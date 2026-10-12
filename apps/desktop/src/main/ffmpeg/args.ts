@@ -171,3 +171,115 @@ export function buildDdagrabProbeArgs(outputIdx: number): string[] {
     '-',
   ]
 }
+
+/** atempo chỉ nhận 0.5..100 mỗi lần, nên tốc độ chậm hơn 0.5 phải ghép nhiều bộ lọc. */
+export function atempoChain(speed: number): string[] {
+  const filters: string[] = []
+  let rest = speed
+  while (rest < 0.5) {
+    filters.push('atempo=0.5')
+    rest /= 0.5
+  }
+  while (rest > 100) {
+    filters.push('atempo=100')
+    rest /= 100
+  }
+  if (Math.abs(rest - 1) > 1e-6) filters.push(`atempo=${Number(rest.toFixed(6))}`)
+  return filters
+}
+
+export interface MuxAudioPiece {
+  /** Đường dẫn đầy đủ tới file âm thanh. */
+  path: string
+  mediaStart: number
+  duration: number
+  outputStart: number
+  speed: number
+  volume: number
+}
+
+const sec = (n: number) => Number(n.toFixed(6))
+
+/**
+ * Ghép video đã dựng (chưa có tiếng) với âm thanh: cắt từng mảnh, đổi tốc độ, chỉnh âm lượng,
+ * đặt đúng vị trí rồi trộn lại. Video được chép nguyên, không mã hóa lại.
+ */
+export function buildExportMuxArgs(options: {
+  video: string
+  pieces: readonly MuxAudioPiece[]
+  durationS: number
+  output: string
+}): string[] {
+  const { video, pieces, durationS, output } = options
+  const head = ['-hide_banner', '-loglevel', 'error', '-y', '-i', video]
+  const tail = ['-movflags', '+faststart', '-t', String(sec(durationS)), output]
+  if (pieces.length === 0) return [...head, '-map', '0:v', '-c:v', 'copy', '-an', ...tail]
+
+  const files = [...new Set(pieces.map((p) => p.path))]
+  const inputs = files.flatMap((f) => ['-i', f])
+  const filters: string[] = []
+  const labels = new Map<string, string[]>()
+  files.forEach((file, i) => {
+    const count = pieces.filter((p) => p.path === file).length
+    const outs = Array.from({ length: count }, (_, k) => `f${i}_${k}`)
+    labels.set(file, outs)
+    filters.push(
+      count === 1
+        ? `[${i + 1}:a]anull[${outs[0]}]`
+        : `[${i + 1}:a]asplit=${count}${outs.map((o) => `[${o}]`).join('')}`,
+    )
+  })
+  const used = new Map<string, number>()
+  const mixed = pieces.map((p, k) => {
+    const n = used.get(p.path) ?? 0
+    used.set(p.path, n + 1)
+    const source = labels.get(p.path)![n]!
+    const delayMs = Math.round(p.outputStart * 1000)
+    const chain = [
+      `atrim=start=${sec(p.mediaStart)}:end=${sec(p.mediaStart + p.duration)}`,
+      'asetpts=PTS-STARTPTS',
+      ...atempoChain(p.speed),
+      `volume=${sec(p.volume)}`,
+      `adelay=${delayMs}:all=1`,
+    ]
+    filters.push(`[${source}]${chain.join(',')}[p${k}]`)
+    return `[p${k}]`
+  })
+  filters.push(
+    `${mixed.join('')}amix=inputs=${mixed.length}:duration=longest:normalize=0,apad[aout]`,
+  )
+  return [
+    ...head,
+    ...inputs,
+    '-filter_complex',
+    filters.join(';'),
+    '-map',
+    '0:v',
+    '-map',
+    '[aout]',
+    '-c:v',
+    'copy',
+    '-c:a',
+    'aac',
+    '-b:a',
+    '192k',
+    ...tail,
+  ]
+}
+
+/** Đổi MP4 sang GIF với bảng màu tối ưu (đẹp hơn nhiều so với bảng màu mặc định). */
+export function buildGifArgs(input: string, output: string, width: number, fps: number): string[] {
+  return [
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+    '-i',
+    input,
+    '-vf',
+    `fps=${fps},scale=${width}:-2:flags=lanczos,split[a][b];[a]palettegen=stats_mode=diff[p];[b][p]paletteuse=dither=bayer:bayer_scale=4`,
+    '-loop',
+    '0',
+    output,
+  ]
+}

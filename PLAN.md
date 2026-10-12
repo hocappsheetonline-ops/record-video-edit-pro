@@ -80,14 +80,13 @@ Mỗi nguồn được ghi thành **file riêng**. Nhờ vậy lúc chỉnh sử
 - Tạm dừng tạo đoạn (segment) mới. `project.json` được lưu sau mỗi đoạn để không mất dữ liệu nếu app bị tắt đột ngột.
 - Trang Dự án: danh sách kèm ảnh thu nhỏ, trình phát đồng bộ các track (tua được), mở thư mục, xóa (chuyển vào Thùng rác).
 
-### Giai đoạn 2: Trình chỉnh sửa và auto-zoom (~4–6 tuần), phần cốt lõi giống Screen Studio
+### Giai đoạn 2: Trình chỉnh sửa và auto-zoom ✅ Đã xong
 
-- **Auto-zoom:** gom các cụm click/gõ phím theo thời gian, tự tạo đoạn zoom với chuyển động mượt và thời lượng tối thiểu. Người dùng chỉnh được từng đoạn zoom trên timeline (mức zoom, tâm, thời gian).
-- **Con trỏ:** làm mượt quỹ đạo bằng mô phỏng lò xo, phóng to con trỏ, hiệu ứng click (gợn sóng hoặc highlight), tự ẩn khi đứng yên.
-- **Khung hình:** nền (màu, gradient, ảnh, làm mờ), padding, bo góc, đổ bóng, đổi tỉ lệ 16:9, 9:16, 1:1 và 4:3.
-- **Webcam:** bong bóng tròn hoặc vuông, kéo thả vị trí, đổi bố cục theo từng đoạn.
-- **Timeline:** cắt, tách, xóa đoạn, đổi tốc độ, các track zoom/phụ đề/âm thanh, hoàn tác/làm lại.
-- **Xuất video:** MP4 (H.264/HEVC) với độ phân giải đến 4K, 30/60fps; GIF; preset cho YouTube và TikTok.
+- Mô hình chỉnh sửa (`edit.json`): clip trên "thời gian nguồn" (các đoạn quay nối liền), tách/xóa/đổi tốc độ, hoàn tác/làm lại, tự lưu.
+- Tự động zoom: gom click và lúc gõ phím liên tục thành cụm; khung nhìn đi theo con trỏ (được làm mượt thêm), chuyển cảnh mượt; kéo trên timeline để chỉnh.
+- Con trỏ vẽ lại, làm mượt bằng lò xo giảm chấn tới hạn (tính sẵn nên tua tới đâu cũng như nhau); hiệu ứng click; tự ẩn khi chuột đứng yên.
+- Khung: các tỉ lệ khung hình, nền trơn/chuyển màu, lề, bo góc, bóng đổ. Bong bóng webcam.
+- Xem trước bằng thẻ video kết hợp canvas. Xuất bằng mediabunny (WebCodecs) qua cùng hàm vẽ, rồi FFmpeg trộn âm thanh theo clip; hỗ trợ MP4 và GIF.
 
 ### Giai đoạn 3: AI (~2–3 tuần)
 
@@ -144,4 +143,4 @@ Cấu hình máy khuyến nghị để quay 1080p/60fps: CPU 4 nhân trở lên,
 
 ## 6. Bước tiếp theo
 
-Bắt đầu **Giai đoạn 2**: trình chỉnh sửa với tự động zoom theo `events.jsonl`, con trỏ mượt vẽ lại, nền, khung, bong bóng webcam, timeline và xuất MP4/GIF.
+Bắt đầu **Giai đoạn 3**: phụ đề tự động (ElevenLabs) và AI tự biên tập (Claude).

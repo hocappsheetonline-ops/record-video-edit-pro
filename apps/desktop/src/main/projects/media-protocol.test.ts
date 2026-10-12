@@ -77,4 +77,25 @@ describe('handleMediaRequest', () => {
     const missing = await handleMediaRequest(new Request(url('a b.lumora', 'nope.mkv')), dir)
     expect(missing.status).toBe(404)
   })
+
+  it('cho phép fetch từ giao diện (CORS) và trả lời preflight', async () => {
+    const res = await handleMediaRequest(new Request(url('a b.lumora', 'seg0-screen.mkv')), dir)
+    expect(res.headers.get('access-control-allow-origin')).toBe('*')
+    expect(res.headers.get('access-control-expose-headers')).toContain('Content-Range')
+    const preflight = await handleMediaRequest(
+      new Request(url('a b.lumora', 'x'), { method: 'OPTIONS' }),
+      dir,
+    )
+    expect(preflight.status).toBe(204)
+    expect(preflight.headers.get('access-control-allow-headers')).toBe('Range')
+  })
+
+  it('HEAD chỉ trả header', async () => {
+    const res = await handleMediaRequest(
+      new Request(url('a b.lumora', 'seg0-screen.mkv'), { method: 'HEAD' }),
+      dir,
+    )
+    expect(res.headers.get('content-length')).toBe('10')
+    expect(await res.text()).toBe('')
+  })
 })

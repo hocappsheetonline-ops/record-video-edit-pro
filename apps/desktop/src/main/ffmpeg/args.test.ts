@@ -89,3 +89,44 @@ describe('các lệnh phụ', () => {
     expect(buildThumbnailArgs('a.mkv', 't.jpg').join(' ')).toContain('-frames:v 1')
   })
 })
+
+describe('xuất video: ghép âm thanh', () => {
+  it('atempoChain tách tốc độ ngoài khoảng 0.5..100', async () => {
+    const { atempoChain } = await import('./args')
+    expect(atempoChain(1)).toEqual([])
+    expect(atempoChain(2)).toEqual(['atempo=2'])
+    expect(atempoChain(0.25)).toEqual(['atempo=0.5', 'atempo=0.5'])
+  })
+
+  it('không có âm thanh thì chỉ chép video', async () => {
+    const { buildExportMuxArgs } = await import('./args')
+    const args = buildExportMuxArgs({ video: 'v.mp4', pieces: [], durationS: 3, output: 'o.mp4' })
+    expect(args.join(' ')).toContain('-map 0:v -c:v copy -an -movflags +faststart -t 3 o.mp4')
+  })
+
+  it('cắt, đổi tốc độ, đặt vị trí và trộn các mảnh âm thanh', async () => {
+    const { buildExportMuxArgs } = await import('./args')
+    const args = buildExportMuxArgs({
+      video: 'v.mp4',
+      pieces: [
+        { path: 'mic.webm', mediaStart: 1.2, duration: 2, outputStart: 0, speed: 1, volume: 1 },
+        { path: 'mic.webm', mediaStart: 5, duration: 2, outputStart: 2, speed: 2, volume: 1 },
+        { path: 'sys.webm', mediaStart: 0, duration: 1.5, outputStart: 0.5, speed: 1, volume: 0.5 },
+      ],
+      durationS: 3,
+      output: 'o.mp4',
+    })
+    expect(args.slice(4, 10)).toEqual(['-i', 'v.mp4', '-i', 'mic.webm', '-i', 'sys.webm'])
+    const graph = args[args.indexOf('-filter_complex') + 1]!
+    expect(graph.split(';')).toEqual([
+      '[1:a]asplit=2[f0_0][f0_1]',
+      '[2:a]anull[f1_0]',
+      '[f0_0]atrim=start=1.2:end=3.2,asetpts=PTS-STARTPTS,volume=1,adelay=0:all=1[p0]',
+      '[f0_1]atrim=start=5:end=7,asetpts=PTS-STARTPTS,atempo=2,volume=1,adelay=2000:all=1[p1]',
+      '[f1_0]atrim=start=0:end=1.5,asetpts=PTS-STARTPTS,volume=0.5,adelay=500:all=1[p2]',
+      '[p0][p1][p2]amix=inputs=3:duration=longest:normalize=0,apad[aout]',
+    ])
+    expect(args.join(' ')).toContain('-map 0:v -map [aout] -c:v copy -c:a aac')
+    expect(args.slice(-4)).toEqual(['+faststart', '-t', '3', 'o.mp4'])
+  })
+})

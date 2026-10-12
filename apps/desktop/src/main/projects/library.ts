@@ -1,10 +1,17 @@
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { join, resolve, sep } from 'node:path'
+import { writeJsonFile } from '../json-file'
 import {
+  EDIT_FILE,
+  EVENTS_FILE,
+  parseEditState,
+  parseEvents,
   parseProject,
   PROJECT_FILE,
   PROJECT_FOLDER_SUFFIX,
   THUMBNAIL_FILE,
+  type EditState,
+  type InputEvent,
   type Project,
 } from '@lumora/core'
 import type { ProjectSummary } from '@shared/ipc'
@@ -68,4 +75,40 @@ export async function listProjects(projectsDir: string): Promise<ProjectSummary[
   return summaries
     .filter((s): s is ProjectSummary => s !== null)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
+/** Bản chỉnh sửa đã lưu, đã kiểm tra hợp lệ theo bản quay. Null nếu chưa có hoặc dự án lỗi. */
+export async function readEdit(projectsDir: string, folder: string): Promise<EditState | null> {
+  const project = await readProject(projectsDir, folder)
+  const file = safeJoin(projectsDir, folder, EDIT_FILE)
+  if (!project || !file) return null
+  try {
+    return parseEditState(JSON.parse(await readFile(file, 'utf8')), project)
+  } catch {
+    return null
+  }
+}
+
+export async function writeEdit(
+  projectsDir: string,
+  folder: string,
+  edit: unknown,
+): Promise<EditState> {
+  const project = await readProject(projectsDir, folder)
+  const file = safeJoin(projectsDir, folder, EDIT_FILE)
+  if (!project || !file) throw new Error('Dự án không hợp lệ')
+  const parsed = parseEditState(edit, project)
+  await writeJsonFile(file, parsed)
+  return parsed
+}
+
+export async function readEvents(projectsDir: string, folder: string): Promise<InputEvent[]> {
+  if (!isProjectFolderName(folder)) return []
+  const file = safeJoin(projectsDir, folder, EVENTS_FILE)
+  if (!file) return []
+  try {
+    return parseEvents(await readFile(file, 'utf8'))
+  } catch {
+    return []
+  }
 }

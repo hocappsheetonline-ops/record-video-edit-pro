@@ -1,5 +1,7 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain, protocol, safeStorage, session, shell } from 'electron'
+import { ExportManager } from './export/manager'
+import { runFfmpeg } from './ffmpeg/runner'
 import { registerIpc } from './ipc'
 import { handleMediaRequest, MEDIA_SCHEME } from './projects/media-protocol'
 import { RecordingController } from './recording/controller'
@@ -15,7 +17,13 @@ if (userDataOverride) app.setPath('userData', userDataOverride)
 protocol.registerSchemesAsPrivileged([
   {
     scheme: MEDIA_SCHEME,
-    privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true },
+    privileges: {
+      standard: true,
+      secure: true,
+      stream: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+    },
   },
 ])
 
@@ -64,6 +72,7 @@ if (!app.requestSingleInstanceLock()) {
       settings,
       secrets: new SecretStore(join(userData, 'secrets.json'), safeStorage),
       recording,
+      exports: new ExportManager(runFfmpeg),
       projects: {
         dir: projectsDir,
         trash: (path) => shell.trashItem(path),

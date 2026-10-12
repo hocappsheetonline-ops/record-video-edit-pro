@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ArrowLeft, Clock, FolderOpen, Trash2 } from 'lucide-react'
+import { ArrowLeft, Clock, FolderOpen, Trash2, Wand2 } from 'lucide-react'
 import { formatDuration, TRACK_KINDS, type Project } from '@lumora/core'
 import type { ProjectSummary } from '@shared/ipc'
 import { lumora } from '../api'
@@ -22,6 +22,7 @@ const actionButton =
 function ProjectDetail({ folder, onDeleted }: { folder: string; onDeleted: () => void }) {
   const { t, i18n } = useTranslation()
   const showProject = useAppStore((s) => s.showProject)
+  const openEditor = useAppStore((s) => s.openEditor)
   const [project, setProject] = useState<Project | null | undefined>(undefined)
   const [segmentIndex, setSegmentIndex] = useState(0)
 
@@ -74,6 +75,15 @@ function ProjectDetail({ folder, onDeleted }: { folder: string; onDeleted: () =>
           </p>
         </div>
         <div className="flex gap-2">
+          <button
+            type="button"
+            data-testid="open-editor"
+            className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg hover:opacity-90"
+            onClick={() => openEditor(folder)}
+          >
+            <Wand2 size={16} aria-hidden />
+            {t('projects.edit')}
+          </button>
           <button
             type="button"
             className={actionButton}

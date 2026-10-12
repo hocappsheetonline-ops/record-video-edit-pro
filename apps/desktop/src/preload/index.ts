@@ -38,6 +38,15 @@ const api: LumoraApi = {
   getProject: (folder) => ipcRenderer.invoke(IPC.projectsGet, folder),
   deleteProject: (folder) => ipcRenderer.invoke(IPC.projectsDelete, folder),
   revealProject: (folder) => ipcRenderer.invoke(IPC.projectsReveal, folder),
+
+  getEdit: (folder) => ipcRenderer.invoke(IPC.projectsGetEdit, folder),
+  saveEdit: (folder, edit) => ipcRenderer.invoke(IPC.projectsSaveEdit, folder, edit),
+  getEvents: (folder) => ipcRenderer.invoke(IPC.projectsGetEvents, folder),
+  startExport: (folder) => ipcRenderer.invoke(IPC.exportStart, folder),
+  writeExport: (id, position, data) => ipcRenderer.invoke(IPC.exportWrite, id, position, data),
+  finishExport: (id, folder, edit) => ipcRenderer.invoke(IPC.exportFinish, id, folder, edit),
+  cancelExport: (id) => ipcRenderer.invoke(IPC.exportCancel, id),
+  revealFile: (path) => ipcRenderer.invoke(IPC.revealFile, path),
 }
 
 contextBridge.exposeInMainWorld('lumora', api)

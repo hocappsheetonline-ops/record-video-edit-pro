@@ -59,6 +59,12 @@ beforeEach(async () => {
       secrets: new SecretStore(join(dir, 'secrets.json'), cipher),
       validators,
       recording,
+      exports: {
+        start: vi.fn(async () => 'e1'),
+        write: vi.fn(async () => {}),
+        finish: vi.fn(async () => ({ path: 'x', fileName: 'x' })),
+        cancel: vi.fn(async () => {}),
+      },
       projects: {
         dir: async () => dir,
         trash: async (path: string) => {

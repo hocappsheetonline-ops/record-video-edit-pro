@@ -19,7 +19,16 @@ import {
   type SegmentStart,
 } from '@shared/ipc'
 import { validateKey, type Validators } from './key-validation'
-import { isProjectFolderName, listProjects, readProject, safeJoin } from './projects/library'
+import type { ExportManager } from './export/manager'
+import {
+  isProjectFolderName,
+  listProjects,
+  readEdit,
+  readEvents,
+  readProject,
+  safeJoin,
+  writeEdit,
+} from './projects/library'
 import type { SecretStore } from './secret-store'
 import type { SettingsStore } from './settings-store'
 
@@ -52,6 +61,7 @@ export interface IpcDeps {
   appInfo: () => AppInfo
   recording: RecordingIpc
   projects: ProjectsIpc
+  exports: Pick<ExportManager, 'start' | 'write' | 'finish' | 'cancel'>
 }
 
 function assertSecretKey(value: unknown) {
@@ -163,5 +173,46 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
   ipcMain.handle(IPC.projectsReveal, async (_event, folder: unknown) => {
     const path = safeJoin(await projects.dir(), assertFolder(folder), PROJECT_FILE)
     if (path) projects.reveal(path)
+  })
+
+  ipcMain.handle(IPC.projectsGetEdit, async (_event, folder: unknown) =>
+    readEdit(await projects.dir(), assertFolder(folder)),
+  )
+  ipcMain.handle(IPC.projectsSaveEdit, async (_event, folder: unknown, edit: unknown) => {
+    await writeEdit(await projects.dir(), assertFolder(folder), edit)
+  })
+  ipcMain.handle(IPC.projectsGetEvents, async (_event, folder: unknown) =>
+    readEvents(await projects.dir(), assertFolder(folder)),
+  )
+
+  ipcMain.handle(IPC.exportStart, async (_event, folder: unknown) => {
+    const path = safeJoin(await projects.dir(), assertFolder(folder))
+    if (!path) throw new Error('Thư mục dự án không hợp lệ')
+    return deps.exports.start(path)
+  })
+  ipcMain.handle(IPC.exportWrite, (_event, id: unknown, position: unknown, data: unknown) => {
+    if (typeof id !== 'string' || typeof position !== 'number')
+      throw new Error('Dữ liệu xuất không hợp lệ')
+    return deps.exports.write(id, position, asBytes(data))
+  })
+  ipcMain.handle(IPC.exportFinish, async (_event, id: unknown, folder: unknown, edit: unknown) => {
+    if (typeof id !== 'string') throw new Error('Phiên xuất không hợp lệ')
+    const dir = await projects.dir()
+    const name = assertFolder(folder)
+    const project = await readProject(dir, name)
+    const path = safeJoin(dir, name)
+    if (!project || !path) throw new Error('Dự án không hợp lệ')
+    const saved = await writeEdit(dir, name, edit)
+    return deps.exports.finish(id, project, saved, path, project.name)
+  })
+  ipcMain.handle(IPC.exportCancel, (_event, id: unknown) => {
+    if (typeof id === 'string') return deps.exports.cancel(id)
+  })
+  ipcMain.handle(IPC.revealFile, async (_event, path: unknown) => {
+    if (typeof path !== 'string') return
+    const root = await projects.dir()
+    const relative = path.startsWith(root) ? path.slice(root.length).replace(/^[\\/]+/, '') : null
+    const safe = relative ? safeJoin(root, relative) : null
+    if (safe) projects.reveal(safe)
   })
 }

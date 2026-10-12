@@ -161,6 +161,17 @@ export function createFakeApi(
       async (folder: string) => (projects = projects.filter((p) => p.folder !== folder)),
     ),
     revealProject: vi.fn<LumoraApi['revealProject']>(async () => {}),
+    getEdit: vi.fn<LumoraApi['getEdit']>(async () => null),
+    saveEdit: vi.fn<LumoraApi['saveEdit']>(async () => {}),
+    getEvents: vi.fn<LumoraApi['getEvents']>(async () => []),
+    startExport: vi.fn<LumoraApi['startExport']>(async () => 'e1'),
+    writeExport: vi.fn<LumoraApi['writeExport']>(async () => {}),
+    finishExport: vi.fn<LumoraApi['finishExport']>(async () => ({
+      path: '/x/out.mp4',
+      fileName: 'out.mp4',
+    })),
+    cancelExport: vi.fn<LumoraApi['cancelExport']>(async () => {}),
+    revealFile: vi.fn<LumoraApi['revealFile']>(async () => {}),
   } satisfies LumoraApi
   return {
     api,

@@ -1,5 +1,7 @@
 import type {
   AppSettings,
+  EditState,
+  InputEvent,
   KeyStatus,
   KeyValidationResult,
   Project,
@@ -34,6 +36,14 @@ export const IPC = {
   projectsGet: 'projects:get',
   projectsDelete: 'projects:delete',
   projectsReveal: 'projects:reveal',
+  projectsGetEdit: 'projects:get-edit',
+  projectsSaveEdit: 'projects:save-edit',
+  projectsGetEvents: 'projects:get-events',
+  exportStart: 'export:start',
+  exportWrite: 'export:write',
+  exportFinish: 'export:finish',
+  exportCancel: 'export:cancel',
+  revealFile: 'files:reveal',
 } as const
 
 /** Sự kiện main process gửi xuống giao diện. */
@@ -110,6 +120,11 @@ export interface ProjectSummary {
   hasThumbnail: boolean
 }
 
+export interface ExportResult {
+  path: string
+  fileName: string
+}
+
 export type Unsubscribe = () => void
 
 /** API mà preload cung cấp cho giao diện qua `window.lumora`. */
@@ -145,4 +160,15 @@ export interface LumoraApi {
   getProject(folder: string): Promise<Project | null>
   deleteProject(folder: string): Promise<ProjectSummary[]>
   revealProject(folder: string): Promise<void>
+
+  /** Bản chỉnh sửa đã lưu (edit.json), hoặc null nếu chưa chỉnh sửa lần nào. */
+  getEdit(folder: string): Promise<EditState | null>
+  saveEdit(folder: string, edit: EditState): Promise<void>
+  getEvents(folder: string): Promise<InputEvent[]>
+  startExport(folder: string): Promise<string>
+  writeExport(id: string, position: number, data: ArrayBuffer): Promise<void>
+  finishExport(id: string, folder: string, edit: EditState): Promise<ExportResult>
+  cancelExport(id: string): Promise<void>
+  /** Mở thư mục chứa một file đã xuất (chỉ trong thư mục dự án). */
+  revealFile(path: string): Promise<void>
 }

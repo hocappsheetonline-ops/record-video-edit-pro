@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import type { Theme } from '@lumora/core'
 import { Sidebar } from './components/Sidebar'
 import { ComingSoonPage } from './pages/ComingSoonPage'
+import { EditorPage } from './pages/EditorPage'
 import { ProjectsPage } from './pages/ProjectsPage'
 import { RecordPage } from './pages/RecordPage'
 import { SettingsPage } from './pages/SettingsPage'
@@ -41,10 +42,10 @@ export function App() {
   return (
     <div className="flex h-full bg-bg text-text">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto">
+      <main className={`flex-1 ${page === 'editor' ? 'overflow-hidden' : 'overflow-y-auto'}`}>
         {page === 'record' && <RecordPage />}
         {page === 'projects' && <ProjectsPage />}
-        {page === 'editor' && <ComingSoonPage section="editor" phase="2" />}
+        {page === 'editor' && <EditorPage />}
         {page === 'live' && <ComingSoonPage section="live" phase="4" />}
         {page === 'settings' && <SettingsPage />}
       </main>

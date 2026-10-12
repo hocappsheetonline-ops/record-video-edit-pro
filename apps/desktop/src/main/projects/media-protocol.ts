@@ -61,8 +61,21 @@ export function resolveMediaPath(url: string, projectsDir: string): string | nul
   return safeJoin(projectsDir, folder, file)
 }
 
+/**
+ * Cho phép giao diện (chạy từ file://) đọc media bằng fetch — bộ giải mã khung hình khi xuất video cần.
+ * Chỉ đọc, và chỉ các file nằm trong thư mục dự án.
+ */
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+  'Access-Control-Allow-Headers': 'Range',
+  'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges',
+}
+
 /** Trả file media từ thư mục dự án, hỗ trợ đọc từng phần (Range) để tua video. */
 export async function handleMediaRequest(request: Request, projectsDir: string): Promise<Response> {
+  if (request.method === 'OPTIONS')
+    return new Response(null, { status: 204, headers: CORS_HEADERS })
   const path = resolveMediaPath(request.url, projectsDir)
   if (!path) return new Response('Not found', { status: 404 })
   let size: number
@@ -74,6 +87,7 @@ export async function handleMediaRequest(request: Request, projectsDir: string):
     return new Response('Not found', { status: 404 })
   }
   const headers = new Headers({
+    ...CORS_HEADERS,
     'Content-Type': MIME[extname(path).toLowerCase()] ?? 'application/octet-stream',
     'Accept-Ranges': 'bytes',
     'Cache-Control': 'no-cache',
@@ -87,7 +101,7 @@ export async function handleMediaRequest(request: Request, projectsDir: string):
   headers.set('Content-Length', String(size === 0 ? 0 : end - start + 1))
   if (range) headers.set('Content-Range', `bytes ${start}-${end}/${size}`)
   const body =
-    size === 0
+    size === 0 || request.method === 'HEAD'
       ? null
       : (Readable.toWeb(createReadStream(path, { start, end })) as unknown as ReadableStream)
   return new Response(body, { status: range ? 206 : 200, headers })

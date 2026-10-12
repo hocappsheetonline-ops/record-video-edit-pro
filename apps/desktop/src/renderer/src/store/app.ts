@@ -14,7 +14,10 @@ interface AppState {
   secrets: SecretsStatus | null
   /** Dự án đang mở trong trang Dự án (tên thư mục), null là đang xem danh sách. */
   openProject: string | null
+  /** Dự án đang mở trong trình chỉnh sửa. */
+  editorFolder: string | null
   init(): Promise<void>
+  openEditor(folder: string): void
   setPage(page: Page): void
   showProject(folder: string | null): void
   updateSettings(patch: Partial<AppSettings>): Promise<void>
@@ -29,6 +32,7 @@ export const useAppStore = create<AppState>((set) => ({
   settings: null,
   secrets: null,
   openProject: null,
+  editorFolder: null,
 
   async init() {
     const api = lumora()
@@ -42,6 +46,10 @@ export const useAppStore = create<AppState>((set) => ({
 
   setPage(page) {
     set({ page, openProject: null })
+  },
+
+  openEditor(folder) {
+    set({ page: 'editor', editorFolder: folder })
   },
 
   showProject(folder) {
