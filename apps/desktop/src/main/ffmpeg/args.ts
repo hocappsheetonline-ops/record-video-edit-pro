@@ -260,7 +260,9 @@ export function buildExportMuxArgs(options: {
     return `[p${k}]`
   })
   filters.push(
-    `${mixed.join('')}amix=inputs=${mixed.length}:duration=longest:normalize=0,apad[aout]`,
+    // apad chỉ đệm im lặng tới đúng độ dài video: `apad` không giới hạn có thể làm FFmpeg chạy
+    // mãi (bỏ qua -t, ngốn RAM) khi hai mảnh liền nhau cùng lấy từ một file.
+    `${mixed.join('')}amix=inputs=${mixed.length}:duration=longest:normalize=0,apad=whole_dur=${sec(durationS)}[aout]`,
   )
   return [
     ...head,

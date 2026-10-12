@@ -110,3 +110,34 @@ describe('phím A / D', () => {
     expect(s().cursor).not.toBeNull()
   })
 })
+
+describe('chuyển tiếp', () => {
+  it('đặt, đổi thời gian, bỏ; tách clip thì chuyển tiếp vẫn ở đúng chỗ nối cũ', () => {
+    const s = useEditorStore.getState
+    const [a] = s().edit!.clips
+    s().setTransition(a!.id, 'fadeBlack')
+    expect(s().edit!.transitions).toEqual([
+      { afterClip: a!.id, kind: 'fadeBlack', durationMs: 600 },
+    ])
+    s().setTransition(a!.id, 'fadeBlack', 1200)
+    expect(s().edit!.transitions[0]!.durationMs).toBe(1200)
+
+    // Tách clip đầu ở giây 2: chỗ nối cũ (5s) giờ nằm sau mảnh bên phải.
+    s().setTime(2000)
+    s().splitAtPlayhead()
+    const clips = s().edit!.clips
+    expect(clips).toHaveLength(3)
+    expect(s().edit!.transitions[0]!.afterClip).toBe(clips[1]!.id)
+
+    s().applyTransitionToAll('zoom', 800)
+    expect(s().edit!.transitions.map((t) => t.kind)).toEqual(['zoom', 'zoom'])
+
+    // Xóa clip cuối: chỗ nối của nó biến mất, chuyển tiếp tương ứng bị bỏ.
+    s().select({ kind: 'clip', id: clips[2]!.id })
+    s().deleteSelection()
+    expect(s().edit!.transitions).toHaveLength(1)
+
+    s().setTransition(clips[0]!.id, null)
+    expect(s().edit!.transitions).toEqual([])
+  })
+})

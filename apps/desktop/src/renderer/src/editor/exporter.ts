@@ -55,7 +55,7 @@ function sampleSource(sample: VideoSample): FrameSource {
 /** Danh sách thời điểm (giây trong file) cần lấy khung hình của một track, theo thứ tự khung xuất. */
 export interface FramePlan {
   /** Với mỗi khung xuất: đoạn quay và thời điểm nguồn. */
-  frames: { segment: number | null; source: number }[]
+  frames: { segment: number | null; source: number; output: number }[]
   /** Với mỗi `${đoạn}:${track}`: các thời điểm trong file theo đúng thứ tự cần lấy. */
   timestamps: Map<string, number[]>
 }
@@ -69,7 +69,7 @@ export function planFrames(project: Project, edit: EditState, fps: number): Fram
     const hit = outputToSource(edit.clips, (i * 1000) / fps)
     const source = hit?.source ?? 0
     const item = segmentAt(segments, source)
-    frames.push({ segment: item?.segment.index ?? null, source })
+    frames.push({ segment: item?.segment.index ?? null, source, output: (i * 1000) / fps })
     if (!item) continue
     for (const kind of ['screen', 'camera'] as const) {
       const t = mediaTime(item, kind, source)
@@ -181,6 +181,7 @@ export async function exportVideo(options: {
       const camera = hasCamera(frame.segment) ? await next(`${frame.segment}:camera`) : null
       const scene = computeScene({
         edit,
+        time: frame.output,
         output: size,
         video: screen
           ? { width: screen.displayWidth, height: screen.displayHeight }

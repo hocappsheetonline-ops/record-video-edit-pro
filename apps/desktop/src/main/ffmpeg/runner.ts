@@ -15,7 +15,8 @@ export const runFfmpeg: FfmpegRunner = (args, timeoutMs = 30_000) =>
     execFile(
       ffmpegPath(),
       args,
-      { timeout: timeoutMs, windowsHide: true, maxBuffer: 16 * 1024 * 1024 },
+      // FFmpeg có thể lờ SIGTERM khi bị kẹt; hết giờ thì buộc dừng hẳn.
+      { timeout: timeoutMs, killSignal: 'SIGKILL', windowsHide: true, maxBuffer: 16 * 1024 * 1024 },
       (error, _stdout, stderr) => {
         const code = error ? (typeof error.code === 'number' ? error.code : null) : 0
         resolve({ code, stderr: String(stderr) })

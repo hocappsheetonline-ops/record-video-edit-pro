@@ -25,6 +25,7 @@ describe('computeScene', () => {
     const edit = createDefaultEdit(project)
     edit.frame.padding = 0.1
     const scene = computeScene({
+      time: 0,
       edit,
       output,
       video,
@@ -42,6 +43,7 @@ describe('computeScene', () => {
     const edit = createDefaultEdit(project)
     edit.frame.padding = 0
     const scene = computeScene({
+      time: 0,
       edit,
       output,
       video,
@@ -58,6 +60,7 @@ describe('computeScene', () => {
     edit.frame.padding = 0
     edit.zooms = [{ id: 'z', start: 0, end: 10_000, scale: 2, mode: 'fixed', x: 0.5, y: 0.5 }]
     const base = computeScene({
+      time: 0,
       edit: { ...edit, zooms: [] },
       output,
       video,
@@ -67,6 +70,7 @@ describe('computeScene', () => {
       hasCamera: false,
     })
     const zoomed = computeScene({
+      time: 0,
       edit,
       output,
       video,
@@ -83,6 +87,7 @@ describe('computeScene', () => {
   it('hiệu ứng click ngay sau khi click', () => {
     const edit = createDefaultEdit(project)
     const scene = computeScene({
+      time: 0,
       edit,
       output,
       video,
@@ -98,6 +103,7 @@ describe('computeScene', () => {
     const edit = createDefaultEdit(project)
     edit.cursor.visible = false
     const scene = computeScene({
+      time: 0,
       edit,
       output,
       video,
@@ -138,8 +144,16 @@ describe('computeScene', () => {
       ],
     }
     const at = (source: number) =>
-      computeScene({ edit, output, video, source, cursor: null, follow: null, hasCamera: false })
-        .captions
+      computeScene({
+        edit,
+        time: 0,
+        output,
+        video,
+        source,
+        cursor: null,
+        follow: null,
+        hasCamera: false,
+      }).captions
     expect(at(600)?.words).toEqual([
       { text: 'Xin', active: false },
       { text: 'chào', active: true },
@@ -176,6 +190,7 @@ describe('computeScene', () => {
       ],
     }
     const scene = computeScene({
+      time: 0,
       edit,
       output,
       video,
@@ -199,6 +214,7 @@ describe('computeScene — video dọc tự cắt theo con trỏ', () => {
 
   it('lấp đầy: video phủ kín khung dọc, cắt một dải 9:16 quanh con trỏ, không bo góc', () => {
     const scene = computeScene({
+      time: 0,
       edit: verticalEdit(),
       output: vertical,
       video,
@@ -221,6 +237,7 @@ describe('computeScene — video dọc tự cắt theo con trỏ', () => {
 
   it('con trỏ sát mép phải: khung dừng ở mép video, con trỏ lệch về bên phải', () => {
     const scene = computeScene({
+      time: 0,
       edit: verticalEdit(),
       output: vertical,
       video,
@@ -238,6 +255,7 @@ describe('computeScene — video dọc tự cắt theo con trỏ', () => {
     const edit = verticalEdit()
     edit.camera = { ...edit.camera, size: 0.32, position: 'top-left' }
     const scene = computeScene({
+      time: 0,
       edit,
       output: vertical,
       video,
@@ -256,6 +274,7 @@ describe('computeScene — video dọc tự cắt theo con trỏ', () => {
     const edit = verticalEdit()
     edit.camera = { ...edit.camera, layout: 'stack', split: 0.4, position: 'top-left' }
     const scene = computeScene({
+      time: 0,
       edit,
       output: vertical,
       video,
@@ -278,6 +297,7 @@ describe('computeScene — video dọc tự cắt theo con trỏ', () => {
     const edit = verticalEdit()
     edit.camera = { ...edit.camera, layout: 'stack' }
     const scene = computeScene({
+      time: 0,
       edit,
       output: vertical,
       video,

@@ -14,11 +14,13 @@ import { AudioPanel } from './AudioPanel'
 import { CaptionsPanel } from './CaptionsPanel'
 import { ExportPanel } from './ExportPanel'
 import { useEditorStore } from './store'
+import { TransitionPanel } from './TransitionPanel'
 
 const TABS = [
   'frame',
   'cursor',
   'motion',
+  'transition',
   'zoom',
   'camera',
   'audio',
@@ -112,6 +114,13 @@ export function Inspector() {
   const edit = useEditorStore((s) => s.edit)
   const selection = useEditorStore((s) => s.selection)
   const change = useEditorStore((s) => s.change)
+  // Timeline yêu cầu mở một tab (vd. bấm ◆ giữa hai clip → tab Chuyển tiếp), kể cả bấm lại lần nữa.
+  const tabRequest = useEditorStore((s) => s.tabRequest)
+  const [seenRequest, setSeenRequest] = useState(tabRequest.n)
+  if (tabRequest.n !== seenRequest) {
+    setSeenRequest(tabRequest.n)
+    if ((TABS as readonly string[]).includes(tabRequest.tab)) setTab(tabRequest.tab as Tab)
+  }
   if (!edit) return null
 
   const set = <K extends keyof EditState>(
@@ -592,6 +601,7 @@ export function Inspector() {
           </>
         )}
 
+        {tab === 'transition' && <TransitionPanel />}
         {tab === 'captions' && <CaptionsPanel />}
         {tab === 'ai' && <AiPanel />}
         {tab === 'export' && <ExportPanel />}

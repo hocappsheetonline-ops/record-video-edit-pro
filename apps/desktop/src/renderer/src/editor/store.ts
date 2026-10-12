@@ -21,6 +21,10 @@ import {
   type Project,
   type Size,
   type AudioClip,
+  cutPoints,
+  DEFAULT_TRANSITION_MS,
+  pruneTransitions,
+  type TransitionKind,
   type Filmstrip,
   MIN_AUDIO_CLIP_MS,
   newAudioClipId,
@@ -31,7 +35,8 @@ import {
 import type { AudioAsset } from '@shared/ipc'
 import { lumora } from '../api'
 
-export type Selection = { kind: 'clip' | 'zoom' | 'audio'; id: string } | null
+/** `transition`: id là clip đứng trước chỗ nối. */
+export type Selection = { kind: 'clip' | 'zoom' | 'audio' | 'transition'; id: string } | null
 
 interface EditorStore {
   folder: string | null
@@ -43,6 +48,8 @@ interface EditorStore {
   waveform: Waveform | null
   /** Ảnh thu nhỏ cho dải phim trên timeline (tải sau). */
   filmstrip: Filmstrip | null
+  /** Yêu cầu mở một tab của bảng bên phải (n tăng mỗi lần yêu cầu, kể cả cùng tab). */
+  tabRequest: { tab: string; n: number }
   /** Dạng sóng của các file nhạc/hiệu ứng đã thêm (theo tên file). */
   assetPeaks: Record<string, Waveform | null>
   cursor: CursorTrack | null
@@ -71,12 +78,16 @@ interface EditorStore {
   splitAtPlayhead(): void
   /** Phím A / D: xóa phần clip bên trái / bên phải đầu phát (giống CapCut). */
   trimAtPlayhead(side: 'left' | 'right'): void
+  /** Đặt (hoặc bỏ khi `kind` null) chuyển tiếp ở chỗ nối sau clip `afterClip`. */
+  setTransition(afterClip: string, kind: TransitionKind | null, durationMs?: number): void
+  applyTransitionToAll(kind: TransitionKind | null, durationMs: number): void
   /** Thêm nhạc từ máy tại đầu phát. Trả về false nếu người dùng hủy. */
   addMusic(): Promise<boolean>
   /** Thêm hiệu ứng âm thanh có sẵn tại đầu phát. */
   addSoundEffect(id: SoundEffectId): Promise<void>
   updateAudioClip(id: string, patch: Partial<AudioClip>, coalesce?: string): void
   loadAssetPeaks(file: string): void
+  requestTab(tab: string): void
   deleteSelection(): void
   setClipSpeed(id: string, speed: number): void
   addZoomAtPlayhead(): void
@@ -105,6 +116,7 @@ const initial = {
   waveform: null,
   filmstrip: null,
   assetPeaks: {},
+  tabRequest: { tab: '', n: 0 },
   cursor: null,
   follow: null,
   videoSize: { width: 1920, height: 1080 },
@@ -199,8 +211,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   change(recipe, coalesce) {
     const { edit, project, events } = get()
     if (!edit || !project) return
-    const next = recipe(edit)
+    let next = recipe(edit)
     if (next === edit) return
+    // Clip đổi (cắt, xóa, A/D): bỏ chuyển tiếp ở chỗ nối không còn tồn tại.
+    if (next.clips !== edit.clips)
+      next = { ...next, transitions: pruneTransitions(next.clips, next.transitions) }
     const now = Date.now()
     const merge = coalesce && lastCoalesce?.key === coalesce && now - lastCoalesce.at < 1500
     lastCoalesce = coalesce ? { key: coalesce, at: now } : null
@@ -266,7 +281,43 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   splitAtPlayhead() {
-    get().change((e) => ({ ...e, clips: splitAt(e.clips, get().time) }))
+    const time = get().time
+    get().change((e) => {
+      const original = outputToSource(e.clips, time)?.position.clip.id
+      const clips = splitAt(e.clips, time)
+      if (!original || clips.length === e.clips.length) return { ...e, clips }
+      // Chuyển tiếp sau clip cũ giờ nằm sau mảnh bên phải.
+      const right = clips[clips.findIndex((c) => c.id === original) + 1]!
+      return {
+        ...e,
+        clips,
+        transitions: e.transitions.map((t) =>
+          t.afterClip === original ? { ...t, afterClip: right.id } : t,
+        ),
+      }
+    })
+  },
+
+  setTransition(afterClip, kind, durationMs) {
+    get().change(
+      (e) => {
+        const rest = e.transitions.filter((t) => t.afterClip !== afterClip)
+        if (!kind) return { ...e, transitions: rest }
+        const old = e.transitions.find((t) => t.afterClip === afterClip)
+        const duration = durationMs ?? old?.durationMs ?? DEFAULT_TRANSITION_MS
+        return { ...e, transitions: [...rest, { afterClip, kind, durationMs: duration }] }
+      },
+      durationMs !== undefined ? `transition-${afterClip}` : undefined,
+    )
+  },
+
+  applyTransitionToAll(kind, durationMs) {
+    get().change((e) => ({
+      ...e,
+      transitions: kind
+        ? cutPoints(e.clips).map((c) => ({ afterClip: c.afterClip, kind, durationMs }))
+        : [],
+    }))
   },
 
   trimAtPlayhead(side) {
@@ -300,6 +351,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       }),
       coalesce,
     )
+  },
+
+  requestTab(tab) {
+    set({ tabRequest: { tab, n: get().tabRequest.n + 1 } })
   },
 
   loadAssetPeaks(file) {

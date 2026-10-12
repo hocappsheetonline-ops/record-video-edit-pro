@@ -51,6 +51,8 @@ Mở một dự án và bấm **Chỉnh sửa**:
 - **Chuyển động** (tab riêng): tốc độ con trỏ, tốc độ khung nhìn đi theo con trỏ, tốc độ zoom vào/ra — kéo về "Chậm" cho chuyển động mượt kiểu điện ảnh.
 - **Làm đẹp mặt** (tab Webcam): bấm **Làm đẹp tự động** hoặc chỉnh mịn da, làm sáng, tông ấm. Áp dụng cả khi xuất và khi livestream (thanh trượt **Làm đẹp mặt** trong studio).
 - **Timeline kiểu CapCut**: mỗi clip có dải ảnh thu nhỏ của video ở trên và dạng sóng âm thanh ở dưới.
+- **Nhạc nền & hiệu ứng âm thanh** (tab Âm thanh): **Thêm nhạc từ máy** (MP3, WAV, M4A, OGG, FLAC…) hoặc chọn hiệu ứng có sẵn (Vút, Bụp, Ting, Bùm, Ta-da, Vỗ tay, Buồn wah-wah, Bíp che từ…). Mỗi đoạn có hàng riêng trên timeline: kéo để dời, kéo mép để cắt; chỉnh âm lượng, tăng dần/nhỏ dần, lặp lại. Hiệu ứng âm thanh do app tự tổng hợp nên không vướng bản quyền.
+- **Chuyển tiếp** giữa hai clip: bấm nút ◆ ở chỗ nối trên timeline → chọn Mờ qua đen/trắng, Lóe sáng, Phóng to, Làm nhòe, Lướt ngang, Glitch; chỉnh thời gian; áp dụng cho tất cả chỗ nối.
 - **Phím tắt**: Space phát/dừng · S tách · **A xóa phần bên trái đầu phát** · **D xóa phần bên phải đầu phát** · Delete xóa clip · Ctrl+Z / Ctrl+Y.
 - **Dạng sóng âm thanh** hiện ngay trong từng clip video trên timeline (micro + âm thanh máy), nên dễ thấy chỗ đang nói và chỗ im lặng để cắt.
 - **Timeline**: tách (phím S), xóa (Delete), đổi tốc độ từng đoạn, hoàn tác/làm lại (Ctrl+Z / Ctrl+Y). Bản chỉnh sửa được tự lưu vào `edit.json`.

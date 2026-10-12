@@ -225,9 +225,10 @@ test('timeline hiện dạng sóng âm thanh của bản quay trong clip video',
   // Số ô vừa đủ phủ chiều rộng clip (phụ thuộc kích thước cửa sổ của máy chạy test).
   const clipBox = (await page.getByTestId('clip-filmstrip').boundingBox())!
   const tileBox = (await page.getByTestId('filmstrip-tile').first().boundingBox())!
-  expect(await page.getByTestId('filmstrip-tile').count()).toBe(
-    Math.ceil(clipBox.width / tileBox.width - 0.01),
-  )
+  // Đủ ô phủ kín chiều rộng clip (cho phép lệch 1 ô do làm tròn điểm ảnh).
+  const tiles = await page.getByTestId('filmstrip-tile').count()
+  expect(tiles).toBeGreaterThanOrEqual(Math.floor(clipBox.width / tileBox.width))
+  expect(tiles).toBeLessThanOrEqual(Math.ceil(clipBox.width / tileBox.width) + 1)
   expect(tileBox.width).toBeGreaterThan(40)
   expect(await page.getByTestId('filmstrip-tile').first().getAttribute('style')).toContain(
     'filmstrip-0.jpg',
@@ -356,6 +357,79 @@ test('nhạc nền + hiệu ứng âm thanh: thêm từ máy, xuất video có n
   expect(
     readdirSync(projectDir).filter((f) => f.startsWith('asset-') && !f.endsWith('.peaks.json')),
   ).toHaveLength(2)
+  expect(errors).toEqual([])
+  await app.close()
+})
+
+test('chuyển tiếp: mờ qua đen làm khung ở chỗ nối tối đen; glitch xuất ra không lỗi', async () => {
+  const { app, page, errors } = await launchApp(dirs.userData)
+  await openEditor(page)
+  // Tách ở giây 2 → có một chỗ nối.
+  await page.getByTestId('editor-canvas').click()
+  await page.keyboard.press('ArrowRight')
+  await page.keyboard.press('ArrowRight')
+  await page.keyboard.press('s')
+  await expect(page.getByTestId('timeline-clip')).toHaveCount(2)
+  await page.getByTestId('transition-marker').dispatchEvent('pointerdown')
+  await page.getByTestId('transition-fadeBlack').click()
+  await expect(page.getByTestId('transition-marker')).toHaveAttribute('data-active', 'true')
+
+  await page.getByTestId('tab-export').click()
+  await page.getByTestId('resolution-720').click()
+  await page.getByTestId('export-start').click()
+  await expect(page.getByTestId('export-result')).toBeVisible({ timeout: 150_000 })
+  const plain = join(projectDir, 'exports', exported('.mp4')[0]!)
+  /** Độ sáng trung bình (Y, 0..255) của cả khung hình tại giây `t`. */
+  const luma = (file: string, t: number) => {
+    const { stderr } = spawnSync(
+      ffmpegPath as unknown as string,
+      [
+        '-hide_banner',
+        '-ss',
+        String(t),
+        '-i',
+        file,
+        '-frames:v',
+        '1',
+        '-vf',
+        'signalstats,metadata=print',
+        '-f',
+        'null',
+        '-',
+      ],
+      { encoding: 'utf8' },
+    )
+    return Number(/lavfi\.signalstats\.YAVG=([\d.]+)/.exec(stderr)?.[1] ?? -1)
+  }
+  // Đúng chỗ nối (giây 2) gần như đen; xa chỗ nối thì bình thường.
+  expect(luma(plain, 2.0)).toBeLessThan(20)
+  expect(luma(plain, 0.5)).toBeGreaterThan(60)
+  expect(luma(plain, 3.5)).toBeGreaterThan(60)
+
+  // Các kiểu còn lại (zoom, nhòe, lướt, glitch vẽ lại khung bằng ảnh chụp tạm): xuất được, đủ dài,
+  // và khung ở chỗ nối khác hẳn kiểu mờ qua đen.
+  for (const kind of ['fadeWhite', 'flash', 'zoom', 'blur', 'slide', 'glitch']) {
+    await page.getByTestId('transition-marker').dispatchEvent('pointerdown')
+    await page.getByTestId(`transition-${kind}`).click()
+    await page.getByTestId('tab-export').click()
+    await page.waitForTimeout(1100)
+    const before = new Set(exported('.mp4'))
+    await page.getByTestId('export-start').click()
+    await expect(page.getByTestId('export-result'), kind).toBeVisible({ timeout: 150_000 })
+    await expect.poll(() => exported('.mp4').filter((f) => !before.has(f)).length).toBe(1)
+    const file = join(
+      projectDir,
+      'exports',
+      exported('.mp4').find((f) => !before.has(f))!,
+    )
+    expect(probeMedia(file).durationMs, kind).toBeGreaterThan(3800)
+    expect(luma(file, 2.0), kind).toBeGreaterThan(40)
+  }
+
+  const saved = JSON.parse(readFileSync(join(projectDir, 'edit.json'), 'utf8'))
+  expect(saved.transitions).toEqual([
+    { afterClip: saved.clips[0].id, kind: 'glitch', durationMs: 600 },
+  ])
   expect(errors).toEqual([])
   await app.close()
 })

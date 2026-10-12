@@ -148,6 +148,23 @@ describe('EditorPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Không đọc được file âm thanh này')
   })
 
+  it('chuyển tiếp: bấm ◆ giữa hai clip mở tab Chuyển tiếp, chọn kiểu, áp dụng cho tất cả', async () => {
+    setup()
+    await screen.findByTestId('editor-title')
+    const markers = screen.getAllByTestId('transition-marker')
+    expect(markers).toHaveLength(1)
+    expect(markers[0]).toHaveAttribute('data-active', 'false')
+    fireEvent.pointerDown(markers[0]!)
+    expect(await screen.findByTestId('transition-panel')).toHaveTextContent('Chỗ nối thứ 1')
+    await userEvent.click(screen.getByTestId('transition-glitch'))
+    expect(useEditorStore.getState().edit!.transitions[0]).toMatchObject({ kind: 'glitch' })
+    expect(screen.getByTestId('transition-marker')).toHaveAttribute('data-active', 'true')
+    fireEvent.change(screen.getByTestId('transition-duration'), { target: { value: '1500' } })
+    expect(useEditorStore.getState().edit!.transitions[0]!.durationMs).toBe(1500)
+    await userEvent.click(screen.getByTestId('transition-none'))
+    expect(useEditorStore.getState().edit!.transitions).toEqual([])
+  })
+
   it('không có âm thanh thì không vẽ sóng', async () => {
     setup()
     await screen.findByTestId('editor-title')

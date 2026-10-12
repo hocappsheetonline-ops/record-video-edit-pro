@@ -182,6 +182,7 @@ export class PreviewEngine {
     const camera = item ? this.el(item.segment.index, 'camera') : undefined
     const scene = computeScene({
       edit,
+      time,
       output: size,
       video: store.videoSize,
       source,

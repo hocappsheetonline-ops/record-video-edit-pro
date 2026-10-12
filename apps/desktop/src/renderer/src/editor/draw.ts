@@ -229,5 +229,105 @@ export function drawScene(
     )
     ctx.restore()
   }
+  applyTransition(ctx, scene)
   drawCaptions(ctx, scene)
+}
+
+type AnyCanvas = HTMLCanvasElement | OffscreenCanvas
+/**
+ * Mỗi canvas đích có bản nháp riêng: canvas xem trước bị trình duyệt đánh dấu "tainted" (video
+ * khác nguồn), dùng chung bản nháp sẽ làm canvas xuất video cũng bị khóa và không mã hóa được.
+ */
+const scratches = new WeakMap<object, AnyCanvas>()
+
+/** Bản sao khung hình hiện tại để vẽ lại có biến đổi (zoom, mờ, lướt, glitch). */
+function snapshot(ctx: Ctx, width: number, height: number): AnyCanvas {
+  let scratch = scratches.get(ctx.canvas)
+  if (!scratch || scratch.width !== width || scratch.height !== height) {
+    scratch =
+      typeof OffscreenCanvas !== 'undefined'
+        ? new OffscreenCanvas(width, height)
+        : Object.assign(document.createElement('canvas'), { width, height })
+    scratches.set(ctx.canvas, scratch)
+  }
+  const c = scratch.getContext('2d') as Ctx
+  c.clearRect(0, 0, width, height)
+  c.drawImage(ctx.canvas, 0, 0)
+  return scratch
+}
+
+/** Số ngẫu nhiên cố định theo hạt giống (xem trước và xuất ra giống hệt nhau). */
+function seeded(seed: number) {
+  let x = Math.floor(seed * 9301 + 49297) % 233280
+  return () => {
+    x = (x * 9301 + 49297) % 233280
+    return x / 233280
+  }
+}
+
+/** Hiệu ứng chuyển tiếp ở chỗ nối giữa hai clip (vẽ đè lên khung hình đã ghép xong). */
+export function applyTransition(ctx: Ctx, scene: FrameScene) {
+  const tr = scene.transition
+  if (!tr || tr.strength <= 0) return
+  const { width: w, height: h } = scene
+  const s = tr.strength
+  ctx.save()
+  switch (tr.kind) {
+    case 'fadeBlack':
+    case 'fadeWhite':
+      ctx.fillStyle = tr.kind === 'fadeBlack' ? `rgba(0,0,0,${s})` : `rgba(255,255,255,${s})`
+      ctx.fillRect(0, 0, w, h)
+      break
+    case 'flash':
+      ctx.fillStyle = `rgba(255,255,255,${0.95 * s ** 3})`
+      ctx.fillRect(0, 0, w, h)
+      break
+    case 'zoom': {
+      const copy = snapshot(ctx, w, h)
+      const scale = 1 + 0.6 * s
+      ctx.filter = `blur(${(s * w) / 400}px)`
+      ctx.translate(w / 2, h / 2)
+      ctx.scale(scale, scale)
+      ctx.drawImage(copy, -w / 2, -h / 2)
+      break
+    }
+    case 'blur': {
+      const copy = snapshot(ctx, w, h)
+      ctx.fillStyle = '#000'
+      ctx.fillRect(0, 0, w, h)
+      ctx.filter = `blur(${(s * w) / 50}px)`
+      ctx.drawImage(copy, 0, 0)
+      break
+    }
+    case 'slide': {
+      const copy = snapshot(ctx, w, h)
+      // Trước chỗ nối: khung trôi sang trái; sau chỗ nối: khung mới trượt vào từ bên phải.
+      const offset = (tr.after ? 1 : -1) * w * 0.45 * s
+      ctx.fillStyle = '#000'
+      ctx.fillRect(0, 0, w, h)
+      ctx.filter = `blur(${(s * w) / 120}px)`
+      ctx.drawImage(copy, offset, 0)
+      break
+    }
+    case 'glitch': {
+      const copy = snapshot(ctx, w, h)
+      const rand = seeded(Math.floor(tr.progress * 24) + 1)
+      // Lệch từng dải ngang.
+      for (let i = 0; i < 7; i++) {
+        const y = rand() * h
+        const sh = h * (0.02 + rand() * 0.08)
+        const dx = (rand() - 0.5) * w * 0.2 * s
+        ctx.drawImage(copy, 0, y, w, sh, dx, y, w, sh)
+      }
+      // Tách màu đỏ / xanh.
+      ctx.globalCompositeOperation = 'screen'
+      ctx.globalAlpha = 0.45 * s
+      ctx.filter = 'sepia(1) saturate(6) hue-rotate(-50deg)'
+      ctx.drawImage(copy, (w / 90) * s, 0)
+      ctx.filter = 'sepia(1) saturate(6) hue-rotate(150deg)'
+      ctx.drawImage(copy, (-w / 90) * s, 0)
+      break
+    }
+  }
+  ctx.restore()
 }

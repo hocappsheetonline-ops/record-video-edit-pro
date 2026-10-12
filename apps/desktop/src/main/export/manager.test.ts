@@ -177,6 +177,46 @@ describe('ExportManager', () => {
     expect(fadingOut).toBeLessThan(full - 6)
   }, 60_000)
 
+  it('hai clip liền nhau cùng lấy từ một file micro (tách clip): ghép xong, không bị treo', async () => {
+    await ffmpeg([
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=440:duration=4',
+      '-c:a',
+      'libopus',
+      join(dir, 'seg0-mic.webm'),
+    ])
+    const rendered = join(dir, 'rendered.mp4')
+    await ffmpeg([
+      '-f',
+      'lavfi',
+      '-i',
+      'testsrc=size=320x240:rate=30:duration=4',
+      '-pix_fmt',
+      'yuv420p',
+      '-c:v',
+      'libx264',
+      rendered,
+    ])
+    const manager = new ExportManager((args, timeout) =>
+      runFfmpeg(args, Math.min(timeout ?? 30_000, 20_000)),
+    )
+    const id = await manager.start(dir)
+    await manager.write(id, 0, await readFile(rendered))
+    const edit = createDefaultEdit(project)
+    edit.clips = [
+      { id: 'a', sourceStart: 0, sourceEnd: 2000, speed: 1 },
+      { id: 'b', sourceStart: 2000, sourceEnd: 4000, speed: 1 },
+    ]
+    const started = Date.now()
+    const result = await manager.finish(id, project, edit, dir, 'Split')
+    expect(Date.now() - started).toBeLessThan(15_000)
+    const probe = await runFfmpeg(['-hide_banner', '-i', result.path])
+    expect(parseDurationMs(probe.stderr)).toBeGreaterThan(3900)
+    expect(parseDurationMs(probe.stderr)).toBeLessThan(4200)
+  }, 60_000)
+
   it('xuất GIF', async () => {
     const rendered = join(dir, 'rendered.mp4')
     await ffmpeg([

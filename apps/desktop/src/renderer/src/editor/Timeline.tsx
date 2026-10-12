@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { useTranslation } from 'react-i18next'
 import {
   clipDuration,
+  cutPoints,
   clipPositions,
   normalizeZooms,
   outputDuration,
@@ -178,6 +179,29 @@ export function Timeline() {
                     {waveform && <ClipWaveform clip={clip} waveform={waveform} />}
                   </div>
                 </button>
+              )
+            })}
+            {/* Nút ◆ ở mỗi chỗ nối giữa hai clip: chọn hiệu ứng chuyển tiếp. */}
+            {cutPoints(edit.clips).map((cut) => {
+              const active = edit.transitions.some((x) => x.afterClip === cut.afterClip)
+              const selected = selection?.kind === 'transition' && selection.id === cut.afterClip
+              return (
+                <button
+                  key={cut.afterClip}
+                  type="button"
+                  data-testid="transition-marker"
+                  data-active={active}
+                  aria-label={t('editor.transition.marker')}
+                  onPointerDown={(e) => {
+                    e.stopPropagation()
+                    store().select({ kind: 'transition', id: cut.afterClip })
+                    store().requestTab('transition')
+                  }}
+                  className={`absolute top-1/2 z-10 flex size-5 -translate-x-1/2 -translate-y-1/2 rotate-45 items-center justify-center rounded-sm border-2 ${
+                    active ? 'border-white bg-accent' : 'border-white/70 bg-surface'
+                  } ${selected ? 'ring-2 ring-white' : ''}`}
+                  style={{ left: `${(cut.at / duration) * 100}%` }}
+                />
               )
             })}
           </div>

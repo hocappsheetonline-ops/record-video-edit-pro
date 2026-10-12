@@ -10,6 +10,8 @@ import {
   fillViewRect,
   frameLayout,
   viewRect,
+  transitionAt,
+  type ActiveTransition,
   type Background,
   type BeautyStyle,
   type CursorTrack,
@@ -37,6 +39,8 @@ export interface FrameScene {
     shape: EditState['camera']['shape'] | 'strip'
     beauty: BeautyStyle
   } | null
+  /** Chuyển tiếp đang diễn ra quanh chỗ nối giữa hai clip. */
+  transition: ActiveTransition | null
   captions: {
     words: { text: string; active: boolean }[]
     style: 'highlight' | 'classic'
@@ -48,6 +52,8 @@ export interface FrameScene {
 
 export interface SceneInput {
   edit: EditState
+  /** Thời điểm trên video xuất (ms) — cho chuyển tiếp, hiệu ứng. */
+  time: number
   output: Size
   /** Kích thước gốc của video màn hình. */
   video: Size
@@ -129,6 +135,7 @@ export function computeScene(input: SceneInput): FrameScene {
   }
 
   return {
+    transition: transitionAt(edit.clips, edit.transitions, input.time),
     captions,
     width: output.width,
     height: output.height,

@@ -126,6 +126,7 @@ export const en: Messages = {
       cursor: 'Cursor',
       motion: 'Motion',
       zoom: 'Zoom',
+      transition: 'Transition',
       camera: 'Webcam',
       audio: 'Audio',
       captions: 'Captions',
@@ -149,6 +150,24 @@ export const en: Messages = {
       fill: 'Fill frame (auto-crop to cursor)',
       fillHint:
         'The screen video fills the whole frame; the overflow is cropped and the view follows the cursor.',
+    },
+    transition: {
+      marker: 'Transition',
+      noCuts: 'No cuts yet. Split a clip (S key) or delete a part to get a cut between two clips.',
+      pick: 'Click the ◆ button between two clips on the timeline to choose a transition.',
+      at: 'Cut #{{n}}',
+      duration: 'Duration',
+      applyAll: 'Apply to all {{count}} cuts',
+      kinds: {
+        none: 'None',
+        fadeBlack: 'Fade through black',
+        fadeWhite: 'Fade through white',
+        flash: 'Flash',
+        zoom: 'Zoom',
+        blur: 'Blur',
+        slide: 'Slide',
+        glitch: 'Glitch',
+      },
     },
     beauty: {
       title: 'Beauty',
