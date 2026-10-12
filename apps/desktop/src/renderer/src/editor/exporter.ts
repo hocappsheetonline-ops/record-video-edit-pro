@@ -36,6 +36,7 @@ import { OverlayImages } from './overlay-images'
 import { drawScene, type FrameSource } from './draw'
 import { computeScene } from './scene'
 import { loadSegmenter } from './segmenter'
+import { loadFonts } from './fonts'
 import { revKeyOf } from './store'
 
 export interface ExportProgress {
@@ -186,6 +187,8 @@ export async function exportVideo(options: {
   }
   const imageMasks = new WeakMap<object, ReturnType<NonNullable<typeof ai>['segment']>>()
 
+  // Phông chữ đi kèm phải sẵn sàng trước khi vẽ chữ.
+  await loadFonts()
   // Ảnh / GIF meme của lớp nổi: tải hết trước khi dựng hình.
   const images = new OverlayImages(folder)
   await Promise.all(edit.overlays.filter((o) => o.kind === 'image').map((o) => images.load(o.file)))

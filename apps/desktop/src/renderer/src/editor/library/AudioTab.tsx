@@ -6,6 +6,7 @@ import {
   MessageSquareQuote,
   Music2,
   Plus,
+  ScrollText,
   Square,
   Upload,
   Volume2,
@@ -77,20 +78,8 @@ function SpeechMaker({
   const { t } = useTranslation()
   const hasKey = useAppStore((s) => s.secrets?.elevenlabs?.state === 'saved')
   const setPage = useAppStore((s) => s.setPage)
-  const [voices, setVoices] = useState<{ id: string; name: string }[]>([])
-  const [voice, setVoice] = useState('')
+  const { voices, voice, setVoice } = useVoices(hasKey)
   const [text, setText] = useState('')
-
-  useEffect(() => {
-    if (!hasKey) return
-    void lumora()
-      .listVoices()
-      .then((list) => {
-        setVoices(list)
-        setVoice((v) => v || list[0]?.id || '')
-      })
-      .catch(() => setVoices([]))
-  }, [hasKey])
 
   if (!hasKey)
     return (
@@ -172,6 +161,140 @@ function SpeechMaker({
           <Plus size={15} aria-hidden />
         </button>
       </form>
+    </div>
+  )
+}
+
+/** Giọng đọc ElevenLabs (rỗng khi chưa có khóa hoặc lỗi mạng). */
+function useVoices(hasKey: boolean) {
+  const [voices, setVoices] = useState<{ id: string; name: string }[]>([])
+  const [voice, setVoice] = useState('')
+  useEffect(() => {
+    if (!hasKey) return
+    let alive = true
+    void lumora()
+      .listVoices()
+      .then((list) => {
+        if (!alive) return
+        setVoices(list)
+        setVoice((v) => v || list[0]?.id || '')
+      })
+      .catch(() => alive && setVoices([]))
+    return () => {
+      alive = false
+    }
+  }, [hasKey])
+  return { voices, voice, setVoice }
+}
+
+/** Số câu tối đa của một kịch bản (mỗi câu một lần gọi giọng AI). */
+export const SCRIPT_MAX_LINES = 40
+
+/**
+ * Kịch bản lồng tiếng: mỗi dòng là một câu, giọng AI đọc lần lượt thành các đoạn "Lồng tiếng"
+ * nối tiếp nhau từ đầu phát; tùy chọn tự thêm phụ đề cho từng câu.
+ */
+function NarrationScript({ onError }: { onError: (e: unknown) => void }) {
+  const { t } = useTranslation()
+  const hasKey = useAppStore((s) => s.secrets?.elevenlabs?.state === 'saved')
+  const setPage = useAppStore((s) => s.setPage)
+  const { voices, voice, setVoice } = useVoices(hasKey)
+  const [script, setScript] = useState('')
+  const [captions, setCaptions] = useState(true)
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null)
+  const [added, setAdded] = useState<number | null>(null)
+  const lines = script
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+  if (!hasKey)
+    return (
+      <p className="text-xs text-muted" data-testid="script-needs-key">
+        {t('editor.library.speechNeedsKey')}{' '}
+        <button
+          type="button"
+          className="text-accent hover:underline"
+          onClick={() => setPage('settings')}
+        >
+          {t('editor.library.openSettings')}
+        </button>
+      </p>
+    )
+  const generate = async () => {
+    setAdded(null)
+    setProgress({ done: 0, total: lines.length })
+    try {
+      const n = await useEditorStore.getState().addNarration(lines, voice, {
+        captions,
+        onProgress: (done, total) => setProgress({ done, total }),
+      })
+      setAdded(n)
+    } catch (e) {
+      onError(e)
+    } finally {
+      setProgress(null)
+    }
+  }
+  return (
+    <div className="flex flex-col gap-2" data-testid="narration-script">
+      <label className="flex items-center gap-2 text-xs">
+        <span className="text-muted">{t('editor.library.voice')}</span>
+        <select
+          value={voice}
+          data-testid="script-voice"
+          onChange={(e) => setVoice(e.target.value)}
+          className="min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-2 py-1 text-xs"
+        >
+          {voices.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <textarea
+        rows={7}
+        value={script}
+        maxLength={8000}
+        data-testid="script-text"
+        aria-label={t('editor.library.scriptPlaceholder')}
+        placeholder={t('editor.library.scriptPlaceholder')}
+        onChange={(e) => setScript(e.target.value)}
+        className="resize-y rounded-md border border-border bg-surface-2 px-2.5 py-2 text-xs leading-relaxed outline-none focus:border-accent"
+      />
+      <p className="text-[11px] text-muted" data-testid="script-count">
+        {t('editor.library.scriptLines', { n: lines.length, max: SCRIPT_MAX_LINES })}
+      </p>
+      <Toggle
+        label={t('editor.library.scriptCaptions')}
+        checked={captions}
+        onChange={setCaptions}
+        testId="script-captions"
+      />
+      <button
+        type="button"
+        data-testid="script-generate"
+        disabled={
+          progress !== null || !voice || lines.length === 0 || lines.length > SCRIPT_MAX_LINES
+        }
+        onClick={() => void generate()}
+        className={primaryButton}
+      >
+        {progress ? (
+          <Loader2 size={15} className="animate-spin" aria-hidden />
+        ) : (
+          <ScrollText size={15} aria-hidden />
+        )}
+        {progress
+          ? t('editor.library.scriptProgress', progress)
+          : t('editor.library.scriptGenerate')}
+      </button>
+      {added !== null && (
+        <p className="text-[11px] text-emerald-400" data-testid="script-done">
+          {t('editor.library.scriptDone', { n: added })}
+        </p>
+      )}
+      <p className="text-[11px] text-muted">{t('editor.library.scriptHint')}</p>
     </div>
   )
 }
@@ -351,10 +474,10 @@ function VoiceOver({ onError }: { onError: (e: unknown) => void }) {
   )
 }
 
-/** Mục Âm thanh: nhạc từ máy, hiệu ứng âm thanh, âm thanh meme và giọng đọc AI. */
+/** Mục Âm thanh: nhạc từ máy, hiệu ứng âm thanh, âm thanh meme, lồng tiếng và kịch bản giọng AI. */
 export function AudioTab() {
   const { t } = useTranslation()
-  const [section, setSection] = useState<'sfx' | 'meme' | 'music' | 'voice'>('sfx')
+  const [section, setSection] = useState<'sfx' | 'meme' | 'music' | 'voice' | 'script'>('sfx')
   const [busy, setBusy] = useState<Busy>(null)
   const [error, setError] = useState<string | null>(null)
   const errorText = useErrorText()
@@ -374,10 +497,12 @@ export function AudioTab() {
           { value: 'meme', label: t('editor.library.audioSections.meme') },
           { value: 'music', label: t('editor.library.audioSections.music') },
           { value: 'voice', label: t('editor.library.audioSections.voice') },
+          { value: 'script', label: t('editor.library.audioSections.script') },
         ]}
         value={section}
         onChange={setSection}
         testIdPrefix="audio-section-"
+        columns={3}
       />
       <ErrorNote text={error} />
       {section === 'music' && (
@@ -403,6 +528,7 @@ export function AudioTab() {
         </>
       )}
       {section === 'voice' && <VoiceOver onError={(e) => setError(errorText(e))} />}
+      {section === 'script' && <NarrationScript onError={(e) => setError(errorText(e))} />}
       {section === 'sfx' && (
         <div className="flex flex-col">
           {BASIC_SFX.map((id) => (

@@ -1,6 +1,8 @@
 import { dragRegion } from './effects'
 import type { AudioClip } from './audio-clips'
 import { isDefaultLook, parseLook, type Look } from './look'
+import { SHAPES, type ShapeKind } from './shapes'
+import { legacyTextStyle, parseTextStyle, type TextStyleProps } from './text-style'
 import {
   animMotion,
   BLEND_MODES,
@@ -21,7 +23,7 @@ import {
  * Lớp nổi trên video (kiểu CapCut "Văn bản" / "Nhãn dán" / "Lớp phủ"): chữ, emoji, ảnh/GIF và
  * video meme (có tiếng, xóa được phông xanh).
  */
-export const OVERLAY_KINDS = ['text', 'emoji', 'image', 'video'] as const
+export const OVERLAY_KINDS = ['text', 'emoji', 'image', 'video', 'shape'] as const
 export type OverlayKind = (typeof OVERLAY_KINDS)[number]
 
 export const TEXT_STYLES = ['meme', 'title', 'bubble', 'neon'] as const
@@ -72,6 +74,19 @@ export interface Overlay {
   keyframes?: Keyframe[]
   /** Xóa phông bằng AI tách người (ảnh / video không có phông xanh). */
   aiKey?: boolean
+  /** Kiểu chữ nâng cao (chữ); không có thì theo `style` + `color` cũ. */
+  textStyle?: TextStyleProps
+  /** Hình vẽ sẵn (kind = shape), vẽ bằng màu `color`. */
+  shape?: ShapeKind
+  /** Độ dày nét của hình (0.02..0.3 theo cạnh nhỏ của lớp). */
+  strokeWidth?: number
+}
+
+/** Kiểu chữ đang dùng của lớp chữ (dự án cũ: suy ra từ `style` + `color`). */
+export function overlayTextStyle(
+  o: Pick<Overlay, 'style' | 'color' | 'textStyle'>,
+): TextStyleProps {
+  return o.textStyle ?? legacyTextStyle(o.style, o.color)
 }
 
 /** Màu phông có sẵn để xóa: xanh lá (phổ biến nhất ở video meme), xanh dương, đen, trắng. */
@@ -212,6 +227,7 @@ export function parseOverlays(value: unknown): Overlay[] {
     const kind = o.kind as OverlayKind
     const file = typeof o.file === 'string' && /^[\w.-]+$/.test(o.file) ? o.file : ''
     if ((kind === 'image' || kind === 'video') && !file) return []
+    if (kind === 'shape' && !SHAPES.includes(o.shape as ShapeKind)) return []
     const sourceDuration = num(o.sourceDuration, 0, 0, 24 * 3600_000)
     if (kind === 'video' && sourceDuration <= 0) return []
     const media = kind === 'image' || kind === 'video'
@@ -254,6 +270,12 @@ export function parseOverlays(value: unknown): Overlay[] {
         ...(o.flipV === true ? { flipV: true } : {}),
         ...(mask ? { mask } : {}),
         ...(media && o.aiKey === true ? { aiKey: true } : {}),
+        ...(kind === 'text' && parseTextStyle(o.textStyle)
+          ? { textStyle: parseTextStyle(o.textStyle) }
+          : {}),
+        ...(kind === 'shape'
+          ? { shape: o.shape as ShapeKind, strokeWidth: num(o.strokeWidth, 0.08, 0.02, 0.3) }
+          : {}),
         ...(keyframes ? { keyframes } : {}),
       },
     ]

@@ -12,8 +12,15 @@ const KIND_STYLE: Record<OverlayKind, string> = {
   emoji: 'bg-pink-500/30 text-pink-50',
   image: 'bg-teal-500/30 text-teal-50',
   video: 'bg-violet-500/40 text-violet-50',
+  shape: 'bg-red-500/30 text-red-50',
 }
-const KIND_ICON: Record<OverlayKind, string> = { text: 'T', emoji: '', image: '🖼', video: '🎬' }
+const KIND_ICON: Record<OverlayKind, string> = {
+  text: 'T',
+  emoji: '',
+  image: '🖼',
+  video: '🎬',
+  shape: '➜',
+}
 
 /** Hàng "Chữ & sticker" trên timeline: kéo để dời, kéo mép để đổi độ dài. */
 export function OverlayTrack({
@@ -83,7 +90,10 @@ export function OverlayTrack({
             }}
           >
             <span className="truncate px-2">
-              {KIND_ICON[fx.kind]} {fx.text || t(`editor.props.${fx.kind}`)}
+              {KIND_ICON[fx.kind]}{' '}
+              {fx.kind === 'shape'
+                ? t(`editor.shapes.${fx.shape ?? 'arrow'}`)
+                : fx.text || t(`editor.props.${fx.kind}`)}
             </span>
             {/* Hình thoi ◇ tại mỗi keyframe: bấm để nhảy tới. */}
             {fx.keyframes?.map((k) => (

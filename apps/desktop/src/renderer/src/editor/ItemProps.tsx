@@ -20,7 +20,6 @@ import {
   EFFECT_KINDS,
   KEY_COLORS,
   overlayPose,
-  TEXT_STYLES,
   TRANSITION_KINDS,
   type AudioClip,
   type Clip,
@@ -35,6 +34,7 @@ import { AdjustPanel, FreezePanel, TransformPanel } from './LookPanels'
 import { AnimSection, BlendSection, KeyframeSection, MaskSection } from './OverlayFxPanels'
 import { PlaybackSection, SpeedSection } from './SpeedPanels'
 import { AiStatus } from './ProjectProps'
+import { ShapeSection, TextStylePanel } from './TextPanels'
 import { useEditorStore } from './store'
 import { ghostButton, pct, secs, Section, Segmented, SliderRow, Toggle } from './ui'
 
@@ -444,29 +444,10 @@ export function OverlayProps({ overlay }: { overlay: Overlay }) {
             onChange={(e) => update({ text: e.target.value }, 'ov-text')}
             className="resize-none rounded-md border border-border bg-surface-2 px-2.5 py-2 text-sm focus:border-accent focus:outline-none"
           />
-          <Segmented
-            label={t('editor.stickers.style')}
-            options={TEXT_STYLES.map((s) => ({
-              value: s,
-              label: t(`editor.stickers.styles.${s}`),
-            }))}
-            value={overlay.style}
-            onChange={(style) => update({ style })}
-            testIdPrefix="overlay-style-"
-            columns={4}
-          />
-          <label className="flex items-center justify-between text-xs">
-            <span className="text-muted">{t('editor.stickers.color')}</span>
-            <input
-              type="color"
-              aria-label={t('editor.stickers.color')}
-              value={overlay.color}
-              onChange={(e) => update({ color: e.target.value }, 'ov-color')}
-              className="h-7 w-10 cursor-pointer rounded border border-border bg-transparent"
-            />
-          </label>
         </Section>
       )}
+      {overlay.kind === 'text' && <TextStylePanel overlay={overlay} />}
+      {overlay.kind === 'shape' && <ShapeSection overlay={overlay} />}
 
       <Section title={t('editor.props.transform')}>
         {overlay.kind === 'video' && (

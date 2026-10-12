@@ -7,6 +7,7 @@ import i18n from '../i18n'
 import { useAppStore } from '../store/app'
 import { createFakeApi, sampleProject, sampleSummary } from '../test/fake-api'
 import { EditorPage } from './EditorPage'
+import { templateStyle } from '@lumora/core'
 
 const t0 = sampleProject.segments[0]!.startedAt
 
@@ -32,6 +33,18 @@ function setup(folder: string | null = sampleSummary.folder) {
   )
   return fake.api
 }
+
+const keys = (elevenlabs: boolean) =>
+  act(() => {
+    useAppStore.setState({
+      secrets: {
+        elevenlabs: elevenlabs ? { state: 'saved', masked: 'el••' } : { state: 'missing' },
+        anthropic: { state: 'missing' },
+        tenor: { state: 'missing' },
+        pixabay: { state: 'missing' },
+      },
+    })
+  })
 
 describe('EditorPage', () => {
   it('chưa chọn dự án thì hướng dẫn mở từ trang Dự án', () => {
@@ -510,6 +523,132 @@ describe('EditorPage', () => {
       'Ối dồi ôi',
       'Xin chào',
     ])
+  })
+
+  it('mẫu chữ và bảng chữ: phông, đậm, nghiêng, viền, nền, chuyển màu, hiệu ứng chữ', async () => {
+    setup()
+    await screen.findByTestId('editor-title')
+    await userEvent.click(screen.getByTestId('lib-text'))
+    keys(false)
+    await userEvent.click(screen.getByTestId('text-add-sunset'))
+    const style = () => useEditorStore.getState().edit!.overlays[0]!.textStyle!
+    expect(style()).toEqual(templateStyle('sunset'))
+    expect(screen.getByTestId('props-title')).toHaveTextContent('Văn bản')
+
+    await userEvent.selectOptions(screen.getByTestId('overlay-font'), 'lobster')
+    await userEvent.click(screen.getByTestId('text-weight-400'))
+    await userEvent.click(screen.getByTestId('text-italic'))
+    await userEvent.click(screen.getByTestId('text-align-left'))
+    await userEvent.click(screen.getByTestId('text-gradient'))
+    expect(style().gradient).toBeUndefined()
+    await userEvent.click(screen.getByTestId('text-gradient'))
+    expect(style().gradient).toMatchObject({ angle: 90 })
+    fireEvent.change(screen.getByTestId('text-stroke'), { target: { value: '0.12' } })
+    fireEvent.change(screen.getByTestId('text-bg'), { target: { value: '0.8' } })
+    fireEvent.change(screen.getByTestId('text-bg-color'), { target: { value: '#112233' } })
+    fireEvent.change(screen.getByTestId('text-letter-spacing'), { target: { value: '0.1' } })
+    await userEvent.click(screen.getByTestId('text-anim-wordPop'))
+    expect(style()).toMatchObject({
+      font: 'lobster',
+      weight: 400,
+      italic: true,
+      align: 'left',
+      stroke: { width: 0.12 },
+      background: { opacity: 0.8, color: '#112233' },
+      letterSpacing: 0.1,
+      anim: 'wordPop',
+    })
+    // Đổi sang mẫu khác: thay cả bộ kiểu; hoàn tác trả lại kiểu trước.
+    await userEvent.click(screen.getByTestId('overlay-style-code'))
+    expect(style()).toEqual(templateStyle('code'))
+    act(() => useEditorStore.getState().undo())
+    expect(style().font).toBe('lobster')
+    // Chưa có key ElevenLabs thì phần đọc chữ chỉ hướng dẫn.
+    expect(screen.getByTestId('text-tts')).toHaveTextContent('Cần key ElevenLabs')
+  })
+
+  it('hình vẽ sẵn: chọn màu, thêm mũi tên, đổi hình, màu và độ dày nét', async () => {
+    setup()
+    await screen.findByTestId('editor-title')
+    await userEvent.click(screen.getByTestId('lib-stickers'))
+    await userEvent.click(screen.getByTestId('sticker-source-shapes'))
+    await userEvent.click(screen.getByTestId('shape-color-22c55e'))
+    await userEvent.click(screen.getByTestId('shape-arrow'))
+    const shape = () => useEditorStore.getState().edit!.overlays[0]!
+    expect(shape()).toMatchObject({ kind: 'shape', shape: 'arrow', color: '#22c55e', size: 0.14 })
+    expect(screen.getByTestId('props-title')).toHaveTextContent('Mũi tên')
+    expect(screen.getByTestId('timeline-overlay')).toHaveTextContent('Mũi tên')
+    await userEvent.click(screen.getByTestId('shape-kind-circle'))
+    await userEvent.click(screen.getByTestId('shape-prop-color-3b82f6'))
+    fireEvent.change(screen.getByTestId('shape-stroke'), { target: { value: '0.15' } })
+    expect(shape()).toMatchObject({ shape: 'circle', color: '#3b82f6', strokeWidth: 0.15 })
+    expect(screen.getByTestId('props-title')).toHaveTextContent('Khoanh tròn')
+    // Hình tô kín (ngôi sao) không có độ dày nét.
+    await userEvent.click(screen.getByTestId('shape-kind-star'))
+    expect(screen.queryByTestId('shape-stroke')).not.toBeInTheDocument()
+  })
+
+  it('kịch bản giọng AI: mỗi dòng thành một đoạn lồng tiếng nối tiếp, kèm phụ đề; đọc lớp chữ', async () => {
+    const api = setup()
+    await screen.findByTestId('editor')
+    await userEvent.click(screen.getByTestId('lib-audio'))
+    keys(false)
+    await userEvent.click(screen.getByTestId('audio-section-script'))
+    expect(screen.getByTestId('script-needs-key')).toBeInTheDocument()
+    keys(true)
+    expect(await screen.findByTestId('script-voice')).toHaveValue('voice-anna')
+    expect(screen.getByTestId('script-generate')).toBeDisabled()
+    await userEvent.type(
+      screen.getByTestId('script-text'),
+      'Xin chào các bạn{Enter}{Enter}Hôm nay mình làm video{Enter}Bắt đầu nhé',
+    )
+    expect(screen.getByTestId('script-count')).toHaveTextContent('3 / 40 câu')
+    act(() => useEditorStore.getState().setTime(500))
+    await userEvent.click(screen.getByTestId('script-generate'))
+    expect(await screen.findByTestId('script-done')).toHaveTextContent('Đã thêm 3 đoạn')
+    expect(api.speak).toHaveBeenCalledTimes(3)
+    expect(api.speak).toHaveBeenNthCalledWith(
+      2,
+      sampleSummary.folder,
+      'Hôm nay mình làm video',
+      'voice-anna',
+    )
+    const { audioClips, overlays } = useEditorStore.getState().edit!
+    // Mỗi câu 900ms, cách nhau 250ms, bắt đầu từ đầu phát.
+    expect(audioClips.map((c) => [c.kind, c.start, c.duration])).toEqual([
+      ['voice', 500, 900],
+      ['voice', 1650, 900],
+      ['voice', 2800, 900],
+    ])
+    expect(overlays.map((o) => [o.text, o.start, o.end])).toEqual([
+      ['Xin chào các bạn', 500, 1400],
+      ['Hôm nay mình làm video', 1650, 2550],
+      ['Bắt đầu nhé', 2800, 3700],
+    ])
+    expect(overlays[0]!.textStyle).toEqual(templateStyle('subtitle'))
+    // Một lần hoàn tác bỏ cả kịch bản.
+    act(() => useEditorStore.getState().undo())
+    expect(useEditorStore.getState().edit!.audioClips).toHaveLength(0)
+    expect(useEditorStore.getState().edit!.overlays).toHaveLength(0)
+
+    // Tắt phụ đề: chỉ có giọng đọc.
+    await userEvent.click(screen.getByTestId('script-captions'))
+    await userEvent.click(screen.getByTestId('script-generate'))
+    await waitFor(() => expect(useEditorStore.getState().edit!.audioClips).toHaveLength(3))
+    expect(useEditorStore.getState().edit!.overlays).toHaveLength(0)
+
+    // Đọc lớp chữ: giọng đọc đặt đúng lúc chữ xuất hiện.
+    act(() => useEditorStore.getState().setTime(4000))
+    await userEvent.click(screen.getByTestId('lib-text'))
+    await userEvent.click(screen.getByTestId('text-add-title'))
+    expect(await screen.findByTestId('tts-voice')).toHaveValue('voice-anna')
+    act(() => useEditorStore.getState().setTime(0))
+    await userEvent.click(screen.getByTestId('tts-read'))
+    await waitFor(() => expect(useEditorStore.getState().edit!.audioClips).toHaveLength(4))
+    expect(useEditorStore.getState().edit!.audioClips[3]).toMatchObject({
+      start: 4000,
+      name: 'Nhập chữ',
+    })
   })
 
   it('nút chỉ có biểu tượng đều có tên và chú thích khi rê chuột', async () => {

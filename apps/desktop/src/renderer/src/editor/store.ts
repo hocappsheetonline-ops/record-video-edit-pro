@@ -23,6 +23,7 @@ import {
   type AudioClip,
   DEFAULT_OVERLAY_MS,
   newOverlayId,
+  templateStyle,
   type Overlay,
   DEFAULT_EFFECT_MS,
   MIN_REGION_MS,
@@ -131,8 +132,22 @@ interface EditorStore {
   addMusic(): Promise<boolean>
   /** Thêm hiệu ứng âm thanh có sẵn tại đầu phát. */
   addSoundEffect(id: SoundEffectId): Promise<void>
-  /** Đọc câu bằng giọng AI rồi thêm tại đầu phát như một hiệu ứng âm thanh. */
-  addSpeech(text: string, voiceId: string): Promise<void>
+  /** Đọc câu bằng giọng AI rồi thêm tại `at` (mặc định: đầu phát) như một hiệu ứng âm thanh. */
+  addSpeech(text: string, voiceId: string, at?: number): Promise<void>
+  /**
+   * Kịch bản lồng tiếng: mỗi dòng đọc bằng giọng AI thành một đoạn "Lồng tiếng" nối tiếp nhau
+   * từ đầu phát (cách nhau `gapMs`); tùy chọn thêm phụ đề chữ đúng thời gian từng đoạn.
+   * `onProgress(done, total)` báo tiến độ. Trả về số đoạn đã thêm.
+   */
+  addNarration(
+    lines: readonly string[],
+    voiceId: string,
+    options?: {
+      captions?: boolean
+      gapMs?: number
+      onProgress?: (done: number, total: number) => void
+    },
+  ): Promise<number>
   updateAudioClip(id: string, patch: Partial<AudioClip>, coalesce?: string): void
   loadAssetPeaks(file: string): void
   /** Bắt đầu xử lý hiệu ứng âm thanh cho file (nếu chưa có); an toàn khi gọi nhiều lần. */
@@ -252,6 +267,33 @@ function insertAudio(asset: AudioAsset, kind: AudioClip['kind'], at?: number) {
   }
   useEditorStore.getState().change((e) => ({ ...e, audioClips: [...e.audioClips, clip] }))
   useEditorStore.setState({ selection: { kind: 'audio', id: clip.id } })
+}
+
+/** Khoảng lặng giữa các câu của kịch bản lồng tiếng. */
+export const NARRATION_GAP_MS = 250
+
+/** Phụ đề cho một câu lồng tiếng (mẫu chữ "Phụ đề", ở cuối khung hình). */
+function narrationCaption(text: string): Omit<Overlay, 'id' | 'start' | 'end'> {
+  return {
+    kind: 'text',
+    x: 0.5,
+    y: 0.86,
+    size: 0.06,
+    rotation: 0,
+    anim: { ...NO_ANIM },
+    text,
+    style: 'meme',
+    textStyle: templateStyle('subtitle'),
+    color: '#ffffff',
+    file: '',
+    aspect: 1,
+    mediaOffset: 0,
+    sourceDuration: 0,
+    hasAudio: false,
+    volume: 1,
+    keyColor: '',
+    keyStrength: 0.4,
+  }
 }
 
 /** Yêu cầu tạo file đảo ngược đang chạy (dùng chung khi gọi trùng). */
@@ -533,10 +575,61 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set({ selection: { kind: 'audio', id: audio.id } })
   },
 
-  async addSpeech(text, voiceId) {
+  async addSpeech(text, voiceId, at) {
     const { folder } = get()
     if (!folder) return
-    insertAudio(await lumora().speak(folder, text, voiceId), 'sfx')
+    insertAudio(await lumora().speak(folder, text, voiceId), 'sfx', at)
+  },
+
+  async addNarration(lines, voiceId, options = {}) {
+    const { folder, edit, time } = get()
+    const list = lines.map((l) => l.trim()).filter(Boolean)
+    if (!folder || !edit || list.length === 0) return 0
+    const gap = options.gapMs ?? NARRATION_GAP_MS
+    // Đọc hết trước rồi mới thêm vào dự án (một bước hoàn tác; lỗi giữa chừng không để dở dang).
+    const assets: AudioAsset[] = []
+    for (const line of list) {
+      assets.push(await lumora().speak(folder, line, voiceId))
+      options.onProgress?.(assets.length, list.length)
+    }
+    const total = outputDuration(get().edit?.clips ?? edit.clips)
+    const audio: AudioClip[] = []
+    const captions: Overlay[] = []
+    let at = Math.min(time, Math.max(0, total - MIN_AUDIO_CLIP_MS))
+    assets.forEach((asset, i) => {
+      if (at > total - MIN_AUDIO_CLIP_MS) return
+      const duration = Math.max(MIN_AUDIO_CLIP_MS, Math.min(asset.durationMs, total - at))
+      audio.push({
+        id: newAudioClipId(),
+        file: asset.file,
+        name: list[i]!.slice(0, 40),
+        kind: 'voice',
+        start: at,
+        offset: 0,
+        duration,
+        sourceDuration: asset.durationMs,
+        volume: 1,
+        fadeIn: 0,
+        fadeOut: 0,
+        loop: false,
+      })
+      if (options.captions)
+        captions.push({
+          ...narrationCaption(list[i]!),
+          id: newOverlayId(),
+          start: at,
+          end: at + duration,
+        })
+      at += duration + gap
+    })
+    if (audio.length === 0) return 0
+    get().change((e) => ({
+      ...e,
+      audioClips: [...e.audioClips, ...audio],
+      overlays: [...e.overlays, ...captions],
+    }))
+    set({ selection: { kind: 'audio', id: audio[0]!.id } })
+    return audio.length
   },
 
   updateAudioClip(id, patch, coalesce) {
@@ -596,7 +689,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           ? 0.35
           : init.kind === 'emoji'
             ? 0.18
-            : 0.09,
+            : init.kind === 'shape'
+              ? 0.14
+              : 0.09,
       rotation: 0,
       anim: video ? { ...NO_ANIM } : { ...DEFAULT_ANIM },
       text: '',

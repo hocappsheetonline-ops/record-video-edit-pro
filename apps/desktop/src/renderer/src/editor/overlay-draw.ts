@@ -1,16 +1,18 @@
 import {
-  accentForeground,
   chromaKey,
   compositeOf,
   lookLayers,
   overlayMotion,
   posedOverlay,
+  SHAPE_ASPECT,
   STILL_MOTION,
   type Overlay,
   type OverlayMask,
 } from '@lumora/core'
 import type { AnyCanvas, Ctx, FrameSource } from './draw'
 import { applyLookLayers } from './look-draw'
+import { drawShape } from './shape-draw'
+import { drawTextLayer, layoutText } from './text-draw'
 
 /** Hình của lớp ảnh / video tại `local` ms kể từ lúc hiện (null nếu chưa tải xong). */
 export type OverlayMediaFn = (overlay: Overlay, local: number) => FrameSource | null
@@ -41,24 +43,6 @@ export interface OverlayItem {
 
 const EMOJI_FONT = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif'
 
-function textFont(o: Overlay, px: number): string {
-  switch (o.style) {
-    case 'meme':
-      return `900 ${px}px Impact, "Arial Black", "Segoe UI", sans-serif`
-    case 'title':
-      return `800 ${px}px "Segoe UI", "Inter", system-ui, sans-serif`
-    case 'bubble':
-      return `700 ${px}px "Segoe UI", "Inter", system-ui, sans-serif`
-    case 'neon':
-      return `700 ${px}px "Segoe UI", "Inter", system-ui, sans-serif`
-  }
-}
-
-const lines = (o: Overlay) => {
-  const text = o.style === 'meme' ? o.text.toUpperCase() : o.text
-  return text.split('\n').map((l) => l || ' ')
-}
-
 /** Khung bao (px, chưa xoay) của lớp nổi — dùng để vẽ và để bấm/kéo trên khung xem trước. */
 export function overlayBox(ctx: Ctx, o: Overlay, width: number, height: number) {
   const px = o.size * height
@@ -66,12 +50,9 @@ export function overlayBox(ctx: Ctx, o: Overlay, width: number, height: number) 
   const cy = o.y * height
   if (o.kind === 'image' || o.kind === 'video') return { cx, cy, w: px * o.aspect, h: px }
   if (o.kind === 'emoji') return { cx, cy, w: px * 1.2, h: px * 1.2 }
-  ctx.save()
-  ctx.font = textFont(o, px)
-  const w = Math.max(...lines(o).map((l) => ctx.measureText(l).width))
-  ctx.restore()
-  const pad = o.style === 'bubble' ? px * 0.5 : px * 0.15
-  return { cx, cy, w: w + pad * 2, h: lines(o).length * px * 1.2 + pad }
+  if (o.kind === 'shape') return { cx, cy, w: px * SHAPE_ASPECT[o.shape ?? 'arrow'], h: px }
+  const layout = layoutText(ctx, o, px)
+  return { cx, cy, w: layout.width, h: layout.height }
 }
 
 /**
@@ -110,75 +91,20 @@ export function drawOverlays(
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText(o.text, 0, 0)
+    } else if (o.kind === 'shape') {
+      drawShape(
+        ctx,
+        o.shape ?? 'arrow',
+        o.color,
+        box.w,
+        box.h,
+        (o.strokeWidth ?? 0.08) * Math.min(box.w, box.h),
+      )
     } else {
-      drawText(ctx, o, px, box, m.reveal)
+      drawTextLayer(ctx, o, px, layoutText(ctx, o, px), local, m.reveal)
     }
     ctx.restore()
   }
-}
-
-/** Cắt chữ còn `reveal` (0..1) phần đầu (hiệu ứng máy đánh chữ). */
-function revealRows(rows: string[], reveal: number): string[] {
-  if (reveal >= 1) return rows
-  let left = Math.floor(rows.reduce((n, r) => n + [...r].length, 0) * reveal)
-  return rows.map((row) => {
-    const chars = [...row]
-    const shown = chars.slice(0, Math.max(0, left)).join('')
-    left -= chars.length
-    return shown
-  })
-}
-
-function drawText(ctx: Ctx, o: Overlay, px: number, box: { w: number; h: number }, reveal = 1) {
-  const rows = revealRows(lines(o), reveal)
-  ctx.font = textFont(o, px)
-  ctx.textAlign = 'center'
-  ctx.textBaseline = 'middle'
-  ctx.lineJoin = 'round'
-  const lineH = px * 1.2
-  const top = -((rows.length - 1) * lineH) / 2
-  if (o.style === 'bubble') {
-    const r = px * 0.5
-    ctx.beginPath()
-    ctx.roundRect(-box.w / 2, -box.h / 2, box.w, box.h, r)
-    ctx.fillStyle = o.color
-    ctx.shadowColor = 'rgba(0,0,0,0.35)'
-    ctx.shadowBlur = px * 0.3
-    ctx.fill()
-    ctx.shadowColor = 'transparent'
-  }
-  rows.forEach((row, i) => {
-    const y = top + i * lineH
-    switch (o.style) {
-      case 'meme':
-        ctx.lineWidth = px * 0.14
-        ctx.strokeStyle = '#000000'
-        ctx.strokeText(row, 0, y)
-        ctx.fillStyle = o.color
-        ctx.fillText(row, 0, y)
-        break
-      case 'title':
-        ctx.shadowColor = 'rgba(0,0,0,0.55)'
-        ctx.shadowBlur = px * 0.25
-        ctx.shadowOffsetY = px * 0.06
-        ctx.fillStyle = o.color
-        ctx.fillText(row, 0, y)
-        break
-      case 'bubble':
-        ctx.fillStyle = accentForeground(o.color)
-        ctx.fillText(row, 0, y)
-        break
-      case 'neon':
-        ctx.shadowColor = o.color
-        ctx.shadowBlur = px * 0.6
-        ctx.lineWidth = px * 0.05
-        ctx.strokeStyle = o.color
-        ctx.strokeText(row, 0, y)
-        ctx.fillStyle = '#ffffff'
-        ctx.fillText(row, 0, y)
-        break
-    }
-  })
 }
 
 /** Bản nháp xóa phông, riêng cho từng canvas đích (giống `snapshot`). */

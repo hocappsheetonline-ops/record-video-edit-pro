@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Activity,
@@ -10,7 +10,6 @@ import {
   PartyPopper,
   Sun,
   Tv,
-  Type,
   Vibrate,
   Zap,
   type LucideIcon,
@@ -20,16 +19,15 @@ import {
   DEFAULT_TRANSITION_MS,
   EFFECT_KINDS,
   EMOJI_STICKERS,
-  TEXT_STYLES,
   TRANSITION_KINDS,
   type EffectKind,
-  type TextStyle,
 } from '@lumora/core'
 import { useEditorStore } from '../store'
-import { ghostButton, primaryButton, Segmented } from '../ui'
+import { ghostButton, Segmented } from '../ui'
 import { Card } from './common'
 import { addLibraryItem } from './MediaTab'
 import { OnlineGrid } from './OnlineGrid'
+import { ShapesGrid } from '../TextPanels'
 
 const EFFECT_ICONS: Record<EffectKind, LucideIcon> = {
   shake: Vibrate,
@@ -57,64 +55,6 @@ const EFFECT_TILES: Record<EffectKind, string> = {
   confetti: 'from-pink-400 to-violet-600',
 }
 
-/** Kiểu chữ minh họa cho thẻ chọn mẫu chữ (gần giống cách vẽ trên video). */
-const TEXT_SAMPLE: Record<TextStyle, CSSProperties> = {
-  meme: {
-    fontFamily: 'Impact, "Arial Black", sans-serif',
-    color: '#fff',
-    textTransform: 'uppercase',
-    WebkitTextStroke: '1.5px #000',
-    fontWeight: 900,
-  },
-  title: { fontWeight: 800, color: '#fff', textShadow: '0 2px 8px rgba(0,0,0,.7)' },
-  bubble: {
-    fontWeight: 700,
-    color: '#111',
-    background: '#fff',
-    borderRadius: 999,
-    padding: '2px 12px',
-  },
-  neon: { fontWeight: 700, color: '#fff', textShadow: '0 0 6px #22d3ee, 0 0 14px #22d3ee' },
-}
-
-export function TextTab() {
-  const { t } = useTranslation()
-  const addOverlay = useEditorStore((s) => s.addOverlay)
-  return (
-    <div className="flex flex-col gap-3 p-3">
-      <button
-        type="button"
-        data-testid="text-add-default"
-        className={primaryButton}
-        onClick={() =>
-          addOverlay({ kind: 'text', text: t('editor.library.defaultText'), style: 'title' })
-        }
-      >
-        <Type size={15} aria-hidden />
-        {t('editor.library.addText')}
-      </button>
-      <div className="grid grid-cols-2 gap-2">
-        {TEXT_STYLES.map((style) => (
-          <Card
-            key={style}
-            testId={`text-add-${style}`}
-            title={t('editor.library.clickToAdd')}
-            onClick={() =>
-              addOverlay({ kind: 'text', text: t('editor.library.defaultText'), style })
-            }
-          >
-            <span className="flex aspect-video items-center justify-center rounded-md bg-gradient-to-br from-slate-600 to-slate-900 text-base">
-              <span style={TEXT_SAMPLE[style]}>{t('editor.library.sample')}</span>
-            </span>
-            {t(`editor.stickers.styles.${style}`)}
-          </Card>
-        ))}
-      </div>
-      <p className="text-[11px] text-muted">{t('editor.library.textHint')}</p>
-    </div>
-  )
-}
-
 function EmojiGrid() {
   const addOverlay = useEditorStore((s) => s.addOverlay)
   return (
@@ -135,15 +75,16 @@ function EmojiGrid() {
   )
 }
 
-/** Nhãn dán: emoji có sẵn hoặc sticker động nền trong suốt từ Tenor. */
+/** Nhãn dán: emoji có sẵn, hình vẽ sẵn (mũi tên, khoanh tròn…) hoặc sticker động nền trong suốt từ Tenor. */
 export function StickersTab() {
   const { t } = useTranslation()
-  const [source, setSource] = useState<'emoji' | 'tenorSticker'>('emoji')
+  const [source, setSource] = useState<'emoji' | 'shapes' | 'tenorSticker'>('emoji')
   return (
     <div className="flex flex-col gap-3 p-3">
       <Segmented
         options={[
           { value: 'emoji', label: t('editor.library.sources.emoji') },
+          { value: 'shapes', label: t('editor.library.sources.shapes') },
           { value: 'tenorSticker', label: t('editor.library.sources.tenorSticker') },
         ]}
         value={source}
@@ -152,6 +93,8 @@ export function StickersTab() {
       />
       {source === 'emoji' ? (
         <EmojiGrid />
+      ) : source === 'shapes' ? (
+        <ShapesGrid />
       ) : (
         <OnlineGrid source="tenorSticker" onUse={addLibraryItem} />
       )}

@@ -21,6 +21,7 @@ import {
 } from '@lumora/core'
 import { mediaUrl } from '../lib/media'
 import { drawScene, videoElementSource, type AnyCanvas } from './draw'
+import { loadFonts } from './fonts'
 import { loadSegmenter, type PersonSegmenter } from './segmenter'
 import { imageSource } from './overlay-draw'
 import { OverlayImages } from './overlay-images'
@@ -105,6 +106,8 @@ export class PreviewEngine {
     }
     this.loop = this.loop.bind(this)
     this.frame = requestAnimationFrame(this.loop)
+    // Phông chữ đi kèm: vẽ lại khi nạp xong.
+    void loadFonts().then(() => this.requestDraw())
   }
 
   private needsDraw = true

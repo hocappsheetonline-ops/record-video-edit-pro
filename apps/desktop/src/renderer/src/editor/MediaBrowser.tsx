@@ -16,7 +16,8 @@ import { AiPanel } from './AiPanel'
 import { CaptionsPanel } from './CaptionsPanel'
 import { AudioTab } from './library/AudioTab'
 import { MediaTab } from './library/MediaTab'
-import { EffectsTab, StickersTab, TextTab, TransitionsTab } from './library/tabs'
+import { EffectsTab, StickersTab, TransitionsTab } from './library/tabs'
+import { TextTemplatesTab } from './TextPanels'
 import { FiltersTab } from './LookPanels'
 import { useEditorStore } from './store'
 
@@ -99,7 +100,7 @@ export function MediaBrowser() {
         <div className="min-h-0 flex-1 overflow-y-auto">
           {tab === 'media' && <MediaTab />}
           {tab === 'audio' && <AudioTab />}
-          {tab === 'text' && <TextTab />}
+          {tab === 'text' && <TextTemplatesTab />}
           {tab === 'stickers' && <StickersTab />}
           {tab === 'effects' && <EffectsTab />}
           {tab === 'filters' && <FiltersTab />}

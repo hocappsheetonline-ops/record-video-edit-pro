@@ -109,7 +109,9 @@ export function PropertiesPanel() {
                   ? t('editor.props.text')
                   : overlay.kind === 'emoji'
                     ? t('editor.props.sticker')
-                    : overlay.text || t(`editor.props.${overlay.kind}`),
+                    : overlay.kind === 'shape'
+                      ? t(`editor.shapes.${overlay.shape ?? 'arrow'}`)
+                      : overlay.text || t(`editor.props.${overlay.kind}`),
               body: (
                 <div data-testid="overlay-selected">
                   <OverlayProps overlay={overlay} />
