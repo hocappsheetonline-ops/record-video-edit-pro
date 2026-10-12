@@ -21,8 +21,13 @@ if (!input || !output) {
 const text = readFileSync(input, 'utf8')
 const newline = text.indexOf('\n')
 const header = text.slice(0, newline)
-if (header.trim() !== 'rnnoise-nu model file version 1') throw new Error('Không phải model rnnoise-nu')
-const tokens = text.slice(newline + 1).trim().split(/\s+/).map(Number)
+if (header.trim() !== 'rnnoise-nu model file version 1')
+  throw new Error('Không phải model rnnoise-nu')
+const tokens = text
+  .slice(newline + 1)
+  .trim()
+  .split(/\s+/)
+  .map(Number)
 let pos = 0
 const take = (n) => {
   const out = tokens.slice(pos, pos + n)
@@ -93,8 +98,7 @@ const vad = {
   bias: gruBias(vadGru, vadN),
 }
 // noise_gru: [dense, vad (đệm), đặc trưng] — chèn đầu vào rỗng sau phần vad gốc.
-const noiseMap = (k) =>
-  k < dense + vadGru.n ? k : k < dense + vadN ? null : k - PAD
+const noiseMap = (k) => (k < dense + vadGru.n ? k : k < dense + vadN ? null : k - PAD)
 const noise = {
   ...noiseGru,
   m: noiseGru.m + PAD,
@@ -125,4 +129,6 @@ gru2(denoise)
 dense2(denoiseOutput)
 dense2(vadOut)
 writeFileSync(output, `${lines.join('\n')}\n`)
-console.log(`vad_gru ${vadGru.n} → ${vadN}; noise_gru ${noise.m} đầu vào; denoise_gru ${denoise.m} đầu vào`)
+console.log(
+  `vad_gru ${vadGru.n} → ${vadN}; noise_gru ${noise.m} đầu vào; denoise_gru ${denoise.m} đầu vào`,
+)
