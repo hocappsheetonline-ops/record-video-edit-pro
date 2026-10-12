@@ -102,6 +102,8 @@ export const vi = {
       zoom: 'Zoom',
       camera: 'Webcam',
       audio: 'Âm thanh',
+      captions: 'Phụ đề',
+      ai: 'AI',
       export: 'Xuất',
     },
     frame: {
@@ -160,6 +162,54 @@ export const vi = {
       done: 'Đã xuất: {{file}}',
       reveal: 'Mở thư mục',
       failed: 'Xuất video thất bại: {{message}}',
+    },
+  },
+  captions: {
+    intro:
+      'Lumora gửi phần lời nói lên ElevenLabs để tạo phụ đề có thời gian từng từ. Bạn sửa được nội dung và xuất SRT/VTT, hoặc in thẳng vào video.',
+    language: 'Ngôn ngữ nói',
+    auto: 'Tự nhận diện',
+    generate: 'Tạo phụ đề',
+    generating: 'Đang nhận dạng giọng nói…',
+    show: 'Hiện phụ đề trên video',
+    styles: { highlight: 'Tô sáng từng từ', classic: 'Cả dòng' },
+    positions: { bottom: 'Dưới', top: 'Trên' },
+    size: 'Cỡ chữ',
+    saveSrt: 'Lưu SRT',
+    saveVtt: 'Lưu VTT',
+    toEn: 'Dịch sang tiếng Anh',
+    toVi: 'Dịch sang tiếng Việt',
+    translating: 'Đang dịch…',
+    reset: 'Tạo lại',
+  },
+  ai: {
+    working: 'Đang xử lý…',
+    kinds: { filler: 'Từ đệm', repeat: 'Nói lặp', silence: 'Khoảng lặng', other: 'Khác' },
+    cuts: {
+      title: 'Cắt từ thừa và khoảng lặng',
+      intro:
+        'Claude tìm từ đệm (ừm, à…), câu nói lặp; app tự tìm khoảng lặng dài. Bạn duyệt rồi mới áp dụng.',
+      find: 'Tìm đoạn nên cắt',
+      none: 'Không tìm thấy đoạn nào cần cắt.',
+      apply: 'Áp dụng {{count}} đoạn cắt',
+      silenceLength: 'Im lặng {{seconds}} giây',
+    },
+    text: {
+      title: 'Chỉnh video bằng văn bản',
+      intro: 'Bấm chọn các từ muốn bỏ rồi bấm cắt — phần video tương ứng sẽ bị xóa.',
+      cut: 'Cắt {{count}} từ đã chọn',
+    },
+    summary: {
+      title: 'Tiêu đề, mô tả và chương',
+      make: 'Tạo bằng Claude',
+      copy: 'Sao chép',
+      save: 'Lưu thành .txt',
+    },
+    errors: {
+      missingKey: 'Chưa có API key {{name}}. Hãy nhập trong Cài đặt.',
+      noAudio: 'Bản quay không có âm thanh micro hay âm thanh máy để nhận dạng.',
+      noTranscript: 'Hãy tạo phụ đề trước (tab Phụ đề).',
+      generic: 'Lỗi: {{message}}',
     },
   },
   live: {

@@ -47,6 +47,14 @@ const api: LumoraApi = {
   finishExport: (id, folder, edit) => ipcRenderer.invoke(IPC.exportFinish, id, folder, edit),
   cancelExport: (id) => ipcRenderer.invoke(IPC.exportCancel, id),
   revealFile: (path) => ipcRenderer.invoke(IPC.revealFile, path),
+
+  transcribe: (folder, language) => ipcRenderer.invoke(IPC.aiTranscribe, folder, language),
+  getTranscript: (folder) => ipcRenderer.invoke(IPC.aiGetTranscript, folder),
+  suggestCuts: (folder) => ipcRenderer.invoke(IPC.aiSuggestCuts, folder),
+  summarize: (folder) => ipcRenderer.invoke(IPC.aiSummarize, folder),
+  translateLines: (lines, target) => ipcRenderer.invoke(IPC.aiTranslate, lines, target),
+  saveExportText: (folder, fileName, content) =>
+    ipcRenderer.invoke(IPC.saveExportText, folder, fileName, content),
 }
 
 contextBridge.exposeInMainWorld('lumora', api)

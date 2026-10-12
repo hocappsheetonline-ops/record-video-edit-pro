@@ -1,5 +1,7 @@
 import {
   cameraAt,
+  captionAt,
+  sourceToOutput,
   cameraRect,
   clickAt,
   contentRect,
@@ -27,6 +29,13 @@ export interface FrameScene {
   cursor: { x: number; y: number; size: number; opacity: number } | null
   ripple: { x: number; y: number; radius: number; opacity: number } | null
   camera: { rect: Rect; shape: EditState['camera']['shape'] } | null
+  captions: {
+    words: { text: string; active: boolean }[]
+    style: 'highlight' | 'classic'
+    position: 'bottom' | 'top'
+    /** Cỡ chữ (px). */
+    fontSize: number
+  } | null
 }
 
 export interface SceneInput {
@@ -72,7 +81,34 @@ export function computeScene(input: SceneInput): FrameScene {
     }
   }
 
+  let captions: FrameScene['captions'] = null
+  const cap = edit.captions
+  if (cap.enabled && cap.lines.length > 0) {
+    const hit = captionAt(cap.lines, source)
+    if (hit) {
+      const useWords = !hit.line.edited && hit.line.words.length > 0
+      // Từ đã bị cắt khỏi video thì không hiện trong phụ đề.
+      const words = useWords
+        ? hit.line.words.flatMap((w, i) =>
+            sourceToOutput(edit.clips, (w.start + w.end) / 2) === null
+              ? []
+              : [{ text: w.text, active: cap.style === 'highlight' && i === hit.wordIndex }],
+          )
+        : hit.line.text
+            .split(/\s+/)
+            .filter(Boolean)
+            .map((text) => ({ text, active: false }))
+      captions = {
+        words,
+        style: cap.style,
+        position: cap.position,
+        fontSize: Math.round(Math.min(output.width, output.height) * 0.05 * cap.size),
+      }
+    }
+  }
+
   return {
+    captions,
     width: output.width,
     height: output.height,
     background: edit.frame.background,

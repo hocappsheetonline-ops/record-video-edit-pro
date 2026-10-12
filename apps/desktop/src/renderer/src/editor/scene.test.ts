@@ -109,4 +109,81 @@ describe('computeScene', () => {
     expect(scene.cursor).toBeNull()
     expect(scene.camera?.shape).toBe('circle')
   })
+
+  it('phụ đề: tô sáng từ đang nói; dòng đã sửa thì hiện nguyên dòng', () => {
+    const edit = createDefaultEdit(project)
+    edit.captions = {
+      ...edit.captions,
+      enabled: true,
+      lines: [
+        {
+          id: 'l0',
+          start: 0,
+          end: 1000,
+          text: 'Xin chào',
+          edited: false,
+          words: [
+            { text: 'Xin', start: 0, end: 400 },
+            { text: 'chào', start: 500, end: 1000 },
+          ],
+        },
+        {
+          id: 'l1',
+          start: 2000,
+          end: 3000,
+          text: 'Đã sửa lại',
+          edited: true,
+          words: [{ text: 'x', start: 2000, end: 3000 }],
+        },
+      ],
+    }
+    const at = (source: number) =>
+      computeScene({ edit, output, video, source, cursor: null, follow: null, hasCamera: false })
+        .captions
+    expect(at(600)?.words).toEqual([
+      { text: 'Xin', active: false },
+      { text: 'chào', active: true },
+    ])
+    expect(at(600)?.fontSize).toBe(54)
+    expect(at(2500)?.words.map((w) => w.text)).toEqual(['Đã', 'sửa', 'lại'])
+    expect(at(1500)).toBeNull()
+    edit.captions.enabled = false
+    expect(at(600)).toBeNull()
+  })
+
+  it('phụ đề bỏ các từ đã bị cắt khỏi video', () => {
+    const edit = createDefaultEdit(project)
+    edit.clips = [
+      { id: 'a', sourceStart: 0, sourceEnd: 400, speed: 1 },
+      { id: 'b', sourceStart: 700, sourceEnd: 10_000, speed: 1 },
+    ]
+    edit.captions = {
+      ...edit.captions,
+      enabled: true,
+      lines: [
+        {
+          id: 'l0',
+          start: 0,
+          end: 1200,
+          text: 'Xin ừm chào',
+          edited: false,
+          words: [
+            { text: 'Xin', start: 0, end: 300 },
+            { text: 'ừm', start: 450, end: 650 },
+            { text: 'chào', start: 800, end: 1200 },
+          ],
+        },
+      ],
+    }
+    const scene = computeScene({
+      edit,
+      output,
+      video,
+      source: 900,
+      cursor: null,
+      follow: null,
+      hasCamera: false,
+    })
+    expect(scene.captions?.words.map((w) => w.text)).toEqual(['Xin', 'chào'])
+  })
 })

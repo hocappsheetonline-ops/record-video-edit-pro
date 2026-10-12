@@ -19,6 +19,7 @@ import {
   type InputEvent,
   type Project,
   type Size,
+  type Transcript,
 } from '@lumora/core'
 import { lumora } from '../api'
 
@@ -29,6 +30,7 @@ interface EditorStore {
   project: Project | null
   edit: EditState | null
   events: InputEvent[]
+  transcript: Transcript | null
   cursor: CursorTrack | null
   follow: CursorTrack | null
   /** Kích thước gốc của video màn hình. */
@@ -51,6 +53,7 @@ interface EditorStore {
   setPlaying(playing: boolean): void
   select(selection: Selection): void
   setVideoSize(size: Size): void
+  setTranscript(transcript: Transcript | null): void
   splitAtPlayhead(): void
   deleteSelection(): void
   setClipSpeed(id: string, speed: number): void
@@ -71,6 +74,7 @@ const initial = {
   project: null,
   edit: null,
   events: [],
+  transcript: null,
   cursor: null,
   follow: null,
   videoSize: { width: 1920, height: 1080 },
@@ -88,10 +92,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   async load(folder) {
     set({ ...initial, folder })
     const api = lumora()
-    const [project, events, saved] = await Promise.all([
+    const [project, events, saved, transcript] = await Promise.all([
       api.getProject(folder),
       api.getEvents(folder),
       api.getEdit(folder),
+      api.getTranscript(folder).catch(() => null),
     ])
     if (get().folder !== folder) return
     if (!project) return set({ loadError: 'not_found' })
@@ -112,6 +117,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set({
       project,
       events,
+      transcript,
       edit,
       ...tracks,
       videoSize: rect ? { width: rect.width, height: rect.height } : { width: 1920, height: 1080 },
@@ -183,6 +189,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setVideoSize(size) {
     const current = get().videoSize
     if (current.width !== size.width || current.height !== size.height) set({ videoSize: size })
+  },
+
+  setTranscript(transcript) {
+    set({ transcript })
   },
 
   splitAtPlayhead() {

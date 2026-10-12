@@ -88,15 +88,15 @@ Mỗi nguồn được ghi thành **file riêng**. Nhờ vậy lúc chỉnh sử
 - Khung: các tỉ lệ khung hình, nền trơn/chuyển màu, lề, bo góc, bóng đổ. Bong bóng webcam.
 - Xem trước bằng thẻ video kết hợp canvas. Xuất bằng mediabunny (WebCodecs) qua cùng hàm vẽ, rồi FFmpeg trộn âm thanh theo clip; hỗ trợ MP4 và GIF.
 
-### Giai đoạn 3: AI (~2–3 tuần)
+### Giai đoạn 3: AI ✅ Đã xong
 
-- **Phụ đề tự động:** gửi audio lên ElevenLabs STT, nhận lại từng từ kèm thời gian, tự chia câu. Có các kiểu hiển thị (từng từ nổi bật kiểu TikTok, hoặc dạng câu), chỉnh sửa nội dung phụ đề, xuất SRT/VTT hoặc in thẳng vào video.
-- **AI tự biên tập (Claude):**
-  - Phát hiện từ thừa ("ừm", "à", "uh", "um"), câu nói lặp và khoảng lặng dài, rồi **đề xuất đoạn cắt** để người dùng duyệt trước khi áp dụng.
-  - Chỉnh video bằng cách sửa văn bản: xóa chữ trong transcript thì đoạn video tương ứng bị cắt.
-  - Tạo tiêu đề, mô tả, hashtag và chương (YouTube chapters).
-  - Dịch phụ đề Việt ↔ Anh.
-- Hiển thị ước tính chi phí API trước mỗi lần chạy.
+- Phụ đề: trộn âm thanh micro (hoặc âm thanh máy) theo thời gian nguồn, gửi lên ElevenLabs Scribe v2 và nhận thời gian từng từ. Câu được chia thành dòng (tối đa 42 ký tự, 4 giây, ngắt ở cuối câu hoặc khi dừng).
+- Kiểu tô sáng từng từ hoặc cả dòng; sửa dòng; xuất SRT/VTT theo timeline đã cắt (bỏ các từ đã cắt); in phụ đề vào video khi xuất; dịch Việt ↔ Anh.
+- Claude (`claude-opus-5-5`, structured outputs, `fallbacks: "default"`):
+  - gợi ý cắt từ đệm và câu nói lặp (kết hợp phần tự tìm từ đệm và khoảng lặng), duyệt trước khi áp dụng;
+  - tạo tiêu đề, mô tả, hashtag và chương.
+- Chỉnh video bằng văn bản: chọn từ để cắt.
+- Test E2E chạy với máy chủ giả lập ElevenLabs và Anthropic: kiểm tra request gửi đi và kết quả trên video (SRT, độ dài video, phụ đề in trong khung hình).
 
 ### Giai đoạn 4: Livestream giống StreamYard (~6–8 tuần)
 
@@ -143,4 +143,4 @@ Cấu hình máy khuyến nghị để quay 1080p/60fps: CPU 4 nhân trở lên,
 
 ## 6. Bước tiếp theo
 
-Bắt đầu **Giai đoạn 3**: phụ đề tự động (ElevenLabs) và AI tự biên tập (Claude).
+Bắt đầu **Giai đoạn 4**: livestream giống StreamYard.

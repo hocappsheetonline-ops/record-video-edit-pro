@@ -59,6 +59,13 @@ beforeEach(async () => {
       secrets: new SecretStore(join(dir, 'secrets.json'), cipher),
       validators,
       recording,
+      ai: {
+        transcribe: vi.fn(async () => ({ language: 'vi', words: [] })),
+        getTranscript: vi.fn(async () => null),
+        suggestCuts: vi.fn(async () => []),
+        summarize: vi.fn(async () => ({ titles: [], description: '', hashtags: [], chapters: [] })),
+        translate: vi.fn(async (lines: { id: string; text: string }[]) => lines),
+      },
       exports: {
         start: vi.fn(async () => 'e1'),
         write: vi.fn(async () => {}),
@@ -164,5 +171,31 @@ describe('registerIpc', () => {
     await expect(call(IPC.projectsDelete, '../evil.lumora')).rejects.toThrow(/không hợp lệ/)
     await call(IPC.projectsDelete, 'a.lumora')
     expect(trashed).toEqual([join(dir, 'a.lumora')])
+  })
+
+  it('lưu phụ đề vào thư mục exports, chỉ cho phép đuôi văn bản', async () => {
+    const { mkdir: mk, writeFile: wf, readFile: rf } = await import('node:fs/promises')
+    await mk(join(dir, 'a.lumora'))
+    await wf(
+      join(dir, 'a.lumora', 'project.json'),
+      JSON.stringify({
+        version: 1,
+        id: 'a',
+        name: 'A',
+        createdAt: 'x',
+        source: { kind: 'display' },
+        engine: 'ffmpeg',
+        segments: [],
+      }),
+    )
+    const saved = (await call(IPC.saveExportText, 'a.lumora', 'Phụ đề: A.srt', '1\n')) as {
+      path: string
+      fileName: string
+    }
+    expect(saved.fileName).toBe('Phụ đề A.srt')
+    expect(await rf(saved.path, 'utf8')).toBe('1\n')
+    await expect(call(IPC.saveExportText, 'a.lumora', 'virus.exe', 'x')).rejects.toThrow(
+      /không được phép/,
+    )
   })
 })

@@ -1,10 +1,12 @@
 import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ASPECTS, BACKGROUND_PRESETS, CORNERS, type Background, type EditState } from '@lumora/core'
+import { AiPanel } from './AiPanel'
+import { CaptionsPanel } from './CaptionsPanel'
 import { ExportPanel } from './ExportPanel'
 import { useEditorStore } from './store'
 
-const TABS = ['frame', 'cursor', 'zoom', 'camera', 'audio', 'export'] as const
+const TABS = ['frame', 'cursor', 'zoom', 'camera', 'audio', 'captions', 'ai', 'export'] as const
 type Tab = (typeof TABS)[number]
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
@@ -405,6 +407,8 @@ export function Inspector() {
           </>
         )}
 
+        {tab === 'captions' && <CaptionsPanel />}
+        {tab === 'ai' && <AiPanel />}
         {tab === 'export' && <ExportPanel />}
       </div>
     </div>

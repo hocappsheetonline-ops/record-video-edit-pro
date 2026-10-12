@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { anthropicBaseUrl, elevenLabsBaseUrl } from './ai/endpoints'
 import { checkKeyFormat, type KeyValidationResult, type SecretKey } from '@lumora/core'
 
 const TIMEOUT_MS = 15_000
@@ -12,7 +13,7 @@ export async function validateElevenLabsKey(
 ): Promise<KeyValidationResult> {
   let response: Response
   try {
-    response = await fetchImpl('https://api.elevenlabs.io/v1/user', {
+    response = await fetchImpl(`${elevenLabsBaseUrl()}/v1/user`, {
       headers: { 'xi-api-key': apiKey },
       signal: AbortSignal.timeout(TIMEOUT_MS),
     })
@@ -32,7 +33,13 @@ export async function validateAnthropicKey(
   apiKey: string,
   fetchImpl?: FetchLike,
 ): Promise<KeyValidationResult> {
-  const client = new Anthropic({ apiKey, maxRetries: 0, timeout: TIMEOUT_MS, fetch: fetchImpl })
+  const client = new Anthropic({
+    apiKey,
+    baseURL: anthropicBaseUrl(),
+    maxRetries: 0,
+    timeout: TIMEOUT_MS,
+    fetch: fetchImpl,
+  })
   try {
     await client.models.list({ limit: 1 })
     return { ok: true }

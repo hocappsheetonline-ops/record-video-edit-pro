@@ -1,5 +1,7 @@
 import type {
   AppSettings,
+  CutSuggestion,
+  Transcript,
   EditState,
   InputEvent,
   KeyStatus,
@@ -44,6 +46,12 @@ export const IPC = {
   exportFinish: 'export:finish',
   exportCancel: 'export:cancel',
   revealFile: 'files:reveal',
+  aiTranscribe: 'ai:transcribe',
+  aiGetTranscript: 'ai:get-transcript',
+  aiSuggestCuts: 'ai:suggest-cuts',
+  aiSummarize: 'ai:summarize',
+  aiTranslate: 'ai:translate',
+  saveExportText: 'export:save-text',
 } as const
 
 /** Sự kiện main process gửi xuống giao diện. */
@@ -120,6 +128,14 @@ export interface ProjectSummary {
   hasThumbnail: boolean
 }
 
+export interface AiSummary {
+  titles: string[]
+  description: string
+  hashtags: string[]
+  /** Chương theo thời gian nguồn (ms). */
+  chapters: { start: number; title: string }[]
+}
+
 export interface ExportResult {
   path: string
   fileName: string
@@ -171,4 +187,16 @@ export interface LumoraApi {
   cancelExport(id: string): Promise<void>
   /** Mở thư mục chứa một file đã xuất (chỉ trong thư mục dự án). */
   revealFile(path: string): Promise<void>
+
+  /** Nhận dạng giọng nói (ElevenLabs). `language`: mã ISO hoặc rỗng để tự nhận diện. */
+  transcribe(folder: string, language: string): Promise<Transcript>
+  getTranscript(folder: string): Promise<Transcript | null>
+  suggestCuts(folder: string): Promise<CutSuggestion[]>
+  summarize(folder: string): Promise<AiSummary>
+  translateLines(
+    lines: { id: string; text: string }[],
+    target: string,
+  ): Promise<{ id: string; text: string }[]>
+  /** Lưu file văn bản (phụ đề SRT/VTT, mô tả...) vào thư mục exports của dự án. */
+  saveExportText(folder: string, fileName: string, content: string): Promise<ExportResult>
 }

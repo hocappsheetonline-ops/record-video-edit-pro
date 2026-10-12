@@ -105,6 +105,8 @@ export const en: Messages = {
       zoom: 'Zoom',
       camera: 'Webcam',
       audio: 'Audio',
+      captions: 'Captions',
+      ai: 'AI',
       export: 'Export',
     },
     frame: {
@@ -163,6 +165,54 @@ export const en: Messages = {
       done: 'Exported: {{file}}',
       reveal: 'Show in folder',
       failed: 'Export failed: {{message}}',
+    },
+  },
+  captions: {
+    intro:
+      'Lumora sends the speech to ElevenLabs to create word-timed captions. You can edit them, save SRT/VTT, or burn them into the video.',
+    language: 'Spoken language',
+    auto: 'Detect automatically',
+    generate: 'Create captions',
+    generating: 'Transcribing…',
+    show: 'Show captions on video',
+    styles: { highlight: 'Highlight words', classic: 'Whole line' },
+    positions: { bottom: 'Bottom', top: 'Top' },
+    size: 'Text size',
+    saveSrt: 'Save SRT',
+    saveVtt: 'Save VTT',
+    toEn: 'Translate to English',
+    toVi: 'Translate to Vietnamese',
+    translating: 'Translating…',
+    reset: 'Start over',
+  },
+  ai: {
+    working: 'Working…',
+    kinds: { filler: 'Filler', repeat: 'Repeat', silence: 'Silence', other: 'Other' },
+    cuts: {
+      title: 'Remove fillers and silences',
+      intro:
+        'Claude finds filler words and repeated phrases; long silences are detected automatically. Review before applying.',
+      find: 'Find cuts',
+      none: 'Nothing to cut.',
+      apply: 'Apply {{count}} cuts',
+      silenceLength: '{{seconds}}s of silence',
+    },
+    text: {
+      title: 'Edit video by editing text',
+      intro: 'Select the words you want to remove, then cut — the matching video is removed.',
+      cut: 'Cut {{count}} selected words',
+    },
+    summary: {
+      title: 'Titles, description and chapters',
+      make: 'Generate with Claude',
+      copy: 'Copy',
+      save: 'Save as .txt',
+    },
+    errors: {
+      missingKey: 'No {{name}} API key yet. Add it in Settings.',
+      noAudio: 'This recording has no microphone or computer audio to transcribe.',
+      noTranscript: 'Create captions first (Captions tab).',
+      generic: 'Error: {{message}}',
     },
   },
   live: {

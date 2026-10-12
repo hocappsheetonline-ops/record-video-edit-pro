@@ -283,3 +283,65 @@ export function buildGifArgs(input: string, output: string, width: number, fps: 
     output,
   ]
 }
+
+/**
+ * Trộn các mảnh âm thanh thành một file MP3 mono 16 kHz (gọn nhẹ để gửi đi nhận dạng giọng nói).
+ * Dùng nền im lặng đủ dài để thời gian trong file khớp đúng thời gian nguồn.
+ */
+export function buildSpeechAudioArgs(options: {
+  pieces: readonly MuxAudioPiece[]
+  durationS: number
+  output: string
+}): string[] {
+  const { pieces, durationS, output } = options
+  const files = [...new Set(pieces.map((p) => p.path))]
+  const filters: string[] = []
+  const labels = new Map<string, string[]>()
+  files.forEach((file, i) => {
+    const count = pieces.filter((p) => p.path === file).length
+    const outs = Array.from({ length: count }, (_, k) => `f${i}_${k}`)
+    labels.set(file, outs)
+    filters.push(
+      count === 1
+        ? `[${i + 1}:a]anull[${outs[0]}]`
+        : `[${i + 1}:a]asplit=${count}${outs.map((o) => `[${o}]`).join('')}`,
+    )
+  })
+  const used = new Map<string, number>()
+  const mixed = ['[0:a]']
+  pieces.forEach((p, k) => {
+    const n = used.get(p.path) ?? 0
+    used.set(p.path, n + 1)
+    filters.push(
+      `[${labels.get(p.path)![n]}]atrim=start=${sec(p.mediaStart)}:end=${sec(p.mediaStart + p.duration)},asetpts=PTS-STARTPTS,adelay=${Math.round(p.outputStart * 1000)}:all=1[p${k}]`,
+    )
+    mixed.push(`[p${k}]`)
+  })
+  filters.push(`${mixed.join('')}amix=inputs=${mixed.length}:duration=first:normalize=0[aout]`)
+  return [
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+    '-f',
+    'lavfi',
+    '-t',
+    String(sec(durationS)),
+    '-i',
+    'anullsrc=r=16000:cl=mono',
+    ...files.flatMap((f) => ['-i', f]),
+    '-filter_complex',
+    filters.join(';'),
+    '-map',
+    '[aout]',
+    '-ac',
+    '1',
+    '-ar',
+    '16000',
+    '-c:a',
+    'libmp3lame',
+    '-b:a',
+    '64k',
+    output,
+  ]
+}

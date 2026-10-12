@@ -19,7 +19,10 @@ import {
   type SegmentStart,
 } from '@shared/ipc'
 import { validateKey, type Validators } from './key-validation'
-import type { ExportManager } from './export/manager'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import type { AiService } from './ai/service'
+import { EXPORTS_DIR, safeFileName, type ExportManager } from './export/manager'
 import {
   isProjectFolderName,
   listProjects,
@@ -62,6 +65,7 @@ export interface IpcDeps {
   recording: RecordingIpc
   projects: ProjectsIpc
   exports: Pick<ExportManager, 'start' | 'write' | 'finish' | 'cancel'>
+  ai: Pick<AiService, 'transcribe' | 'getTranscript' | 'suggestCuts' | 'summarize' | 'translate'>
 }
 
 function assertSecretKey(value: unknown) {
@@ -215,4 +219,58 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
     const safe = relative ? safeJoin(root, relative) : null
     if (safe) projects.reveal(safe)
   })
+
+  const projectPath = async (folder: unknown) => {
+    const dir = await projects.dir()
+    const name = assertFolder(folder)
+    const path = safeJoin(dir, name)
+    const project = await readProject(dir, name)
+    if (!path || !project) throw new Error('Dự án không hợp lệ')
+    return { path, project }
+  }
+
+  ipcMain.handle(IPC.aiTranscribe, async (_event, folder: unknown, language: unknown) => {
+    const { path, project } = await projectPath(folder)
+    const lang =
+      typeof language === 'string' && /^[a-z]{2,3}$/i.test(language)
+        ? language.toLowerCase()
+        : undefined
+    return deps.ai.transcribe(project, path, lang)
+  })
+  ipcMain.handle(IPC.aiGetTranscript, async (_event, folder: unknown) =>
+    deps.ai.getTranscript((await projectPath(folder)).path),
+  )
+  ipcMain.handle(IPC.aiSuggestCuts, async (_event, folder: unknown) =>
+    deps.ai.suggestCuts((await projectPath(folder)).path),
+  )
+  ipcMain.handle(IPC.aiSummarize, async (_event, folder: unknown) =>
+    deps.ai.summarize((await projectPath(folder)).path),
+  )
+  ipcMain.handle(IPC.aiTranslate, (_event, lines: unknown, target: unknown) => {
+    if (!Array.isArray(lines) || typeof target !== 'string')
+      throw new Error('Dữ liệu dịch không hợp lệ')
+    const clean = lines
+      .filter(
+        (l): l is { id: string; text: string } =>
+          typeof l?.id === 'string' && typeof l?.text === 'string',
+      )
+      .slice(0, 2000)
+    return deps.ai.translate(clean, target.slice(0, 8))
+  })
+  ipcMain.handle(
+    IPC.saveExportText,
+    async (_event, folder: unknown, fileName: unknown, content: unknown) => {
+      const { path } = await projectPath(folder)
+      if (typeof fileName !== 'string' || typeof content !== 'string')
+        throw new Error('Dữ liệu không hợp lệ')
+      const ext = /\.(srt|vtt|txt)$/i.exec(fileName)?.[1]?.toLowerCase()
+      if (!ext) throw new Error('Loại file không được phép')
+      const dir = join(path, EXPORTS_DIR)
+      await mkdir(dir, { recursive: true })
+      const name = `${safeFileName(fileName.slice(0, -(ext.length + 1)))}.${ext}`
+      const file = join(dir, name)
+      await writeFile(file, content, 'utf8')
+      return { path: file, fileName: name }
+    },
+  )
 }

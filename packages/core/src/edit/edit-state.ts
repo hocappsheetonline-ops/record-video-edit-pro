@@ -1,4 +1,10 @@
 import type { Project } from '../project'
+import {
+  DEFAULT_CAPTIONS,
+  type CaptionLine,
+  type CaptionsState,
+  type TranscriptWord,
+} from './captions'
 import { ASPECTS, CORNERS, RESOLUTIONS, type Aspect, type Corner, type Resolution } from './layout'
 import { initialClips, MIN_CLIP_MS, sourceDuration, type Clip } from './timeline'
 import { normalizeZooms, type ZoomRegion } from './zoom'
@@ -64,6 +70,7 @@ export interface EditState {
   camera: CameraStyle
   audio: AudioMix
   export: ExportSettings
+  captions: CaptionsState
 }
 
 export const BACKGROUND_PRESETS: Background[] = [
@@ -102,6 +109,49 @@ export function createDefaultEdit(
     camera: { visible: true, shape: 'circle', size: 0.22, position: 'bottom-right' },
     audio: { mic: 1, system: 1 },
     export: { resolution: 1080, fps: project.fps >= 60 ? 60 : 30, format: 'mp4' },
+    captions: { ...DEFAULT_CAPTIONS, lines: [] },
+  }
+}
+
+function parseWords(value: unknown, duration: number): TranscriptWord[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((w): TranscriptWord[] => {
+    if (!isObj(w) || typeof w.text !== 'string') return []
+    const start = num(w.start, NaN, 0, duration)
+    const end = num(w.end, NaN, 0, duration)
+    return Number.isFinite(start) && Number.isFinite(end) && end >= start
+      ? [{ text: w.text, start, end }]
+      : []
+  })
+}
+
+function parseCaptions(value: unknown, duration: number): CaptionsState {
+  const c = isObj(value) ? value : {}
+  const lines: CaptionLine[] = Array.isArray(c.lines)
+    ? c.lines.flatMap((l, i): CaptionLine[] => {
+        if (!isObj(l) || typeof l.text !== 'string') return []
+        const start = num(l.start, NaN, 0, duration)
+        const end = num(l.end, NaN, 0, duration)
+        if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return []
+        return [
+          {
+            id: typeof l.id === 'string' ? l.id : `l${i}`,
+            start,
+            end,
+            text: l.text.slice(0, 500),
+            words: parseWords(l.words, duration),
+            edited: l.edited === true,
+          },
+        ]
+      })
+    : []
+  return {
+    enabled: bool(c.enabled, false),
+    style: c.style === 'classic' ? 'classic' : 'highlight',
+    position: c.position === 'top' ? 'top' : 'bottom',
+    size: num(c.size, 1, 0.5, 2.5),
+    language: typeof c.language === 'string' ? c.language.slice(0, 16) : '',
+    lines,
   }
 }
 
@@ -210,5 +260,6 @@ export function parseEditState(
       fps: pick([30, 60] as const, e.fps, base.export.fps),
       format: e.format === 'gif' ? 'gif' : 'mp4',
     },
+    captions: parseCaptions(input.captions, duration),
   }
 }

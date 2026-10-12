@@ -52,6 +52,19 @@ export const sampleProject: Project = {
   durationMs: 7000,
 }
 
+export const sampleTranscript = {
+  language: 'vi',
+  words: [
+    { text: 'Xin', start: 0, end: 300 },
+    { text: 'chào', start: 350, end: 700 },
+    { text: 'ừm', start: 800, end: 1000 },
+    { text: 'các', start: 1100, end: 1300 },
+    { text: 'bạn.', start: 1350, end: 1700 },
+    { text: 'Hôm', start: 4100, end: 4300 },
+    { text: 'nay', start: 4350, end: 4600 },
+  ],
+}
+
 export const sampleSummary: ProjectSummary = {
   folder: '2026-10-12 09.30.00.lumora',
   id: 'p1',
@@ -172,6 +185,28 @@ export function createFakeApi(
     })),
     cancelExport: vi.fn<LumoraApi['cancelExport']>(async () => {}),
     revealFile: vi.fn<LumoraApi['revealFile']>(async () => {}),
+    transcribe: vi.fn<LumoraApi['transcribe']>(async () => sampleTranscript),
+    getTranscript: vi.fn<LumoraApi['getTranscript']>(async () => null),
+    suggestCuts: vi.fn<LumoraApi['suggestCuts']>(async () => [
+      { id: 'ai0', kind: 'filler', start: 800, end: 1100, text: 'ừm', reason: 'Từ đệm' },
+      { id: 's0', kind: 'silence', start: 2500, end: 4000, text: '', reason: '' },
+    ]),
+    summarize: vi.fn<LumoraApi['summarize']>(async () => ({
+      titles: ['Hướng dẫn Lumora', 'Lumora trong 5 phút', 'Quay màn hình đẹp'],
+      description: 'Video hướng dẫn.',
+      hashtags: ['#lumora'],
+      chapters: [
+        { start: 0, title: 'Mở đầu' },
+        { start: 5500, title: 'Phần 2' },
+      ],
+    })),
+    translateLines: vi.fn<LumoraApi['translateLines']>(async (lines) =>
+      lines.map((l) => ({ id: l.id, text: `EN: ${l.text}` })),
+    ),
+    saveExportText: vi.fn<LumoraApi['saveExportText']>(async (_folder, fileName) => ({
+      path: `/x/${fileName}`,
+      fileName,
+    })),
   } satisfies LumoraApi
   return {
     api,

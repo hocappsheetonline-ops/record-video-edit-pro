@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { app, BrowserWindow, ipcMain, protocol, safeStorage, session, shell } from 'electron'
+import { AiService } from './ai/service'
 import { ExportManager } from './export/manager'
 import { runFfmpeg } from './ffmpeg/runner'
 import { registerIpc } from './ipc'
@@ -67,10 +68,12 @@ if (!app.requestSingleInstanceLock()) {
     )
 
     const recording = new RecordingController({ mainWindow: () => mainWindow, projectsDir })
+    const secrets = new SecretStore(join(userData, 'secrets.json'), safeStorage)
 
     registerIpc(ipcMain, {
       settings,
-      secrets: new SecretStore(join(userData, 'secrets.json'), safeStorage),
+      secrets,
+      ai: new AiService({ getKey: (key) => secrets.get(key), run: runFfmpeg }),
       recording,
       exports: new ExportManager(runFfmpeg),
       projects: {
