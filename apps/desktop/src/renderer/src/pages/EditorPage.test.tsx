@@ -165,6 +165,34 @@ describe('EditorPage', () => {
     expect(useEditorStore.getState().edit!.transitions).toEqual([])
   })
 
+  it('hiệu ứng hình: thêm tại đầu phát, chỉnh độ mạnh, chọn trên timeline, xóa', async () => {
+    setup()
+    await screen.findByTestId('editor-title')
+    await userEvent.click(screen.getByTestId('tab-effects'))
+    act(() => useEditorStore.getState().setTime(6000))
+    await userEvent.click(screen.getByTestId('effect-add-vhs'))
+    // Gần cuối video: hiệu ứng bị giới hạn trong video (6s → 7s).
+    expect(useEditorStore.getState().edit!.effects[0]).toMatchObject({
+      kind: 'vhs',
+      start: 6000,
+      end: 7000,
+      intensity: 0.7,
+    })
+    const block = screen.getByTestId('timeline-effect')
+    expect(block).toHaveTextContent('VHS cổ')
+    fireEvent.change(screen.getByTestId('effect-intensity'), { target: { value: '0.3' } })
+    expect(useEditorStore.getState().edit!.effects[0]!.intensity).toBe(0.3)
+
+    act(() => useEditorStore.getState().setTime(0))
+    await userEvent.click(screen.getByTestId('effect-add-confetti'))
+    expect(screen.getAllByTestId('timeline-effect')).toHaveLength(2)
+    // Bấm khối hiệu ứng trên timeline để chọn lại hiệu ứng đầu tiên.
+    fireEvent.pointerDown(screen.getAllByTestId('timeline-effect')[0]!)
+    expect(screen.getByTestId('effect-selected')).toHaveTextContent('VHS cổ')
+    await userEvent.click(screen.getByTestId('effect-remove'))
+    expect(useEditorStore.getState().edit!.effects.map((e) => e.kind)).toEqual(['confetti'])
+  })
+
   it('không có âm thanh thì không vẽ sóng', async () => {
     setup()
     await screen.findByTestId('editor-title')

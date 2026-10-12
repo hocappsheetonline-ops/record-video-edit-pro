@@ -120,13 +120,14 @@ export const en: Messages = {
     speed: 'Speed',
     shortcuts:
       'Space: play/pause · S: split · A: delete left · D: delete right · Delete: remove · Ctrl+Z: undo',
-    tracks: { clips: 'Video', zooms: 'Zoom', audio: 'Audio' },
+    tracks: { clips: 'Video', zooms: 'Zoom', audio: 'Audio', effects: 'Effects' },
     tabs: {
       frame: 'Frame',
       cursor: 'Cursor',
       motion: 'Motion',
       zoom: 'Zoom',
       transition: 'Transition',
+      effects: 'Effects',
       camera: 'Webcam',
       audio: 'Audio',
       captions: 'Captions',
@@ -150,6 +151,24 @@ export const en: Messages = {
       fill: 'Fill frame (auto-crop to cursor)',
       fillHint:
         'The screen video fills the whole frame; the overflow is cropped and the view follows the cursor.',
+    },
+    effects: {
+      hint: 'Click to add an effect at the playhead (2 s). Drag on the Effects row to move it, drag its edges to resize.',
+      intensity: 'Intensity',
+      remove: 'Remove effect',
+      dragHint: 'drag on the timeline to move or resize',
+      kinds: {
+        shake: 'Shake',
+        glitch: 'Glitch',
+        vhs: 'Retro VHS',
+        bw: 'Black & white',
+        vintage: 'Vintage',
+        vignette: 'Vignette',
+        blur: 'Blur',
+        flash: 'Beat flash',
+        pulse: 'Beat pulse',
+        confetti: 'Confetti',
+      },
     },
     transition: {
       marker: 'Transition',

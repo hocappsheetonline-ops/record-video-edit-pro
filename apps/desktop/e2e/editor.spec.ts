@@ -433,3 +433,86 @@ test('chuyển tiếp: mờ qua đen làm khung ở chỗ nối tối đen; glit
   expect(errors).toEqual([])
   await app.close()
 })
+
+test('hiệu ứng hình: đủ 10 kiểu xuất được; đen trắng làm mất màu, viền tối làm góc tối đi', async () => {
+  const { app, page, errors } = await launchApp(dirs.userData)
+  await openEditor(page)
+  await page.getByTestId('tab-export').click()
+  await page.getByTestId('resolution-720').click()
+  await page.getByTestId('export-start').click()
+  await expect(page.getByTestId('export-result')).toBeVisible({ timeout: 150_000 })
+  const plain = join(projectDir, 'exports', exported('.mp4')[0]!)
+
+  // Giây 0–1: đen trắng; 1–2: viền tối; 2–3: rung + VHS + glitch + pháo giấy; 3–4: mờ + lóe + nhún + cổ điển.
+  await page.getByTestId('tab-effects').click()
+  const groups = [
+    ['bw'],
+    ['vignette'],
+    ['shake', 'vhs', 'glitch', 'confetti'],
+    ['blur', 'flash', 'pulse', 'vintage'],
+  ]
+  for (const [second, kinds] of groups.entries()) {
+    if (second > 0) {
+      await page.getByTestId('editor-canvas').click()
+      await page.keyboard.press('ArrowRight')
+    }
+    for (const kind of kinds) await page.getByTestId(`effect-add-${kind}`).click()
+  }
+  await expect(page.getByTestId('timeline-effect')).toHaveCount(10)
+  // Đen trắng và viền tối mạnh nhất, mỗi cái chỉ 1 giây.
+  const saved = () => JSON.parse(readFileSync(join(projectDir, 'edit.json'), 'utf8'))
+  await expect.poll(() => saved().effects?.length).toBe(10)
+
+  await page.getByTestId('tab-export').click()
+  await page.waitForTimeout(1100)
+  const before = new Set(exported('.mp4'))
+  await page.getByTestId('export-start').click()
+  await expect(page.getByTestId('export-result')).toBeVisible({ timeout: 150_000 })
+  await expect.poll(() => exported('.mp4').filter((f) => !before.has(f)).length).toBe(1)
+  const styled = join(
+    projectDir,
+    'exports',
+    exported('.mp4').find((f) => !before.has(f))!,
+  )
+  expect(probeMedia(styled).durationMs).toBeGreaterThan(3800)
+
+  const stats = (file: string, t: number) => {
+    const { stderr } = spawnSync(
+      ffmpegPath as unknown as string,
+      [
+        '-hide_banner',
+        '-ss',
+        String(t),
+        '-i',
+        file,
+        '-frames:v',
+        '1',
+        '-vf',
+        'signalstats,metadata=print',
+        '-f',
+        'null',
+        '-',
+      ],
+      { encoding: 'utf8' },
+    )
+    const get = (key: string) =>
+      Number(new RegExp(`signalstats\\.${key}=([\\d.]+)`).exec(stderr)?.[1] ?? -1)
+    return { sat: get('SATAVG'), y: get('YAVG') }
+  }
+  // Đen trắng (độ mạnh 70%): màu giảm mạnh.
+  expect(stats(styled, 0.5).sat).toBeLessThan(stats(plain, 0.5).sat * 0.5)
+  // Viền tối: góc tối hơn bản gốc.
+  const corner = (file: string) => {
+    const [r, g, b] = pixelAt(file, 20, 20, 1.5)
+    return r + g + b
+  }
+  expect(corner(styled)).toBeLessThan(corner(plain))
+  // Các hiệu ứng còn lại làm khung khác bản gốc.
+  for (const t of [2.5, 3.5]) {
+    const a = stats(plain, t)
+    const b = stats(styled, t)
+    expect(Math.abs(a.y - b.y) + Math.abs(a.sat - b.sat), `t=${t}`).toBeGreaterThan(2)
+  }
+  expect(errors).toEqual([])
+  await app.close()
+})

@@ -21,6 +21,11 @@ import {
   type Project,
   type Size,
   type AudioClip,
+  DEFAULT_EFFECT_MS,
+  MIN_REGION_MS,
+  newEffectId,
+  type EffectKind,
+  type EffectRegion,
   cutPoints,
   DEFAULT_TRANSITION_MS,
   pruneTransitions,
@@ -36,7 +41,10 @@ import type { AudioAsset } from '@shared/ipc'
 import { lumora } from '../api'
 
 /** `transition`: id là clip đứng trước chỗ nối. */
-export type Selection = { kind: 'clip' | 'zoom' | 'audio' | 'transition'; id: string } | null
+export type Selection = {
+  kind: 'clip' | 'zoom' | 'audio' | 'transition' | 'effect'
+  id: string
+} | null
 
 interface EditorStore {
   folder: string | null
@@ -88,6 +96,9 @@ interface EditorStore {
   updateAudioClip(id: string, patch: Partial<AudioClip>, coalesce?: string): void
   loadAssetPeaks(file: string): void
   requestTab(tab: string): void
+  /** Thêm hiệu ứng hình tại đầu phát (mặc định 2 giây) và chọn nó. */
+  addEffect(kind: EffectKind): void
+  updateEffect(id: string, patch: Partial<EffectRegion>, coalesce?: string): void
   deleteSelection(): void
   setClipSpeed(id: string, speed: number): void
   addZoomAtPlayhead(): void
@@ -353,6 +364,29 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     )
   },
 
+  addEffect(kind) {
+    const { edit, time } = get()
+    if (!edit) return
+    const total = outputDuration(edit.clips)
+    const start = Math.min(time, Math.max(0, total - MIN_REGION_MS))
+    const effect: EffectRegion = {
+      id: newEffectId(),
+      kind,
+      start,
+      end: Math.min(total, start + DEFAULT_EFFECT_MS),
+      intensity: 0.7,
+    }
+    get().change((e) => ({ ...e, effects: [...e.effects, effect] }))
+    set({ selection: { kind: 'effect', id: effect.id } })
+  },
+
+  updateEffect(id, patch, coalesce) {
+    get().change(
+      (e) => ({ ...e, effects: e.effects.map((x) => (x.id === id ? { ...x, ...patch } : x)) }),
+      coalesce,
+    )
+  },
+
   requestTab(tab) {
     set({ tabRequest: { tab, n: get().tabRequest.n + 1 } })
   },
@@ -372,7 +406,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   deleteSelection() {
     const { selection } = get()
     if (!selection) return
-    if (selection.kind === 'audio') {
+    if (selection.kind === 'effect') {
+      get().change((e) => ({ ...e, effects: e.effects.filter((x) => x.id !== selection.id) }))
+    } else if (selection.kind === 'audio') {
       get().change((e) => ({ ...e, audioClips: e.audioClips.filter((c) => c.id !== selection.id) }))
     } else if (selection.kind === 'clip') {
       get().change((e) =>

@@ -7,6 +7,7 @@ import {
 } from './captions'
 import { parseAudioClips, type AudioClip } from './audio-clips'
 import { NO_BEAUTY, parseBeauty, type BeautyStyle } from './beauty'
+import { parseEffects, type EffectRegion } from './effects'
 import { parseTransitions, pruneTransitions, type Transition } from './transitions'
 import { ASPECTS, CORNERS, RESOLUTIONS, type Aspect, type Corner, type Resolution } from './layout'
 import { initialClips, MIN_CLIP_MS, sourceDuration, type Clip } from './timeline'
@@ -99,6 +100,8 @@ export interface EditState {
   audioClips: AudioClip[]
   /** Hiệu ứng chuyển tiếp ở chỗ nối giữa các clip. */
   transitions: Transition[]
+  /** Hiệu ứng hình theo khoảng thời gian (rung, glitch, VHS…). */
+  effects: EffectRegion[]
   export: ExportSettings
   captions: CaptionsState
 }
@@ -150,6 +153,7 @@ export function createDefaultEdit(
     audio: { mic: 1, system: 1 },
     audioClips: [],
     transitions: [],
+    effects: [],
     export: { resolution: 1080, fps: project.fps >= 60 ? 60 : 30, format: 'mp4' },
     captions: { ...DEFAULT_CAPTIONS, lines: [] },
   }
@@ -308,6 +312,7 @@ export function parseEditState(
     audio: { mic: num(a.mic, 1, 0, 2), system: num(a.system, 1, 0, 2) },
     audioClips: parseAudioClips(input.audioClips),
     transitions: pruneTransitions(clips, parseTransitions(input.transitions)),
+    effects: parseEffects(input.effects),
     export: {
       resolution: pick(RESOLUTIONS, e.resolution, base.export.resolution),
       fps: pick([30, 60] as const, e.fps, base.export.fps),

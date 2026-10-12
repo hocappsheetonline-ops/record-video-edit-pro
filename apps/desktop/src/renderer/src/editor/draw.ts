@@ -1,7 +1,8 @@
 import { beautyLayers, coverSource, type BeautyStyle } from '@lumora/core'
+import { applyEffects } from './effects-draw'
 import type { FrameScene } from './scene'
 
-type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
+export type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
 
 /** Một nguồn hình (thẻ video khi xem trước, VideoSample khi xuất) có thể vẽ một phần của nó. */
 export interface FrameSource {
@@ -230,10 +231,11 @@ export function drawScene(
     ctx.restore()
   }
   applyTransition(ctx, scene)
+  applyEffects(ctx, scene)
   drawCaptions(ctx, scene)
 }
 
-type AnyCanvas = HTMLCanvasElement | OffscreenCanvas
+export type AnyCanvas = HTMLCanvasElement | OffscreenCanvas
 /**
  * Mỗi canvas đích có bản nháp riêng: canvas xem trước bị trình duyệt đánh dấu "tainted" (video
  * khác nguồn), dùng chung bản nháp sẽ làm canvas xuất video cũng bị khóa và không mã hóa được.
@@ -241,7 +243,7 @@ type AnyCanvas = HTMLCanvasElement | OffscreenCanvas
 const scratches = new WeakMap<object, AnyCanvas>()
 
 /** Bản sao khung hình hiện tại để vẽ lại có biến đổi (zoom, mờ, lướt, glitch). */
-function snapshot(ctx: Ctx, width: number, height: number): AnyCanvas {
+export function snapshot(ctx: Ctx, width: number, height: number): AnyCanvas {
   let scratch = scratches.get(ctx.canvas)
   if (!scratch || scratch.width !== width || scratch.height !== height) {
     scratch =
@@ -257,12 +259,38 @@ function snapshot(ctx: Ctx, width: number, height: number): AnyCanvas {
 }
 
 /** Số ngẫu nhiên cố định theo hạt giống (xem trước và xuất ra giống hệt nhau). */
-function seeded(seed: number) {
+export function seeded(seed: number) {
   let x = Math.floor(seed * 9301 + 49297) % 233280
   return () => {
     x = (x * 9301 + 49297) % 233280
     return x / 233280
   }
+}
+
+/** Glitch: lệch các dải ngang và tách màu đỏ/xanh (dùng cho chuyển tiếp và hiệu ứng). */
+export function drawGlitch(
+  ctx: Ctx,
+  copy: AnyCanvas,
+  w: number,
+  h: number,
+  s: number,
+  seed: number,
+) {
+  const rand = seeded(seed)
+  ctx.save()
+  for (let i = 0; i < 7; i++) {
+    const y = rand() * h
+    const sh = h * (0.02 + rand() * 0.08)
+    const dx = (rand() - 0.5) * w * 0.2 * s
+    ctx.drawImage(copy, 0, y, w, sh, dx, y, w, sh)
+  }
+  ctx.globalCompositeOperation = 'screen'
+  ctx.globalAlpha = 0.45 * s
+  ctx.filter = 'sepia(1) saturate(6) hue-rotate(-50deg)'
+  ctx.drawImage(copy, (w / 90) * s, 0)
+  ctx.filter = 'sepia(1) saturate(6) hue-rotate(150deg)'
+  ctx.drawImage(copy, (-w / 90) * s, 0)
+  ctx.restore()
 }
 
 /** Hiệu ứng chuyển tiếp ở chỗ nối giữa hai clip (vẽ đè lên khung hình đã ghép xong). */
@@ -309,25 +337,9 @@ export function applyTransition(ctx: Ctx, scene: FrameScene) {
       ctx.drawImage(copy, offset, 0)
       break
     }
-    case 'glitch': {
-      const copy = snapshot(ctx, w, h)
-      const rand = seeded(Math.floor(tr.progress * 24) + 1)
-      // Lệch từng dải ngang.
-      for (let i = 0; i < 7; i++) {
-        const y = rand() * h
-        const sh = h * (0.02 + rand() * 0.08)
-        const dx = (rand() - 0.5) * w * 0.2 * s
-        ctx.drawImage(copy, 0, y, w, sh, dx, y, w, sh)
-      }
-      // Tách màu đỏ / xanh.
-      ctx.globalCompositeOperation = 'screen'
-      ctx.globalAlpha = 0.45 * s
-      ctx.filter = 'sepia(1) saturate(6) hue-rotate(-50deg)'
-      ctx.drawImage(copy, (w / 90) * s, 0)
-      ctx.filter = 'sepia(1) saturate(6) hue-rotate(150deg)'
-      ctx.drawImage(copy, (-w / 90) * s, 0)
+    case 'glitch':
+      drawGlitch(ctx, snapshot(ctx, w, h), w, h, s, Math.floor(tr.progress * 24) + 1)
       break
-    }
   }
   ctx.restore()
 }

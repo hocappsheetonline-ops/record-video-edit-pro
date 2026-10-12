@@ -10,7 +10,9 @@ import {
   fillViewRect,
   frameLayout,
   viewRect,
+  effectsAt,
   transitionAt,
+  type ActiveEffect,
   type ActiveTransition,
   type Background,
   type BeautyStyle,
@@ -41,6 +43,8 @@ export interface FrameScene {
   } | null
   /** Chuyển tiếp đang diễn ra quanh chỗ nối giữa hai clip. */
   transition: ActiveTransition | null
+  /** Hiệu ứng hình đang chạy. */
+  effects: ActiveEffect[]
   captions: {
     words: { text: string; active: boolean }[]
     style: 'highlight' | 'classic'
@@ -136,6 +140,7 @@ export function computeScene(input: SceneInput): FrameScene {
 
   return {
     transition: transitionAt(edit.clips, edit.transitions, input.time),
+    effects: effectsAt(edit.effects, input.time),
     captions,
     width: output.width,
     height: output.height,
