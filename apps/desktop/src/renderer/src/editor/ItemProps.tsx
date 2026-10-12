@@ -34,6 +34,7 @@ import { AudioFxPanel } from './AudioFxPanel'
 import { AdjustPanel, FreezePanel, TransformPanel } from './LookPanels'
 import { AnimSection, BlendSection, KeyframeSection, MaskSection } from './OverlayFxPanels'
 import { PlaybackSection, SpeedSection } from './SpeedPanels'
+import { AiStatus } from './ProjectProps'
 import { useEditorStore } from './store'
 import { ghostButton, pct, secs, Section, Segmented, SliderRow, Toggle } from './ui'
 
@@ -607,6 +608,14 @@ export function OverlayProps({ overlay }: { overlay: Overlay }) {
             />
           )}
           <p className="text-xs text-muted">{t('editor.stickers.keyHint')}</p>
+          <Toggle
+            label={t('editor.aiBg.overlay')}
+            hint={t('editor.aiBg.overlayHint')}
+            checked={!!overlay.aiKey}
+            onChange={(on) => update({ aiKey: on ? true : undefined })}
+            testId="overlay-ai-key"
+          />
+          {overlay.aiKey && <AiStatus />}
         </Section>
       )}
 

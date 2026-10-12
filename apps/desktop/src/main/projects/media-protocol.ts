@@ -13,6 +13,9 @@ const MIME: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.png': 'image/png',
   '.jsonl': 'application/x-ndjson',
+  '.wasm': 'application/wasm',
+  '.js': 'text/javascript',
+  '.tflite': 'application/octet-stream',
 }
 
 export interface ByteRange {
@@ -45,13 +48,24 @@ export function parseRange(header: string | null, size: number): ByteRange | nul
   return { start, end }
 }
 
-/** URL dạng lumora-media://projects/<thư mục dự án>/<tên file>. */
-export function resolveMediaPath(url: string, projectsDir: string): string | null {
+/**
+ * URL dạng lumora-media://projects/<thư mục dự án>/<tên file>, hoặc lumora-media://ai/<tên file>
+ * cho các file của AI xóa phông (chỉ những file trong danh sách cho phép `aiFiles`).
+ */
+export function resolveMediaPath(
+  url: string,
+  projectsDir: string,
+  aiFiles: Readonly<Record<string, string>> = {},
+): string | null {
   let parsed: URL
   try {
     parsed = new URL(url)
   } catch {
     return null
+  }
+  if (parsed.host === 'ai') {
+    const name = decodeURIComponent(parsed.pathname.replace(/^\//, ''))
+    return Object.hasOwn(aiFiles, name) ? aiFiles[name]! : null
   }
   if (parsed.host !== 'projects') return null
   const parts = parsed.pathname.split('/').filter(Boolean).map(decodeURIComponent)
@@ -73,10 +87,14 @@ const CORS_HEADERS = {
 }
 
 /** Trả file media từ thư mục dự án, hỗ trợ đọc từng phần (Range) để tua video. */
-export async function handleMediaRequest(request: Request, projectsDir: string): Promise<Response> {
+export async function handleMediaRequest(
+  request: Request,
+  projectsDir: string,
+  aiFiles: Readonly<Record<string, string>> = {},
+): Promise<Response> {
   if (request.method === 'OPTIONS')
     return new Response(null, { status: 204, headers: CORS_HEADERS })
-  const path = resolveMediaPath(request.url, projectsDir)
+  const path = resolveMediaPath(request.url, projectsDir, aiFiles)
   if (!path) return new Response('Not found', { status: 404 })
   let size: number
   try {

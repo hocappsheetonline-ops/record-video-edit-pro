@@ -1127,3 +1127,39 @@ test('phát ngược, đường cong tốc độ và độ mờ clip: video xu�
   expect(errors).toEqual([])
   await app.close()
 })
+
+test('AI xóa phông webcam: nạp được AI trong app, phông màu thay phần không phải người khi xuất', async () => {
+  const { app, page, errors } = await launchApp(dirs.userData)
+  await openEditor(page)
+  await page.getByTestId('tab-camera').click()
+  await page.getByTestId('cam-bg-mode-color').click()
+  await page.getByTestId('cam-bg-color-input').fill('#ff0000')
+  // AI chạy thật (MediaPipe qua lumora-media://ai) trong khung xem trước.
+  await expect(page.getByTestId('ai-status')).toHaveAttribute('data-status', 'ready', {
+    timeout: 60_000,
+  })
+  const saved = () => {
+    try {
+      return JSON.parse(readFileSync(join(projectDir, 'edit.json'), 'utf8'))
+    } catch {
+      return { camera: {} }
+    }
+  }
+  await expect.poll(() => saved().camera.background?.color).toBe('#ff0000')
+  expect(saved().camera.background.mode).toBe('color')
+
+  await openExport(page)
+  await page.getByTestId('resolution-720').click()
+  await page.getByTestId('export-start').click()
+  await expect(page.getByTestId('export-result')).toBeVisible({ timeout: 150_000 })
+  const file = join(projectDir, 'exports', exported('.mp4')[0]!)
+  // Webcam mẫu không có người: cả bong bóng thành màu phông (đỏ: V rất cao).
+  const r = Math.round((saved().camera.size * 720) / 2)
+  const cx = Math.round(1280 - 0.04 * 720 - r)
+  const cy = Math.round(720 - 0.04 * 720 - r)
+  const [, , v] = areaStats(file, 1, `30:30:${cx - 15}:${cy - 15}`)
+  expect(v).toBeGreaterThan(200)
+
+  expect(errors).toEqual([])
+  await app.close()
+})

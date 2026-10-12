@@ -90,6 +90,8 @@ interface EditorStore {
    * 'pending' / 'error'.
    */
   revFiles: Record<string, ReversedFiles | 'pending' | 'error'>
+  /** AI xóa phông: chưa nạp / đang nạp / sẵn sàng / máy không chạy được. */
+  aiStatus: 'idle' | 'loading' | 'ready' | 'unavailable'
   /** Giữ nút "nghe bản gốc": xem trước tạm bỏ hiệu ứng âm thanh. */
   bypassFx: boolean
   /** Đang ghi lồng tiếng và tắt tiếng bản gốc trong lúc ghi. */
@@ -202,6 +204,7 @@ const initial = {
   tabRequest: { tab: '', n: 0 },
   fxFiles: {},
   revFiles: {},
+  aiStatus: 'idle' as EditorStore['aiStatus'],
   bypassFx: false,
   muteOriginal: false,
   cursor: null,
@@ -615,7 +618,17 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   updateOverlay(id, patch, coalesce) {
     get().change(
-      (e) => ({ ...e, overlays: e.overlays.map((o) => (o.id === id ? { ...o, ...patch } : o)) }),
+      (e) => ({
+        ...e,
+        overlays: e.overlays.map((o) => {
+          if (o.id !== id) return o
+          const next: Overlay = { ...o, ...patch }
+          // Trường đặt về undefined (bỏ mặt nạ, bỏ lật…): xóa hẳn cho file gọn.
+          for (const key of Object.keys(patch) as (keyof Overlay)[])
+            if (patch[key] === undefined) delete next[key]
+          return next
+        }),
+      }),
       coalesce,
     )
   },

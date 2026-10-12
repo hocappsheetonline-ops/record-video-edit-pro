@@ -448,6 +448,22 @@ export const en: Messages = {
         generic: 'Error: {{message}}',
       },
     },
+    aiBg: {
+      title: 'Background (AI)',
+      mode: 'Background',
+      modes: { none: 'Keep', remove: 'Remove', blur: 'Blur', color: 'Color' },
+      color: 'Background color',
+      blur: 'Background blur',
+      edge: 'Edge softness',
+      hint: 'AI separates the person from the background, on this computer (nothing is uploaded).',
+      overlay: 'AI background removal',
+      overlayHint: 'Cut the person out of a video / image without a green screen.',
+      status: {
+        loading: 'Loading background AI…',
+        ready: 'Background AI is on',
+        unavailable: 'Background AI cannot run on this computer',
+      },
+    },
     curve: {
       mode: 'Speed type',
       fixed: 'Fixed',

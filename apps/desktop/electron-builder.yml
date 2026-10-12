@@ -10,6 +10,10 @@ files:
   - resources/**
   - package.json
   - '!**/*.{map,md,ts,tsx}'
+  # MediaPipe: giao diện đã gói phần JS; main chỉ phục vụ bản wasm SIMD (Chromium luôn hỗ trợ).
+  - '!node_modules/@mediapipe/tasks-vision/vision_bundle.*'
+  - '!node_modules/@mediapipe/tasks-vision/wasm/vision_wasm_nosimd_internal.*'
+  - '!node_modules/@mediapipe/tasks-vision/wasm/vision_wasm_module_internal.*'
 # File thực thi và thư viện native không chạy được từ bên trong gói asar.
 asarUnpack:
   - resources/**

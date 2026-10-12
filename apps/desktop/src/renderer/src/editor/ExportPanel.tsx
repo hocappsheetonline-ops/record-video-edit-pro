@@ -46,7 +46,16 @@ export function ExportPanel() {
       })
       setResult(done)
     } catch (e) {
-      if (!(e instanceof ExportCancelled)) setError(ipcErrorMessage(e))
+      if (!(e instanceof ExportCancelled)) {
+        const message = ipcErrorMessage(e)
+        setError(
+          message === 'ai_bg_unavailable'
+            ? t('editor.aiBg.status.unavailable')
+            : message.startsWith('reverse_')
+              ? t('editor.reverse.failed')
+              : message,
+        )
+      }
     } finally {
       abort.current = null
       setProgress(null)

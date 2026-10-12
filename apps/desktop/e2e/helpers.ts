@@ -70,7 +70,8 @@ export async function launchApp(
   const errors: string[] = []
   page.on('pageerror', (error) => errors.push(error.message))
   page.on('console', (msg) => {
-    if (msg.type() === 'error') errors.push(msg.text())
+    // TensorFlow Lite (AI xóa phông) ghi thông báo "INFO: …" qua kênh lỗi — không phải lỗi.
+    if (msg.type() === 'error' && !msg.text().startsWith('INFO:')) errors.push(msg.text())
   })
   await page.getByTestId('nav-record').waitFor()
   return { app, page, errors }

@@ -6,6 +6,7 @@ import {
   ASPECTS,
   BACKGROUND_PRESETS,
   BEAUTY_PRESET,
+  CAMERA_BG_MODES,
   CAMERA_LAYOUTS,
   placementCorner,
   type Background,
@@ -467,9 +468,88 @@ export function CameraProps({ edit }: { edit: EditState }) {
               />
             ))}
           </Section>
+          <CameraBackgroundSection edit={edit} />
         </>
       )}
     </>
+  )
+}
+
+/** Trạng thái AI xóa phông (đang nạp / sẵn sàng / máy không chạy được). */
+export function AiStatus() {
+  const { t } = useTranslation()
+  const status = useEditorStore((s) => s.aiStatus)
+  if (status === 'idle') return null
+  return (
+    <p
+      className={`text-xs ${status === 'unavailable' ? 'text-danger' : 'text-muted'}`}
+      data-testid="ai-status"
+      data-status={status}
+    >
+      {t(`editor.aiBg.status.${status}`)}
+    </p>
+  )
+}
+
+/** Phông nền webcam bằng AI tách người: giữ, xóa, làm mờ, thay màu. */
+function CameraBackgroundSection({ edit }: { edit: EditState }) {
+  const { t } = useTranslation()
+  const { set } = useSetters()
+  const bg = edit.camera.background
+  const setBg = (patch: Partial<typeof bg>, coalesce?: string) =>
+    set('camera', { background: { ...bg, ...patch } }, coalesce)
+  return (
+    <Section title={t('editor.aiBg.title')} testId="cam-bg">
+      <Segmented
+        label={t('editor.aiBg.mode')}
+        options={CAMERA_BG_MODES.map((m) => ({ value: m, label: t(`editor.aiBg.modes.${m}`) }))}
+        value={bg.mode}
+        onChange={(mode) => setBg({ mode })}
+        testIdPrefix="cam-bg-mode-"
+        columns={4}
+      />
+      {bg.mode === 'color' && (
+        <label className="flex items-center justify-between text-xs">
+          <span className="text-muted">{t('editor.aiBg.color')}</span>
+          <input
+            type="color"
+            data-testid="cam-bg-color-input"
+            aria-label={t('editor.aiBg.color')}
+            value={bg.color}
+            onChange={(e) => setBg({ color: e.target.value }, 'cam-bg-color')}
+            className="h-7 w-10 cursor-pointer rounded border border-border bg-transparent"
+          />
+        </label>
+      )}
+      {bg.mode === 'blur' && (
+        <SliderRow
+          label={t('editor.aiBg.blur')}
+          value={bg.blur}
+          min={0}
+          max={1}
+          step={0.05}
+          format={pct}
+          defaultValue={0.5}
+          testId="cam-bg-blur"
+          onChange={(blur) => setBg({ blur }, 'cam-bg-blur')}
+        />
+      )}
+      {bg.mode !== 'none' && (
+        <SliderRow
+          label={t('editor.aiBg.edge')}
+          value={bg.edge}
+          min={0}
+          max={1}
+          step={0.05}
+          format={pct}
+          defaultValue={0.3}
+          testId="cam-bg-edge"
+          onChange={(edge) => setBg({ edge }, 'cam-bg-edge')}
+        />
+      )}
+      {bg.mode !== 'none' && <AiStatus />}
+      <p className="text-xs text-muted">{t('editor.aiBg.hint')}</p>
+    </Section>
   )
 }
 

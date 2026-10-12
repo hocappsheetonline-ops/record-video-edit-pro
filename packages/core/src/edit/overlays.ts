@@ -70,6 +70,8 @@ export interface Overlay {
   mask?: OverlayMask
   /** Keyframe vị trí / cỡ / góc / độ mờ (có thì ghi đè giá trị gốc). */
   keyframes?: Keyframe[]
+  /** Xóa phông bằng AI tách người (ảnh / video không có phông xanh). */
+  aiKey?: boolean
 }
 
 /** Màu phông có sẵn để xóa: xanh lá (phổ biến nhất ở video meme), xanh dương, đen, trắng. */
@@ -251,6 +253,7 @@ export function parseOverlays(value: unknown): Overlay[] {
         ...(o.flipH === true ? { flipH: true } : {}),
         ...(o.flipV === true ? { flipV: true } : {}),
         ...(mask ? { mask } : {}),
+        ...(media && o.aiKey === true ? { aiKey: true } : {}),
         ...(keyframes ? { keyframes } : {}),
       },
     ]

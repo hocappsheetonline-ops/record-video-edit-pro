@@ -64,6 +64,8 @@ export interface FrameScene {
     rect: Rect
     shape: EditState['camera']['shape'] | 'strip'
     beauty: BeautyStyle
+    /** Phông nền (AI tách người). */
+    background: EditState['camera']['background']
     /** Khung cắt mặt trong video webcam. */
     framing: { zoom: number; focusX: number; focusY: number }
     /** Viền (px, 0 = không) và màu. */
@@ -216,6 +218,7 @@ function cameraScene(
       rect: strip,
       shape: 'strip',
       beauty: cam.beauty,
+      background: cam.background,
       framing,
       border: 0,
       borderColor: cam.borderColor,
@@ -225,6 +228,7 @@ function cameraScene(
     rect,
     shape: cam.shape,
     beauty: cam.beauty,
+    background: cam.background,
     framing,
     border: cam.border * rect.width * 0.06,
     borderColor: cam.borderColor,

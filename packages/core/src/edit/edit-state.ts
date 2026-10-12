@@ -93,6 +93,28 @@ export interface CameraStyle {
   split: number
   /** Làm đẹp mặt (mịn da, làm sáng, tông ấm). */
   beauty: BeautyStyle
+  /** Phông nền webcam bằng AI tách người: giữ nguyên, xóa, làm mờ hoặc thay bằng màu. */
+  background: CameraBackground
+}
+
+export const CAMERA_BG_MODES = ['none', 'remove', 'blur', 'color'] as const
+export type CameraBgMode = (typeof CAMERA_BG_MODES)[number]
+
+export interface CameraBackground {
+  mode: CameraBgMode
+  /** Màu phông khi `color`. */
+  color: string
+  /** Độ mờ phông khi `blur` (0..1). */
+  blur: number
+  /** Độ mềm của viền người (0..1). */
+  edge: number
+}
+
+export const DEFAULT_CAMERA_BG: CameraBackground = {
+  mode: 'none',
+  color: '#16a34a',
+  blur: 0.5,
+  edge: 0.3,
 }
 
 export const CAMERA_LAYOUTS = ['bubble', 'stack'] as const
@@ -193,6 +215,7 @@ export function createDefaultEdit(
       layout: 'bubble',
       split: 0.4,
       beauty: { ...NO_BEAUTY },
+      background: { ...DEFAULT_CAMERA_BG },
     },
     motion: { cameraSpeed: 0.85, zoomTransitionMs: 700 },
     audio: { mic: 1, system: 1, micFx: { ...DEFAULT_AUDIO_FX }, systemFx: { ...DEFAULT_AUDIO_FX } },
@@ -374,6 +397,7 @@ export function parseEditState(
       layout: pick(CAMERA_LAYOUTS, cam.layout, base.camera.layout),
       split: num(cam.split, base.camera.split, 0.2, 0.6),
       beauty: parseBeauty(cam.beauty),
+      background: parseCameraBackground(cam.background),
     },
     motion: {
       cameraSpeed: num(m.cameraSpeed, base.motion.cameraSpeed, 0, 1),
@@ -396,5 +420,15 @@ export function parseEditState(
       format: e.format === 'gif' ? 'gif' : 'mp4',
     },
     captions: parseCaptions(input.captions, duration),
+  }
+}
+
+export function parseCameraBackground(value: unknown): CameraBackground {
+  const v = isObj(value) ? value : {}
+  return {
+    mode: pick(CAMERA_BG_MODES, v.mode, 'none'),
+    color: color(v.color, DEFAULT_CAMERA_BG.color),
+    blur: num(v.blur, DEFAULT_CAMERA_BG.blur, 0, 1),
+    edge: num(v.edge, DEFAULT_CAMERA_BG.edge, 0, 1),
   }
 }

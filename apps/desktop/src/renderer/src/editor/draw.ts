@@ -1,7 +1,7 @@
 import { beautyLayers, cameraCrop, type BeautyStyle } from '@lumora/core'
 import { applyEffects } from './effects-draw'
 import { applyLookLayers, joinFilters } from './look-draw'
-import { drawOverlays, type OverlayMediaFn } from './overlay-draw'
+import { drawOverlays, type OverlayMaskFn, type OverlayMediaFn } from './overlay-draw'
 import type { FrameScene } from './scene'
 
 export type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
@@ -172,6 +172,10 @@ export function drawScene(
     camera: FrameSource | null
     /** Ảnh / khung GIF / khung video của lớp nổi (null nếu chưa tải xong). */
     overlayMedia?: OverlayMediaFn
+    /** Mặt nạ người (AI) của khung webcam hiện tại, khi webcam đang bỏ / đổi phông. */
+    cameraMask?: AnyCanvas | null
+    /** Mặt nạ người (AI) cho ảnh / video meme bật "xóa phông AI". */
+    overlayMask?: OverlayMaskFn
   },
 ) {
   drawBackground(ctx, scene)
@@ -264,15 +268,20 @@ export function drawScene(
   const camFrame = frames.camera
   if (cam && camFrame) {
     const { x, y, width, height } = cam.rect
+    // Phông nền bằng AI: chỉ khi đã có mặt nạ người của khung này.
+    const bg = cam.background?.mode && cam.background.mode !== 'none' ? cam.background : null
+    const mask = bg ? (frames.cameraMask ?? null) : null
     ctx.save()
     const r = cam.shape === 'circle' ? width / 2 : cam.shape === 'rounded' ? width * 0.18 : 0
-    if (cam.shape !== 'strip') {
+    const cutout = mask && bg?.mode === 'remove'
+    if (cam.shape !== 'strip' && !cutout) {
       ctx.shadowColor = 'rgba(0,0,0,0.4)'
       ctx.shadowBlur = width * 0.08
     }
     roundedRect(ctx, x, y, width, height, r)
-    ctx.fillStyle = '#000000'
-    ctx.fill()
+    ctx.fillStyle = mask && bg?.mode === 'color' ? bg.color : '#000000'
+    // Xóa phông: không tô nền, để thấy video màn hình phía sau người.
+    if (!cutout) ctx.fill()
     ctx.shadowColor = 'transparent'
     ctx.clip()
     // Cắt khung webcam cho vừa ô hiển thị (cover), phóng to / dời tâm tới mặt nếu có chỉnh.
@@ -281,13 +290,45 @@ export function drawScene(
       cam.rect,
       cam.framing,
     )
-    drawBeautified(
-      ctx,
-      cam.beauty,
-      width,
-      () => camFrame.draw(ctx, crop.x, crop.y, crop.width, crop.height, x, y, width, height),
-      look?.css,
-    )
+    const paint = (target: Ctx, dx: number, dy: number) =>
+      drawBeautified(
+        target,
+        cam.beauty,
+        width,
+        () => camFrame.draw(target, crop.x, crop.y, crop.width, crop.height, dx, dy, width, height),
+        look?.css,
+      )
+    if (!mask || !bg) paint(ctx, x, y)
+    else {
+      if (bg.mode === 'blur') {
+        // Phông mờ: vẽ cả khung webcam thật mờ phía sau người.
+        ctx.save()
+        ctx.filter = `blur(${(bg.blur * width * 0.06).toFixed(2)}px)`
+        camFrame.draw(ctx, crop.x, crop.y, crop.width, crop.height, x, y, width, height)
+        ctx.restore()
+      }
+      const person = personLayer(ctx, width, height)
+      paint(person.ctx, 0, 0)
+      // Chỉ giữ phần là người (mặt nạ cùng khung cắt, viền mềm theo độ mềm).
+      const kx = mask.width / camFrame.width
+      const ky = mask.height / camFrame.height
+      person.ctx.save()
+      person.ctx.globalCompositeOperation = 'destination-in'
+      person.ctx.filter = bg.edge > 0 ? `blur(${(bg.edge * width * 0.02).toFixed(2)}px)` : 'none'
+      person.ctx.drawImage(
+        mask,
+        crop.x * kx,
+        crop.y * ky,
+        crop.width * kx,
+        crop.height * ky,
+        0,
+        0,
+        width,
+        height,
+      )
+      person.ctx.restore()
+      ctx.drawImage(person.canvas, x, y)
+    }
     if (look) applyLookLayers(ctx, look, cam.rect, Math.floor(scene.time / 40) + 7)
     ctx.restore()
     if (cam.border > 0) {
@@ -302,13 +343,42 @@ export function drawScene(
   }
   applyTransition(ctx, scene)
   applyEffects(ctx, scene)
-  drawOverlays(ctx, scene.overlays, scene.width, scene.height, frames.overlayMedia ?? (() => null))
+  drawOverlays(
+    ctx,
+    scene.overlays,
+    scene.width,
+    scene.height,
+    frames.overlayMedia ?? (() => null),
+    frames.overlayMask,
+  )
   drawCaptions(ctx, scene)
 }
 
 export type AnyCanvas = HTMLCanvasElement | OffscreenCanvas
 
 const layers = new WeakMap<object, AnyCanvas>()
+const persons = new WeakMap<object, AnyCanvas>()
+
+/** Lớp tạm để cắt người theo mặt nạ AI (cỡ bằng ô webcam). */
+function personLayer(ctx: Ctx, width: number, height: number): { canvas: AnyCanvas; ctx: Ctx } {
+  const w = Math.max(1, Math.round(width))
+  const h = Math.max(1, Math.round(height))
+  let canvas = persons.get(ctx.canvas)
+  if (!canvas || canvas.width !== w || canvas.height !== h) {
+    canvas =
+      typeof OffscreenCanvas !== 'undefined'
+        ? new OffscreenCanvas(w, h)
+        : Object.assign(document.createElement('canvas'), { width: w, height: h })
+    persons.set(ctx.canvas, canvas)
+  }
+  const c = canvas.getContext('2d') as Ctx
+  c.setTransform(1, 0, 0, 1, 0, 0)
+  c.globalAlpha = 1
+  c.globalCompositeOperation = 'source-over'
+  c.filter = 'none'
+  c.clearRect(0, 0, w, h)
+  return { canvas, ctx: c }
+}
 
 /** Lớp vẽ tạm (trong suốt, cùng cỡ khung) riêng cho từng canvas đích. */
 function beginLayer(ctx: Ctx, width: number, height: number): { canvas: AnyCanvas; ctx: Ctx } {

@@ -9,11 +9,14 @@ import {
   type Overlay,
   type OverlayMask,
 } from '@lumora/core'
-import type { Ctx, FrameSource } from './draw'
+import type { AnyCanvas, Ctx, FrameSource } from './draw'
 import { applyLookLayers } from './look-draw'
 
 /** Hình của lớp ảnh / video tại `local` ms kể từ lúc hiện (null nếu chưa tải xong). */
 export type OverlayMediaFn = (overlay: Overlay, local: number) => FrameSource | null
+
+/** Mặt nạ người (AI) của khung ảnh / video meme đang vẽ (null nếu chưa có). */
+export type OverlayMaskFn = (overlay: Overlay, local: number) => AnyCanvas | null
 
 /** Bọc ảnh (ImageBitmap…) thành nguồn hình chung. */
 export function imageSource(image: ImageBitmap | null): FrameSource | null {
@@ -81,6 +84,7 @@ export function drawOverlays(
   width: number,
   height: number,
   mediaAt: OverlayMediaFn,
+  maskAt?: OverlayMaskFn,
 ) {
   for (const { overlay: raw, local, still } of items) {
     const t = raw.start + local
@@ -99,7 +103,8 @@ export function drawOverlays(
     ctx.scale(m.scale * m.scaleX * (o.flipH ? -1 : 1), m.scale * (o.flipV ? -1 : 1))
     if (o.kind === 'image' || o.kind === 'video') {
       const media = mediaAt(raw, local)
-      if (media) drawMedia(ctx, media, o, box.w, box.h, Math.floor(t / 40))
+      const aiMask = o.aiKey ? (maskAt?.(raw, local) ?? null) : null
+      if (media) drawMedia(ctx, media, o, box.w, box.h, Math.floor(t / 40), aiMask)
     } else if (o.kind === 'emoji') {
       ctx.font = `${px}px ${EMOJI_FONT}`
       ctx.textAlign = 'center'
@@ -207,10 +212,18 @@ function scratchFor(
  * Vẽ ảnh / video của lớp nổi. Có xóa phông hoặc bộ lọc thì xử lý ở canvas nháp: xóa phông trước
  * (màu cần xóa không bị bộ lọc làm lệch), rồi bộ lọc màu, rồi trả lại đúng phần trong suốt.
  */
-function drawMedia(ctx: Ctx, media: FrameSource, o: Overlay, w: number, h: number, frame: number) {
+function drawMedia(
+  ctx: Ctx,
+  media: FrameSource,
+  o: Overlay,
+  w: number,
+  h: number,
+  frame: number,
+  aiMask: AnyCanvas | null = null,
+) {
   const full = [0, 0, media.width, media.height] as const
   const look = o.look ? lookLayers(o.look) : null
-  if (!o.keyColor && !look && !o.mask) {
+  if (!o.keyColor && !look && !o.mask && !aiMask) {
     media.draw(ctx, ...full, -w / 2, -h / 2, w, h)
     return
   }
@@ -230,6 +243,14 @@ function drawMedia(ctx: Ctx, media: FrameSource, o: Overlay, w: number, h: numbe
     } catch {
       // Nguồn khác gốc (không đọc được điểm ảnh): vẽ nguyên bản thay vì bỏ trống.
     }
+  }
+  if (aiMask) {
+    // Xóa phông AI: chỉ giữ phần là người.
+    sctx.save()
+    sctx.globalCompositeOperation = 'destination-in'
+    sctx.filter = `blur(${Math.max(0.5, sw / 400).toFixed(2)}px)`
+    sctx.drawImage(aiMask, 0, 0, sw, sh)
+    sctx.restore()
   }
   if (look) {
     // Bản sao trước khi lọc: vừa làm nguồn cho bộ lọc CSS, vừa làm mặt nạ độ trong suốt.

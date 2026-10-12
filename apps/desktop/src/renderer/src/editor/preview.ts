@@ -20,7 +20,8 @@ import {
   type TrackKind,
 } from '@lumora/core'
 import { mediaUrl } from '../lib/media'
-import { drawScene, videoElementSource } from './draw'
+import { drawScene, videoElementSource, type AnyCanvas } from './draw'
+import { loadSegmenter, type PersonSegmenter } from './segmenter'
 import { imageSource } from './overlay-draw'
 import { OverlayImages } from './overlay-images'
 import { computeScene } from './scene'
@@ -61,6 +62,13 @@ export class PreviewEngine {
   private readonly revMedia = new Map<string, MediaEl>()
   /** Thẻ hình đang hiện cho video màn hình / webcam (đoạn quay hoặc file đảo ngược). */
   private active: { screen?: MediaEl; camera?: MediaEl } = {}
+  /** AI xóa phông (nạp khi cần) và mặt nạ gần nhất của từng nguồn hình. */
+  private segmenter: PersonSegmenter | null = null
+  private readonly masks = new Map<
+    string,
+    { at: number; stamp: number; canvas: AnyCanvas | null }
+  >()
+  private readonly imageMasks = new WeakMap<object, AnyCanvas | null>()
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -76,6 +84,8 @@ export class PreviewEngine {
         const el = document.createElement(
           kind === 'screen' || kind === 'camera' ? 'video' : 'audio',
         )
+        // Cùng gốc với canvas (giao thức trả CORS): AI xóa phông đọc được điểm ảnh webcam.
+        el.crossOrigin = 'anonymous'
         el.src = mediaUrl(folder, track.file)
         el.preload = 'auto'
         el.muted = kind === 'screen' || kind === 'camera'
@@ -169,6 +179,7 @@ export class PreviewEngine {
     let el = this.revMedia.get(file)
     if (!el) {
       el = document.createElement(kind === 'screen' || kind === 'camera' ? 'video' : 'audio')
+      el.crossOrigin = 'anonymous'
       el.preload = 'auto'
       el.muted = kind === 'screen' || kind === 'camera'
       if (el instanceof HTMLVideoElement) el.playsInline = true
@@ -391,7 +402,40 @@ export class PreviewEngine {
         item.overlay.id === selection.id ? { ...item, still: true } : item,
       )
     const overlayVideos = this.overlayVideos
+    // AI xóa phông: webcam đang bỏ / đổi phông, hoặc ảnh / video meme bật xóa phông AI.
+    const needAi =
+      (scene.camera?.background?.mode ?? 'none') !== 'none' ||
+      scene.overlays.some((i) => i.overlay.aiKey)
+    const ai = needAi ? this.ai() : null
+    const cameraEl = camera instanceof HTMLVideoElement ? camera : null
+    const cameraMask =
+      ai && cameraEl && cameraEl.readyState >= 2
+        ? this.maskOf(
+            ai,
+            'camera',
+            cameraEl,
+            cameraEl.videoWidth,
+            cameraEl.videoHeight,
+            cameraEl.currentTime,
+          )
+        : null
     drawScene(ctx, scene, {
+      cameraMask,
+      overlayMask: (o, local) => {
+        if (!ai) return null
+        if (o.kind === 'video') {
+          const el = overlayVideos.get(o.id)
+          if (!el || el.readyState < 2) return null
+          return this.maskOf(ai, `ov:${o.id}`, el, el.videoWidth, el.videoHeight, el.currentTime)
+        }
+        const image = this.images.frameAt(o.file, local)
+        if (!image) return null
+        if (!this.imageMasks.has(image)) {
+          this.imageMasks.set(image, ai.segment(image, image.width, image.height))
+          if (ai.failed) useEditorStore.setState({ aiStatus: 'unavailable' })
+        }
+        return this.imageMasks.get(image) ?? null
+      },
       screen: screen instanceof HTMLVideoElement ? videoElementSource(screen) : null,
       camera: camera instanceof HTMLVideoElement ? videoElementSource(camera) : null,
       overlayMedia: (o, local) => {
@@ -400,6 +444,43 @@ export class PreviewEngine {
         return el ? videoElementSource(el) : null
       },
     })
+  }
+
+  /** AI xóa phông nếu đã sẵn sàng; lần đầu thì bắt đầu nạp (vẽ lại khi xong). */
+  private ai(): PersonSegmenter | null {
+    const store = useEditorStore.getState()
+    if (store.aiStatus === 'idle') {
+      useEditorStore.setState({ aiStatus: 'loading' })
+      void loadSegmenter().then((s) => {
+        this.segmenter = s
+        useEditorStore.setState({ aiStatus: s ? 'ready' : 'unavailable' })
+        this.requestDraw()
+      })
+    }
+    return this.segmenter
+  }
+
+  /**
+   * Mặt nạ người của một nguồn hình: tính lại khi khung đổi (đang phát thì tối đa ~15 lần/giây,
+   * giữa hai lần dùng mặt nạ gần nhất).
+   */
+  private maskOf(
+    ai: PersonSegmenter,
+    key: string,
+    source: CanvasImageSource,
+    width: number,
+    height: number,
+    stamp: number,
+  ): AnyCanvas | null {
+    const last = this.masks.get(key)
+    const now = performance.now()
+    const playing = useEditorStore.getState().playing
+    if (last && (last.stamp === stamp || (playing && now - last.at < 66))) return last.canvas
+    const canvas = ai.segment(source, width, height)
+    if (ai.failed) useEditorStore.setState({ aiStatus: 'unavailable' })
+    this.masks.set(key, { at: now, stamp, canvas })
+    if (playing) this.requestDraw()
+    return canvas
   }
 
   /** Xem trước ở độ phân giải vừa phải (cạnh ngắn 720) để nhẹ máy. */

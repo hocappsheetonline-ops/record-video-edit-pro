@@ -35,6 +35,7 @@ import { imageSource } from './overlay-draw'
 import { OverlayImages } from './overlay-images'
 import { drawScene, type FrameSource } from './draw'
 import { computeScene } from './scene'
+import { loadSegmenter } from './segmenter'
 import { revKeyOf } from './store'
 
 export interface ExportProgress {
@@ -157,6 +158,34 @@ export async function exportVideo(options: {
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('Không tạo được canvas')
 
+  // AI xóa phông (webcam hoặc ảnh / video meme): cần nạp được trước khi xuất.
+  const needAi =
+    edit.camera.background.mode !== 'none' && edit.camera.visible
+      ? true
+      : edit.overlays.some((o) => o.aiKey)
+  const ai = needAi ? await loadSegmenter() : null
+  if (needAi && !ai) throw new Error('ai_bg_unavailable')
+  const frameCanvas = new OffscreenCanvas(16, 16)
+  /** Khung giải mã → canvas (để đưa vào AI). */
+  const toCanvas = (sample: VideoSample) => {
+    frameCanvas.width = sample.displayWidth
+    frameCanvas.height = sample.displayHeight
+    const c = frameCanvas.getContext('2d')!
+    sample.draw(
+      c,
+      0,
+      0,
+      sample.displayWidth,
+      sample.displayHeight,
+      0,
+      0,
+      sample.displayWidth,
+      sample.displayHeight,
+    )
+    return frameCanvas
+  }
+  const imageMasks = new WeakMap<object, ReturnType<NonNullable<typeof ai>['segment']>>()
+
   // Ảnh / GIF meme của lớp nổi: tải hết trước khi dựng hình.
   const images = new OverlayImages(folder)
   await Promise.all(edit.overlays.filter((o) => o.kind === 'image').map((o) => images.load(o.file)))
@@ -258,7 +287,26 @@ export async function exportVideo(options: {
         follow,
         hasCamera: !!camera,
       })
+      const cameraMask =
+        ai && camera && edit.camera.background.mode !== 'none'
+          ? ai.segment(toCanvas(camera), camera.displayWidth, camera.displayHeight)
+          : null
       drawScene(ctx, scene, {
+        cameraMask,
+        overlayMask: (o, local) => {
+          if (!ai) return null
+          if (o.kind === 'video') {
+            const sample = overlayFrames.get(o.id)
+            return sample
+              ? ai.segment(toCanvas(sample), sample.displayWidth, sample.displayHeight)
+              : null
+          }
+          const image = images.frameAt(o.file, local)
+          if (!image) return null
+          if (!imageMasks.has(image))
+            imageMasks.set(image, ai.segment(image, image.width, image.height))
+          return imageMasks.get(image) ?? null
+        },
         screen: screen ? sampleSource(screen) : null,
         camera: camera ? sampleSource(camera) : null,
         overlayMedia: (o, local) => {
@@ -267,6 +315,7 @@ export async function exportVideo(options: {
           return sample ? sampleSource(sample) : null
         },
       })
+      if (ai?.failed) throw new Error('ai_bg_unavailable')
       await source.add(i / fps, 1 / fps)
       options.onProgress?.({ phase: 'render', progress: (i + 1) / plan.frames.length })
     }

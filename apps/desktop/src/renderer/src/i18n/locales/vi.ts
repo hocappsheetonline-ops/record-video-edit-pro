@@ -440,6 +440,22 @@ export const vi = {
         generic: 'Lỗi: {{message}}',
       },
     },
+    aiBg: {
+      title: 'Phông nền (AI)',
+      mode: 'Phông',
+      modes: { none: 'Giữ nguyên', remove: 'Xóa', blur: 'Làm mờ', color: 'Màu' },
+      color: 'Màu phông',
+      blur: 'Độ mờ phông',
+      edge: 'Viền mềm',
+      hint: 'AI tự tách người khỏi phông, chạy ngay trên máy (không gửi video đi đâu).',
+      overlay: 'Xóa phông AI',
+      overlayHint: 'Tách người ra khỏi video / ảnh không có phông xanh.',
+      status: {
+        loading: 'Đang nạp AI xóa phông…',
+        ready: 'AI xóa phông đang bật',
+        unavailable: 'Máy này không chạy được AI xóa phông',
+      },
+    },
     curve: {
       mode: 'Kiểu tốc độ',
       fixed: 'Cố định',

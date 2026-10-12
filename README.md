@@ -71,6 +71,7 @@ Tính năng:
 - **Đóng băng khung hình** (nút ❄ trên thanh công cụ timeline): giữ khung đang xem 2 giây (chỉnh được 0.1–20 giây), không có tiếng, rồi video chạy tiếp đúng chỗ.
 - **Đường cong tốc độ** (tab Tốc độ của clip → Đường cong): 6 mẫu như CapCut (Dựng nhanh, Khoảnh khắc, Đạn bay, Nhảy cắt, Lướt vào, Lướt ra) hoặc kéo điểm trên đồ thị (0.1×–10×); tiếng khi xuất đổi tốc độ theo từng đoạn ngắn.
 - **Phát ngược** clip (tab Video của clip): cả hình và tiếng chạy từ cuối về đầu; bản đảo ngược được tạo ở nền (clip trong một đoạn quay, tối đa 2 phút). **Độ mờ** clip để thấy nền phía sau.
+- **Phông nền AI cho webcam** (Cài đặt video → Webcam → Phông nền (AI)): **Xóa** phông (thấy video màn hình phía sau người), **Làm mờ** phông hoặc thay bằng **Màu**; chỉnh độ mềm viền. Ảnh / video meme có nút **Xóa phông AI** để tách người không cần phông xanh. AI (MediaPipe) chạy ngay trên máy, không gửi video đi đâu; máy không có GPU vẫn chạy được (WebGL phần mềm).
 - **Lớp phủ nâng cao** (chọn chữ / nhãn dán / ảnh / video meme): **Hoạt ảnh** vào (12 kiểu: bật ra, mờ dần, trượt 4 hướng, phóng to, xoay, nảy, lật, nhòe, đánh chữ), ra (8 kiểu) và lặp (nhún, rung, nhịp, đung đưa, lơ lửng, nhấp nháy) với thời lượng riêng; **Keyframe** vị trí / cỡ / góc / độ mờ (bấm ◇ tại đầu phát, kéo lớp trên khung xem trước hoặc kéo thanh trượt là tự ghi keyframe; chọn kiểu chuyển Đều / Nhanh dần / Chậm dần / Mượt; hình thoi trên timeline để nhảy tới); **Độ mờ**, **chế độ hòa trộn** (Screen, Multiply, Overlay, Lighten, Darken, Difference, Add), **lật**; **Mặt nạ** cho ảnh / video (tròn, chữ nhật, trái tim, ngôi sao, tuyến tính, gương; viền mềm, đảo ngược).
 - **Ô số cạnh mọi thanh trượt**: bấm vào để gõ số (Enter áp dụng, mũi tên lên / xuống tăng giảm, Shift để bước lớn), nút ↺ để về mặc định. Mọi nút chỉ có biểu tượng đều có chú thích khi rê chuột (kèm phím tắt).
 - **Meme video** (Thư viện → Meme): **kéo thả** video meme (MP4, MOV, WEBM, MKV…) hoặc ảnh / GIF vào thư viện một lần, dùng lại ở mọi dự án. Video được chuẩn hóa sang MP4 (tối đa 1280px, 2 phút). Bấm để thêm vào timeline tại đầu phát — video **có tiếng** (chỉnh âm lượng), cắt đầu/cuối trên timeline, **Phủ kín khung** hoặc **Vừa khung**, và **Xóa phông** (phông xanh lá / xanh dương / đen / trắng, chỉnh độ mạnh) để chỉ giữ lại nhân vật. Lumora không kèm sẵn meme có bản quyền — hãy dùng video bạn có quyền sử dụng.
@@ -191,3 +192,11 @@ packages/core/         Logic thuần, không phụ thuộc Electron, dễ test
 - Key được mã hóa bằng `safeStorage` của Electron (dùng DPAPI trên Windows) và lưu trong `%APPDATA%\Lumora\secrets.json`.
 - Giao diện không bao giờ nhận lại key gốc, chỉ thấy dạng rút gọn như `sk-a••••••••1234`.
 - Nút "Kiểm tra" gọi API thật nhưng không tốn credit: ElevenLabs gọi `GET /v1/user`, Claude gọi danh sách model.
+
+## Kiểm tra thủ công
+
+Tự động test không có video người thật, nên cần thử bằng webcam trên Windows sau mỗi lần đổi phần AI xóa phông:
+
+1. Quay một đoạn có webcam (mặt và vai trong khung).
+2. Mở Chỉnh sửa → Webcam → Phông nền (AI) → **Xóa**: chỉ còn người, phía sau là video màn hình; **Làm mờ** và **Màu** cũng đúng như vậy.
+3. Xuất video và xem lại: viền người mềm, không nhấp nháy mạnh.

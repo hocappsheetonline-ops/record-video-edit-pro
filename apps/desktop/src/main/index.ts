@@ -74,6 +74,27 @@ async function loadUpdater(): Promise<UpdaterLike | null> {
   return autoUpdater
 }
 
+/** Đường dẫn các file MediaPipe (wasm) và model xóa phông, phục vụ qua lumora-media://ai/. */
+function aiAssetFiles(): Record<string, string> {
+  const files: Record<string, string> = {
+    'selfie_segmenter.tflite': join(
+      __dirname,
+      '../../resources/ai/selfie_segmenter.tflite',
+    ).replace('app.asar', 'app.asar.unpacked'),
+  }
+  try {
+    for (const name of ['vision_wasm_internal.js', 'vision_wasm_internal.wasm'])
+      files[name] = require.resolve(`@mediapipe/tasks-vision/${name}`)
+  } catch (error) {
+    logger.warn('ai', `MediaPipe không có: ${String(error)}`)
+  }
+  return files
+}
+
+// Máy không có GPU dùng được (máy ảo, driver bị chặn): vẫn có WebGL bằng phần mềm (SwiftShader)
+// cho AI xóa phông. Giao diện chỉ chạy nội dung của chính app nên không có rủi ro từ web lạ.
+app.commandLine.appendSwitch('enable-unsafe-swiftshader')
+
 // Giao thức riêng để giao diện phát video trong thư mục dự án (hỗ trợ tua).
 protocol.registerSchemesAsPrivileged([
   {
@@ -127,8 +148,10 @@ if (!app.requestSingleInstanceLock()) {
     const projectsDir = async () =>
       (await settings.get()).projectsDir || join(app.getPath('videos'), 'Lumora')
 
+    // File của AI xóa phông (MediaPipe + model): chỉ phục vụ đúng các file này.
+    const aiFiles = aiAssetFiles()
     protocol.handle(MEDIA_SCHEME, async (request) =>
-      handleMediaRequest(request, await projectsDir()),
+      handleMediaRequest(request, await projectsDir(), aiFiles),
     )
 
     const recording = new RecordingController({ mainWindow: () => mainWindow, projectsDir })
