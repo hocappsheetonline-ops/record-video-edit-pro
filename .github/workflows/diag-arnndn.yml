@@ -1,7 +1,7 @@
 name: Diag arnndn
 on:
   push:
-    paths: ['.github/workflows/diag-arnndn.yml']
+    paths: ['.github/workflows/diag-arnndn.yml', 'apps/desktop/resources/rnnoise/**']
 jobs:
   diag:
     runs-on: windows-latest
@@ -10,20 +10,13 @@ jobs:
       - name: Measure
         shell: bash
         run: |
-          set -x
-          powershell -Command "Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores | Format-List"
           curl -sSL -o ff.gz https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1/ffmpeg-win32-x64.gz
           gunzip ff.gz && mv ff ff.exe
-          ./ff.exe -version | head -1
+          git show HEAD~1:apps/desktop/resources/rnnoise/sh.rnnn > orig.rnnn
           ./ff.exe -hide_banner -loglevel error -y -f lavfi -i "anoisesrc=d=3:c=white:a=0.08:r=48000" n.wav
-          M="$(cygpath -m "$PWD/apps/desktop/resources/rnnoise/sh.rnnn")"
-          M="${M//:/\\:}"
-          echo "model=$M"
-          ./ff.exe -hide_banner -i n.wav -af volumedetect -f null - 2>&1 | grep mean_volume
-          for flags in "" "-cpuflags -fma3" "-cpuflags -avx2-fma3-avx512" "-cpuflags 0"; do
-            for i in 1 2 3; do
-              echo -n "[$flags] run $i: "
-              ./ff.exe -hide_banner $flags -i n.wav -af "arnndn=m='$M',volumedetect" -f null - 2>&1 | grep -E "mean_volume|rror" | tr -d '\r'
+          for name in orig apps/desktop/resources/rnnoise/sh; do
+            M="$(cygpath -m "$PWD/$name.rnnn")"; M="${M//:/\\:}"
+            for i in $(seq 1 12); do
+              ./ff.exe -hide_banner -i n.wav -af "arnndn=m='$M',volumedetect" -f null - 2>&1 | grep -oE "mean_volume: [-0-9.]+" | tr -d '\r' | sed "s|^|$name |"
             done
           done
-          for i in 1 2; do echo -n "afftdn run $i: "; ./ff.exe -hide_banner -i n.wav -af "afftdn=nf=-25:nr=30:nt=w,volumedetect" -f null - 2>&1 | grep mean_volume; done
