@@ -144,7 +144,7 @@ Cấu hình máy khuyến nghị để quay 1080p/60fps: CPU 4 nhân trở lên,
 
 ## 6. Bước tiếp theo
 
-Cả 5 giai đoạn đã xong. Các hướng mở rộng có thể làm sau:
+Cả 5 giai đoạn đã xong. Lộ trình tiếp theo (v0.4 → v1.0, clone trình chỉnh sửa CapCut, có hướng dẫn chi tiết cho A.I) nằm ở **`ROADMAP.md`**. Các hướng mở rộng khác:
 
 - Ký số Windows để không còn cảnh báo SmartScreen.
 - Bản macOS (cần máy Mac để test quay màn hình và quyền truy cập).
