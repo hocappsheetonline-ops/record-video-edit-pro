@@ -1048,3 +1048,82 @@ test('lớp phủ: keyframe kéo trên khung xem trước, mặt nạ tròn, hò
   expect(errors).toEqual([])
   await app.close()
 })
+
+test('phát ngược, đường cong tốc độ và độ mờ clip: video xuất đúng', async () => {
+  const { app, page, errors } = await launchApp(dirs.userData)
+  await openEditor(page)
+  const exportNew = async () => {
+    await openExport(page)
+    await page.getByTestId('resolution-720').click()
+    await page.waitForTimeout(1100)
+    const old = new Set(exported('.mp4'))
+    await page.getByTestId('export-start').click()
+    await expect(page.getByTestId('export-result')).toBeVisible({ timeout: 150_000 })
+    await expect.poll(() => exported('.mp4').filter((f) => !old.has(f)).length).toBe(1)
+    await closeExport(page)
+    return join(
+      projectDir,
+      'exports',
+      exported('.mp4').find((f) => !old.has(f))!,
+    )
+  }
+  const saved = () => JSON.parse(readFileSync(join(projectDir, 'edit.json'), 'utf8'))
+  const video = '1100:600:90:60'
+  const plain = await exportNew()
+
+  // Phát ngược: khung đầu của bản xuất là khung cuối của bản gốc (có cả tiếng đảo ngược).
+  await page.getByTestId('timeline-clip').first().click()
+  await page.getByTestId('clip-reverse').click()
+  await expect(page.getByTestId('clip-reverse-status')).toHaveText(/sẵn sàng/, { timeout: 60_000 })
+  await expect.poll(() => saved().clips[0].reversed).toBe(true)
+  expect(
+    readdirSync(projectDir)
+      .filter((f) => f.startsWith('rev-'))
+      .sort(),
+  ).toEqual(['rev-s0-0-4000-camera.mp4', 'rev-s0-0-4000-mic.m4a', 'rev-s0-0-4000-screen.mp4'])
+  const reversed = await exportNew()
+  expect(statsDiff(areaStats(reversed, 0.3, video), areaStats(plain, 3.7, video))).toBeLessThan(4)
+  expect(statsDiff(areaStats(reversed, 0.3, video), areaStats(plain, 0.3, video))).toBeGreaterThan(
+    4,
+  )
+  expect(probeMedia(reversed).durationMs).toBeGreaterThan(3800)
+
+  // Bỏ phát ngược; đường cong "Lướt vào" (bắt đầu 6×) làm video ngắn lại; độ mờ 30% thấy nền.
+  await page.getByTestId('clip-reverse').click()
+  await page.getByTestId('clip-tab-speed').click()
+  await page.getByTestId('speed-mode-curve').click()
+  await page.getByTestId('curve-flashIn').click()
+  await page.getByTestId('clip-tab-video').click()
+  await page.getByTestId('clip-opacity-input').click()
+  await page.keyboard.press('ControlOrMeta+A')
+  await page.keyboard.type('30')
+  await page.keyboard.press('Enter')
+  await expect.poll(() => saved().clips[0].opacity).toBe(0.3)
+  expect(saved().clips[0].speedCurve.preset).toBe('flashIn')
+  expect(saved().clips[0].reversed).toBeUndefined()
+  const curved = await exportNew()
+  const length = probeMedia(curved).durationMs ?? 0
+  expect(length).toBeLessThan(3000)
+  expect(length).toBeGreaterThan(1500)
+  // Độ mờ 30%: video màn hình nhạt đi, nền (gradient mịn) lộ ra → độ chênh sáng tối giảm mạnh.
+  // Cuối clip đường cong chạy 1× nên khung cuối ứng với khung cuối bản gốc.
+  const spread = (file: string, t: number) => {
+    const { stderr } = spawnSync(
+      ffmpegPath as unknown as string,
+      ['-hide_banner', '-ss', String(t), '-i', file, '-frames:v', '1'].concat([
+        '-vf',
+        `crop=${video},signalstats,metadata=print`,
+        '-f',
+        'null',
+        '-',
+      ]),
+      { encoding: 'utf8' },
+    )
+    const get = (k: string) => Number(new RegExp(`signalstats\\.${k}=([\\d.]+)`).exec(stderr)?.[1])
+    return get('YHIGH') - get('YLOW')
+  }
+  expect(spread(curved, length / 1000 - 0.15)).toBeLessThan(spread(plain, 3.85) * 0.5)
+
+  expect(errors).toEqual([])
+  await app.close()
+})

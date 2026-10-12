@@ -78,6 +78,10 @@ export interface ProjectsIpc {
   soundEffect(dir: string, id: string): Promise<AudioAsset>
   voiceover(dir: string, data: Uint8Array): Promise<AudioAsset>
   processAudio(dir: string, file: string, fx: AudioFx): Promise<string>
+  reverseClip(
+    dir: string,
+    clip: { sourceStart: number; sourceEnd: number },
+  ): Promise<Partial<Record<'screen' | 'camera' | 'mic' | 'system', string>>>
   assetPeaks(dir: string, file: string): Promise<Waveform | null>
   /** Hộp thoại chọn ảnh/GIF rồi chép vào dự án (null nếu hủy). */
   importImage(dir: string): Promise<MediaAsset | null>
@@ -272,6 +276,21 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
     if (typeof file !== 'string' || !/^[\w.-]+$/.test(file)) throw new Error('audio_unreadable')
     return projects.processAudio(await projectDir(folder), file, parseAudioFx(fx))
   })
+  ipcMain.handle(
+    IPC.clipReverse,
+    async (_event, folder: unknown, sourceStart: unknown, sourceEnd: unknown) => {
+      if (
+        typeof sourceStart !== 'number' ||
+        typeof sourceEnd !== 'number' ||
+        !Number.isFinite(sourceStart) ||
+        !Number.isFinite(sourceEnd) ||
+        sourceStart < 0 ||
+        sourceEnd <= sourceStart
+      )
+        throw new Error('reverse_failed')
+      return projects.reverseClip(await projectDir(folder), { sourceStart, sourceEnd })
+    },
+  )
   ipcMain.handle(IPC.assetsAddSfx, async (_event, folder: unknown, id: unknown) => {
     if (typeof id !== 'string') throw new Error('sfx_unknown')
     return projects.soundEffect(await projectDir(folder), id)

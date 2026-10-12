@@ -448,6 +448,32 @@ export const en: Messages = {
         generic: 'Error: {{message}}',
       },
     },
+    curve: {
+      mode: 'Speed type',
+      fixed: 'Fixed',
+      curve: 'Curve',
+      point: 'Point {{n}}',
+      hint: 'Drag points up / down to change speed (the middle line is 1×). Exported audio follows the curve in short steps.',
+      presets: {
+        montage: 'Montage',
+        hero: 'Hero',
+        bullet: 'Bullet',
+        jumpCut: 'Jump cut',
+        flashIn: 'Flash in',
+        flashOut: 'Flash out',
+      },
+    },
+    reverse: {
+      title: 'Playback',
+      toggle: 'Reverse',
+      short: 'Reversed',
+      hint: 'The clip plays from end to start (picture and sound). The reversed file is built in the background.',
+      notAllowed:
+        'Only clips within one recording segment and up to 2 minutes long can be reversed.',
+      processing: 'Building reversed copy…',
+      ready: 'Ready',
+      failed: 'Could not build the reversed copy',
+    },
     anim: {
       in: 'In',
       out: 'Out',

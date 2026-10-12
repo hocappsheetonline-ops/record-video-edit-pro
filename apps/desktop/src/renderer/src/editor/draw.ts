@@ -191,17 +191,22 @@ export function drawScene(
   ctx.save()
   roundedRect(ctx, content.x, content.y, content.width, content.height, radius)
   ctx.clip()
+  // Clip có độ mờ: không tô đen phía sau để thấy nền.
+  const opacity = scene.opacity ?? 1
   ctx.fillStyle = '#000000'
-  ctx.fillRect(content.x, content.y, content.width, content.height)
+  if (opacity >= 1) ctx.fillRect(content.x, content.y, content.width, content.height)
   const screen = frames.screen
   const look = scene.look
   if (screen) {
     const v = scene.source
-    ctx.save()
-    if (look) ctx.filter = look.css
+    // Độ mờ < 1: vẽ lên một lớp riêng rồi ghép mờ (để bộ lọc và lớp màu cũng mờ theo).
+    const layer = opacity < 1 ? beginLayer(ctx, scene.width, scene.height) : null
+    const target = layer?.ctx ?? ctx
+    target.save()
+    if (look) target.filter = look.css
     if (!scene.orient) {
       screen.draw(
-        ctx,
+        target,
         v.x * screen.width,
         v.y * screen.height,
         v.width * screen.width,
@@ -217,11 +222,11 @@ export function drawScene(
       const swap = rotate % 180 !== 0
       const dw = swap ? content.height : content.width
       const dh = swap ? content.width : content.height
-      ctx.translate(content.x + content.width / 2, content.y + content.height / 2)
-      ctx.rotate((rotate * Math.PI) / 180)
-      ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1)
+      target.translate(content.x + content.width / 2, content.y + content.height / 2)
+      target.rotate((rotate * Math.PI) / 180)
+      target.scale(flipH ? -1 : 1, flipV ? -1 : 1)
       screen.draw(
-        ctx,
+        target,
         v.x * screen.width,
         v.y * screen.height,
         v.width * screen.width,
@@ -232,8 +237,14 @@ export function drawScene(
         dh,
       )
     }
-    ctx.restore()
-    if (look) applyLookLayers(ctx, look, content, Math.floor(scene.time / 40))
+    target.restore()
+    if (look) applyLookLayers(target, look, content, Math.floor(scene.time / 40))
+    if (layer) {
+      ctx.save()
+      ctx.globalAlpha = opacity
+      ctx.drawImage(layer.canvas, 0, 0)
+      ctx.restore()
+    }
   }
   if (scene.ripple) {
     const r = scene.ripple
@@ -296,6 +307,27 @@ export function drawScene(
 }
 
 export type AnyCanvas = HTMLCanvasElement | OffscreenCanvas
+
+const layers = new WeakMap<object, AnyCanvas>()
+
+/** Lớp vẽ tạm (trong suốt, cùng cỡ khung) riêng cho từng canvas đích. */
+function beginLayer(ctx: Ctx, width: number, height: number): { canvas: AnyCanvas; ctx: Ctx } {
+  let canvas = layers.get(ctx.canvas)
+  if (!canvas || canvas.width !== width || canvas.height !== height) {
+    canvas =
+      typeof OffscreenCanvas !== 'undefined'
+        ? new OffscreenCanvas(width, height)
+        : Object.assign(document.createElement('canvas'), { width, height })
+    layers.set(ctx.canvas, canvas)
+  }
+  const c = canvas.getContext('2d') as Ctx
+  c.setTransform(1, 0, 0, 1, 0, 0)
+  c.globalAlpha = 1
+  c.globalCompositeOperation = 'source-over'
+  c.filter = 'none'
+  c.clearRect(0, 0, width, height)
+  return { canvas, ctx: c }
+}
 /**
  * Mỗi canvas đích có bản nháp riêng: canvas xem trước bị trình duyệt đánh dấu "tainted" (video
  * khác nguồn), dùng chung bản nháp sẽ làm canvas xuất video cũng bị khóa và không mã hóa được.

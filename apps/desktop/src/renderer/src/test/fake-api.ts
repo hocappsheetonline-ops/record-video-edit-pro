@@ -323,6 +323,10 @@ export function createFakeApi(
     processAudio: vi.fn<LumoraApi['processAudio']>(
       async (_folder, file) => `fx-${file.replace(/\.[^.]+$/, '')}-test.m4a`,
     ),
+    reverseClip: vi.fn<LumoraApi['reverseClip']>(async (_folder, start, end) => ({
+      screen: `rev-s0-${Math.round(start)}-${Math.round(end)}-screen.mp4`,
+      mic: `rev-s0-${Math.round(start)}-${Math.round(end)}-mic.m4a`,
+    })),
     listVoices: vi.fn<LumoraApi['listVoices']>(async () => [
       { id: 'voice-anna', name: 'Anna' },
       { id: 'voice-bao', name: 'Bao' },

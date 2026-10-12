@@ -57,6 +57,8 @@ const api: LumoraApi = {
   addImageFile: (folder) => ipcRenderer.invoke(IPC.assetsAddImage, folder),
   addVoiceover: (folder, data) => ipcRenderer.invoke(IPC.assetsVoiceover, folder, data),
   processAudio: (folder, file, fx) => ipcRenderer.invoke(IPC.audioProcess, folder, file, fx),
+  reverseClip: (folder, sourceStart, sourceEnd) =>
+    ipcRenderer.invoke(IPC.clipReverse, folder, sourceStart, sourceEnd),
   listMemes: () => ipcRenderer.invoke(IPC.memesList),
   importMemes: () => ipcRenderer.invoke(IPC.memesImport),
   addMemePaths: (paths) => ipcRenderer.invoke(IPC.memesAddPaths, paths),

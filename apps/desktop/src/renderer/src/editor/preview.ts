@@ -1,7 +1,9 @@
 import {
+  alongAtSource,
   audioClipGain,
   audioClipMediaTime,
   clipGain,
+  clipSpeedAt,
   isDefaultFx,
   mediaTime,
   outputDuration,
@@ -22,7 +24,7 @@ import { drawScene, videoElementSource } from './draw'
 import { imageSource } from './overlay-draw'
 import { OverlayImages } from './overlay-images'
 import { computeScene } from './scene'
-import { fxKeyOf, useEditorStore } from './store'
+import { fxKeyOf, revKeyOf, useEditorStore } from './store'
 
 type MediaEl = HTMLVideoElement | HTMLAudioElement
 const RESYNC_S = 0.25
@@ -55,6 +57,10 @@ export class PreviewEngine {
   private readonly audioClips = new Map<string, HTMLAudioElement>()
   /** Thẻ video cho từng video meme (theo id lớp), phát cả tiếng. */
   private readonly overlayVideos = new Map<string, HTMLVideoElement>()
+  /** Thẻ media cho file đảo ngược của clip phát ngược (theo tên file). */
+  private readonly revMedia = new Map<string, MediaEl>()
+  /** Thẻ hình đang hiện cho video màn hình / webcam (đoạn quay hoặc file đảo ngược). */
+  private active: { screen?: MediaEl; camera?: MediaEl } = {}
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -158,12 +164,57 @@ export class PreviewEngine {
     this.frame = requestAnimationFrame(this.loop)
   }
 
-  /** Giữ các thẻ media đúng vị trí: chỉ đoạn quay hiện tại phát, các đoạn khác dừng. */
+  /** Thẻ media của file đảo ngược (tạo khi cần). */
+  private revEl(file: string, kind: TrackKind): MediaEl {
+    let el = this.revMedia.get(file)
+    if (!el) {
+      el = document.createElement(kind === 'screen' || kind === 'camera' ? 'video' : 'audio')
+      el.preload = 'auto'
+      el.muted = kind === 'screen' || kind === 'camera'
+      if (el instanceof HTMLVideoElement) el.playsInline = true
+      el.dataset.src = mediaUrl(this.folder, file)
+      el.src = el.dataset.src
+      el.addEventListener('loadeddata', () => this.requestDraw())
+      el.addEventListener('seeked', () => this.requestDraw())
+      this.revMedia.set(file, el)
+    }
+    return el
+  }
+
+  /** Đưa một thẻ media tới đúng thời điểm, phát / dừng theo trạng thái và tốc độ. */
+  private drive(el: MediaEl, target: number, playing: boolean, rate: number) {
+    if (rate > 0 && Math.abs(el.playbackRate - rate) > 0.01)
+      el.playbackRate = Math.min(16, Math.max(0.0625, rate))
+    const drift = Math.abs(el.currentTime - target)
+    if (playing && rate > 0) {
+      if (drift > RESYNC_S) el.currentTime = target
+      if (el.paused) safePlay(el)
+    } else {
+      if (!el.paused) el.pause()
+      if (drift > 0.02) el.currentTime = target
+    }
+  }
+
+  /**
+   * Giữ các thẻ media đúng vị trí: chỉ đoạn quay hiện tại phát, các đoạn khác dừng. Clip phát ngược
+   * dùng file đảo ngược (chưa có thì dừng hình ở đúng khung); clip có đường cong tốc độ đổi tốc độ
+   * phát liên tục.
+   */
   private sync(edit: EditState, time: number, playing: boolean) {
     const hit = outputToSource(edit.clips, time)
     const item = hit ? segmentAt(this.segments, hit.source) : null
+    const clip = hit?.position.clip
     // Khung hình đứng yên: hình dừng đúng khung, không có tiếng.
-    const frozen = !!hit?.position.clip.freeze
+    const frozen = !!clip?.freeze
+    const offset = hit ? time - hit.position.outputStart : 0
+    const rate = clip ? clipSpeedAt(clip, offset) : 1
+    // Clip phát ngược: file đảo ngược theo track (nếu đã tạo xong).
+    const store = useEditorStore.getState()
+    const rev = clip?.reversed ? store.revFiles[revKeyOf(clip)] : undefined
+    const revFiles = rev && rev !== 'pending' && rev !== 'error' ? rev : null
+    if (clip?.reversed && !rev) void store.ensureReversed(clip)
+    const usedRev = new Set<MediaEl>()
+    this.active = {}
     for (const [key, el] of this.media) {
       const [segText, kind] = key.split(':') as [string, TrackKind]
       // Track có lọc tạp âm / hiệu ứng: đổi sang bản đã xử lý ngay cả khi chưa tới lượt phát.
@@ -179,27 +230,46 @@ export class PreviewEngine {
       const target = active && hit ? mediaTime(item, kind, hit.source) : null
       const outOfRange =
         target === null || target < 0 || (Number.isFinite(el.duration) && target > el.duration)
-      if (outOfRange || (frozen && (kind === 'mic' || kind === 'system'))) {
+      const audio = kind === 'mic' || kind === 'system'
+      if (outOfRange || (frozen && audio)) {
         if (!el.paused) el.pause()
         continue
       }
       // Âm lượng chung × âm lượng riêng của clip (tắt tiếng clip = 0); đang ghi lồng tiếng thì
       // có thể tắt tiếng bản gốc.
-      if (kind === 'mic' || kind === 'system') {
-        const muted = useEditorStore.getState().muteOriginal
-        el.volume = muted ? 0 : Math.min(1, edit.audio[kind] * clipGain(hit!.position.clip, kind))
-      }
-      const speed = hit!.position.clip.speed
-      if (el.playbackRate !== speed) el.playbackRate = speed
-      const drift = Math.abs(el.currentTime - target)
-      if (playing && !frozen) {
-        if (drift > RESYNC_S) el.currentTime = target
-        if (el.paused) safePlay(el)
-      } else {
+      const volume = store.muteOriginal
+        ? 0
+        : audio
+          ? Math.min(1, edit.audio[kind as 'mic' | 'system'] * clipGain(clip!, kind as 'mic'))
+          : 0
+      const revFile = revFiles?.[kind]
+      if (clip?.reversed && revFile) {
+        // Phát ngược: dùng file đảo ngược, giây 0 ứng với cuối clip.
         if (!el.paused) el.pause()
-        if (drift > 0.02) el.currentTime = target
+        const r = this.revEl(revFile, kind)
+        if (audio) {
+          this.setSource(
+            r,
+            this.playable(revFile, kind === 'mic' ? edit.audio.micFx : edit.audio.systemFx),
+          )
+          r.volume = volume
+        }
+        usedRev.add(r)
+        this.drive(r, alongAtSource(clip, hit!.source) / 1000, playing, rate)
+        if (!audio) this.active[kind as 'screen' | 'camera'] = r
+        continue
       }
+      if (audio) el.volume = volume
+      // Phát ngược nhưng file chưa sẵn sàng: dừng hình đúng khung (không phát xuôi).
+      const holding = frozen || (clip?.reversed && !revFile)
+      if (holding && audio) {
+        if (!el.paused) el.pause()
+        continue
+      }
+      this.drive(el, target!, playing && !holding, rate)
+      if (!audio) this.active[kind as 'screen' | 'camera'] = el
     }
+    for (const el of this.revMedia.values()) if (!usedRev.has(el) && !el.paused) el.pause()
   }
 
   /** Nhạc nền / hiệu ứng: phát đúng đoạn, đúng vị trí trong file, âm lượng theo fade. */
@@ -300,8 +370,8 @@ export class PreviewEngine {
       this.canvas.width = size.width
       this.canvas.height = size.height
     }
-    const screen = item ? this.el(item.segment.index, 'screen') : undefined
-    const camera = item ? this.el(item.segment.index, 'camera') : undefined
+    const screen = this.active.screen ?? (item ? this.el(item.segment.index, 'screen') : undefined)
+    const camera = this.active.camera ?? (item ? this.el(item.segment.index, 'camera') : undefined)
     const scene = computeScene({
       edit,
       time,
@@ -371,6 +441,12 @@ export class PreviewEngine {
       el.load()
     }
     this.overlayVideos.clear()
+    for (const el of this.revMedia.values()) {
+      el.pause()
+      el.removeAttribute('src')
+      el.load()
+    }
+    this.revMedia.clear()
     this.images.dispose()
   }
 }

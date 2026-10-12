@@ -11,6 +11,7 @@ import { NO_BEAUTY, parseBeauty, type BeautyStyle } from './beauty'
 import { parseEffects, type EffectRegion } from './effects'
 import { DEFAULT_LOOK, isDefaultLook, parseLook, type Look } from './look'
 import { parseClipTransform } from './orient'
+import { parseSpeedCurve } from './speed-curve'
 import { parseOverlays, type Overlay } from './overlays'
 import { parseTransitions, pruneTransitions, type Transition } from './transitions'
 import {
@@ -278,6 +279,8 @@ export function parseEditState(
         if (!Number.isFinite(freeze) && end - start < MIN_CLIP_MS) return []
         const look = c.look === undefined ? undefined : parseLook(c.look)
         const transform = parseClipTransform(c.transform)
+        const curve = Number.isFinite(freeze) ? undefined : parseSpeedCurve(c.speedCurve)
+        const opacity = num(c.opacity, 1, 0, 1)
         return [
           {
             id: typeof c.id === 'string' ? c.id : `c${i}`,
@@ -288,6 +291,9 @@ export function parseEditState(
             ...(look && !isDefaultLook(look) ? { look } : {}),
             ...(transform ? { transform } : {}),
             ...(Number.isFinite(freeze) ? { freeze } : {}),
+            ...(c.reversed === true && !Number.isFinite(freeze) ? { reversed: true } : {}),
+            ...(curve ? { speedCurve: curve } : {}),
+            ...(opacity < 1 ? { opacity } : {}),
           },
         ]
       })

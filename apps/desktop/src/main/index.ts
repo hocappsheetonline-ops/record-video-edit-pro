@@ -33,6 +33,7 @@ import { importImageFile, MEDIA_EXTENSIONS, MemeLibrary } from './projects/image
 import { clearDirs, dirSize } from './content/cache'
 import { RnnoiseDenoiser } from './audio/denoise'
 import { AudioProcessor } from './audio/process'
+import { ClipReverser } from './clips/reverse'
 import { OnlineService } from './content/online'
 import { PACK_EXTENSION } from './projects/share'
 import { loadWaveform } from './projects/waveform'
@@ -179,6 +180,7 @@ if (!app.requestSingleInstanceLock()) {
         ),
       ),
     )
+    const reverser = new ClipReverser(runFfmpeg)
     const cacheDirs = [join(userData, 'cache'), join(userData, 'sounds')]
     const online = new OnlineService({
       getKey: (name) => secrets.get(name),
@@ -212,7 +214,7 @@ if (!app.requestSingleInstanceLock()) {
       online,
       cache: { size: () => dirSize(cacheDirs), clear: () => clearDirs(cacheDirs) },
       recording,
-      exports: new ExportManager(runFfmpeg, audioProcessor),
+      exports: new ExportManager(runFfmpeg, audioProcessor, reverser),
       projects: {
         dir: projectsDir,
         waveform: (project, dir) => loadWaveform(project, dir, runFfmpeg),
@@ -241,6 +243,7 @@ if (!app.requestSingleInstanceLock()) {
         soundEffect: (dir, id) => createSoundEffect(id, dir, runFfmpeg),
         voiceover: (dir, data) => importVoiceover(dir, data, runFfmpeg),
         processAudio: (dir, file, fx) => audioProcessor.process(dir, file, fx),
+        reverseClip: (dir, clip) => reverser.ensure(dir, clip),
         importImage: async (dir) => {
           const file = await pickFiles(MEDIA_EXTENSIONS, false)
           return file[0] ? importImageFile(file[0], dir, runFfmpeg) : null

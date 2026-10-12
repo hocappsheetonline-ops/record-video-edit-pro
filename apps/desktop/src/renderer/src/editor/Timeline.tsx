@@ -13,9 +13,11 @@ import {
   Music2,
   Redo2,
   Palette,
+  Rewind,
   Scissors,
   Snowflake,
   Sparkles,
+  TrendingUp,
   Trash2,
   Undo2,
   Video,
@@ -495,7 +497,16 @@ export function Timeline() {
                         )}
                         <span className="absolute left-1 top-1 flex items-center gap-1 rounded bg-black/60 px-1.5 text-[11px] font-medium text-white">
                           {i + 1}
-                          {clip.speed !== 1 && !clip.freeze && ` · ${clip.speed}×`}
+                          {clip.speed !== 1 &&
+                            !clip.freeze &&
+                            !clip.speedCurve &&
+                            ` · ${clip.speed}×`}
+                          {clip.speedCurve && (
+                            <TrendingUp size={11} aria-hidden data-testid="clip-curve-badge" />
+                          )}
+                          {clip.reversed && (
+                            <Rewind size={11} aria-hidden data-testid="clip-reverse-badge" />
+                          )}
                           {clip.freeze && (
                             <Snowflake size={11} aria-hidden data-testid="clip-freeze-badge" />
                           )}

@@ -1,6 +1,7 @@
 import type { Project, Segment, TrackKind } from '../project'
 import type { Look } from './look'
 import type { ClipTransform } from './orient'
+import { curveAlongAt, curveOutputAt, curveSpeedAt, subCurve, type SpeedCurve } from './speed-curve'
 
 /**
  * "Thời gian nguồn" (ms): các đoạn quay được nối liền nhau theo thứ tự, bỏ qua lúc tạm dừng.
@@ -75,6 +76,12 @@ export interface Clip {
    * tiếng. Clip đứng yên có `sourceEnd === sourceStart`.
    */
   freeze?: number
+  /** Phát ngược (dùng file đảo ngược do main tạo). */
+  reversed?: boolean
+  /** Đường cong tốc độ (thay cho `speed` khi có). */
+  speedCurve?: SpeedCurve
+  /** Độ mờ của video màn hình trong clip (0..1, không có = 1): thấy nền phía sau. */
+  opacity?: number
 }
 
 export interface ClipAudio {
@@ -110,9 +117,66 @@ export function newClipId(): string {
   return `c${Date.now().toString(36)}${clipCounter.toString(36)}`
 }
 
+/** Độ dài nguồn của clip (ms). */
+export const clipLength = (clip: Clip) => clip.sourceEnd - clip.sourceStart
+
+/**
+ * "Quãng đã phát" (ms nguồn tính từ đầu clip theo thứ tự phát) ↔ thời điểm nguồn. Clip phát ngược
+ * đi từ `sourceEnd` lùi về.
+ */
+export function sourceAtAlong(clip: Clip, along: number): number {
+  return clip.reversed ? clip.sourceEnd - along : clip.sourceStart + along
+}
+export function alongAtSource(clip: Clip, s: number): number {
+  return clip.reversed ? clip.sourceEnd - s : s - clip.sourceStart
+}
+
+/** Quãng đã phát sau `offset` ms trên video xuất tính từ đầu clip. */
+export function alongAtOffset(clip: Clip, offset: number): number {
+  if (clip.freeze) return 0
+  const len = clipLength(clip)
+  if (clip.speedCurve) return curveAlongAt(clip.speedCurve, len, offset)
+  return Math.min(len, Math.max(0, offset * clip.speed))
+}
+
+/** Thời gian xuất (ms từ đầu clip) để phát tới quãng `along`. */
+export function offsetAtAlong(clip: Clip, along: number): number {
+  if (clip.freeze) return 0
+  if (clip.speedCurve) return curveOutputAt(clip.speedCurve, clipLength(clip), along)
+  return along / clip.speed
+}
+
+/** Tốc độ phát tức thời tại `offset` ms từ đầu clip (cho thẻ video khi xem trước). */
+export function clipSpeedAt(clip: Clip, offset: number): number {
+  if (clip.freeze) return 0
+  if (!clip.speedCurve) return clip.speed
+  const len = clipLength(clip)
+  return curveSpeedAt(clip.speedCurve, len > 0 ? alongAtOffset(clip, offset) / len : 0)
+}
+
 export function clipDuration(clip: Clip): number {
   if (clip.freeze) return clip.freeze
-  return (clip.sourceEnd - clip.sourceStart) / clip.speed
+  return offsetAtAlong(clip, clipLength(clip))
+}
+
+/**
+ * Phần của clip từ quãng `a` tới `b` (ms nguồn theo thứ tự phát) thành một clip mới (giữ chiều phát,
+ * đường cong tốc độ được cắt đúng phần).
+ */
+export function clipPart(clip: Clip, a: number, b: number): Clip {
+  const len = clipLength(clip)
+  const lo = Math.max(0, Math.min(a, b))
+  const hi = Math.min(len, Math.max(a, b))
+  const range = clip.reversed
+    ? { sourceStart: clip.sourceEnd - hi, sourceEnd: clip.sourceEnd - lo }
+    : { sourceStart: clip.sourceStart + lo, sourceEnd: clip.sourceStart + hi }
+  return {
+    ...clip,
+    ...range,
+    ...(clip.speedCurve && len > 0
+      ? { speedCurve: subCurve(clip.speedCurve, lo / len, hi / len) }
+      : {}),
+  }
 }
 
 /** Thời lượng khung hình đứng yên mặc định và giới hạn (ms). */
@@ -150,14 +214,20 @@ export function outputToSource(
   for (const position of positions) {
     const end = position.outputStart + clipDuration(position.clip)
     if (clamped < end) {
-      const source = position.clip.freeze
-        ? position.clip.sourceStart
-        : position.clip.sourceStart + (clamped - position.outputStart) * position.clip.speed
+      const clip = position.clip
+      const source = clip.freeze
+        ? clip.sourceStart
+        : sourceAtAlong(clip, alongAtOffset(clip, clamped - position.outputStart))
       return { position, source }
     }
   }
   const last = positions[positions.length - 1]!
-  return { position: last, source: last.clip.sourceEnd }
+  return {
+    position: last,
+    source: last.clip.freeze
+      ? last.clip.sourceStart
+      : sourceAtAlong(last.clip, clipLength(last.clip)),
+  }
 }
 
 /** Thời điểm nguồn → thời điểm trên video xuất, hoặc null nếu đoạn đó đã bị cắt bỏ. */
@@ -165,7 +235,7 @@ export function sourceToOutput(clips: readonly Clip[], s: number): number | null
   for (const { clip, outputStart } of clipPositions(clips)) {
     if (clip.freeze) continue
     if (s >= clip.sourceStart && s <= clip.sourceEnd) {
-      return outputStart + (s - clip.sourceStart) / clip.speed
+      return outputStart + offsetAtAlong(clip, alongAtSource(clip, s))
     }
   }
   return null
@@ -195,10 +265,11 @@ export function splitAt(clips: readonly Clip[], t: number): Clip[] {
     const right: Clip = { ...clip, id: newClipId(), freeze: clip.freeze - local }
     return [...clips.slice(0, index), left, right, ...clips.slice(index + 1)]
   }
-  const s = Math.round(hit.source)
-  if (s - clip.sourceStart < MIN_CLIP_MS || clip.sourceEnd - s < MIN_CLIP_MS) return [...clips]
-  const left: Clip = { ...clip, sourceEnd: s }
-  const right: Clip = { ...clip, id: newClipId(), sourceStart: s }
+  const a = Math.round(alongAtSource(clip, hit.source))
+  const len = clipLength(clip)
+  if (a < MIN_CLIP_MS || len - a < MIN_CLIP_MS) return [...clips]
+  const left: Clip = clipPart(clip, 0, a)
+  const right: Clip = { ...clipPart(clip, a, len), id: newClipId() }
   return [...clips.slice(0, index), left, right, ...clips.slice(index + 1)]
 }
 
@@ -215,13 +286,13 @@ export function trimAtPlayhead(
   const hit = outputToSource(clips, t)
   if (!hit) return { clips: [...clips], time: t }
   const { clip, index, outputStart } = hit.position
-  const s = Math.round(hit.source)
+  const a = Math.round(alongAtSource(clip, hit.source))
   const local = Math.round(t - outputStart)
   const keep: Clip = clip.freeze
     ? { ...clip, freeze: side === 'left' ? clip.freeze - local : local }
     : side === 'left'
-      ? { ...clip, sourceStart: s }
-      : { ...clip, sourceEnd: s }
+      ? clipPart(clip, a, clipLength(clip))
+      : clipPart(clip, 0, a)
   const tooShort = clip.freeze
     ? (keep.freeze ?? 0) < MIN_CLIP_MS
     : keep.sourceEnd - keep.sourceStart < MIN_CLIP_MS
@@ -238,7 +309,13 @@ export function removeClip(clips: readonly Clip[], id: string): Clip[] {
 
 export function setClipSpeed(clips: readonly Clip[], id: string, speed: number): Clip[] {
   const safe = Math.min(16, Math.max(0.25, speed))
-  return clips.map((c) => (c.id === id && !c.freeze ? { ...c, speed: safe } : c))
+  return clips.map((c) => {
+    if (c.id !== id || c.freeze) return c
+    // Tốc độ cố định thay cho đường cong.
+    const next: Clip = { ...c, speed: safe }
+    delete next.speedCurve
+    return next
+  })
 }
 
 /**
@@ -295,18 +372,32 @@ export function removeSourceRanges(clips: readonly Clip[], ranges: readonly Sour
       result.push(clip)
       continue
     }
-    let pieces: Clip[] = [clip]
+    // Phần giữ lại tính theo quãng phát (đúng cả clip phát ngược, đường cong tốc độ).
+    const len = clipLength(clip)
+    let kept: [number, number][] = [[0, len]]
     for (const range of sorted) {
-      pieces = pieces.flatMap((piece) => {
-        if (range.end <= piece.sourceStart || range.start >= piece.sourceEnd) return [piece]
-        const out: Clip[] = []
-        if (range.start > piece.sourceStart) out.push({ ...piece, sourceEnd: range.start })
-        if (range.end < piece.sourceEnd)
-          out.push({ ...piece, id: newClipId(), sourceStart: range.end })
+      const a = alongAtSource(
+        clip,
+        Math.max(clip.sourceStart, Math.min(clip.sourceEnd, range.start)),
+      )
+      const b = alongAtSource(clip, Math.max(clip.sourceStart, Math.min(clip.sourceEnd, range.end)))
+      const lo = Math.min(a, b)
+      const hi = Math.max(a, b)
+      if (hi <= lo) continue
+      kept = kept.flatMap(([x, y]): [number, number][] => {
+        if (hi <= x || lo >= y) return [[x, y]]
+        const out: [number, number][] = []
+        if (lo > x) out.push([x, lo])
+        if (hi < y) out.push([hi, y])
         return out
       })
     }
-    result.push(...pieces.filter((p) => p.sourceEnd - p.sourceStart >= MIN_CLIP_MS))
+    kept
+      .filter(([x, y]) => y - x >= MIN_CLIP_MS)
+      .forEach(([x, y], i) => {
+        const part = clipPart(clip, x, y)
+        result.push(i === 0 ? part : { ...part, id: newClipId() })
+      })
   }
   // Mảnh đầu tiên của mỗi clip giữ id cũ; nếu id bị trùng do tách thì đặt id mới.
   const seen = new Set<string>()

@@ -12,6 +12,7 @@ import {
 import { buildExportMuxArgs, buildGifArgs } from '../ffmpeg/args'
 import type { FfmpegRunner } from '../ffmpeg/runner'
 import { AudioProcessor } from '../audio/process'
+import { ClipReverser } from '../clips/reverse'
 
 export const EXPORTS_DIR = 'exports'
 
@@ -46,10 +47,14 @@ export class ExportManager {
 
   private readonly audio: Pick<AudioProcessor, 'process'>
 
-  /** `audio`: bộ xử lý lọc tạp âm / hiệu ứng giọng (mặc định: không có model AI, dùng lọc phổ). */
+  /**
+   * `audio`: bộ xử lý lọc tạp âm / hiệu ứng giọng (mặc định: không có AI, dùng lọc phổ).
+   * `reverser`: tạo file đảo ngược cho clip phát ngược.
+   */
   constructor(
     private readonly run: FfmpegRunner,
     audio?: Pick<AudioProcessor, 'process'>,
+    private readonly reverser?: Pick<ClipReverser, 'ensure'>,
   ) {
     this.audio = audio ?? new AudioProcessor(run, null)
   }
@@ -90,6 +95,10 @@ export class ExportManager {
       const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')
       const name = safeFileName(`${baseName} ${stamp}`)
       const mp4 = join(job.dir, `${name}.mp4`)
+      // Clip phát ngược: cần file tiếng đảo ngược (tạo ngay nếu chưa có).
+      for (const clip of edit.clips)
+        if (clip.reversed && !clip.freeze)
+          await (this.reverser ?? new ClipReverser(this.run)).ensure(projectDir, clip, project)
       // Track có lọc tạp âm / hiệu ứng giọng: dùng file đã xử lý (xử lý ngay nếu chưa có).
       const recorded = await Promise.all(
         planAudio(project, edit.clips, edit.audio).map(async (p) => ({

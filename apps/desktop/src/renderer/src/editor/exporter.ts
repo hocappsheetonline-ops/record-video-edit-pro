@@ -12,6 +12,7 @@ import {
   type VideoSample,
 } from 'mediabunny'
 import {
+  alongAtSource,
   buildCursorTrack,
   cameraFollowTrack,
   mediaTime,
@@ -34,6 +35,7 @@ import { imageSource } from './overlay-draw'
 import { OverlayImages } from './overlay-images'
 import { drawScene, type FrameSource } from './draw'
 import { computeScene } from './scene'
+import { revKeyOf } from './store'
 
 export interface ExportProgress {
   phase: 'render' | 'mux'
@@ -56,17 +58,33 @@ function sampleSource(sample: VideoSample): FrameSource {
   }
 }
 
+/** File đảo ngược của các clip phát ngược, theo `revKeyOf(clip)`. */
+export type ReversedMap = Record<string, Partial<Record<'screen' | 'camera', string>>>
+
 /** Danh sách thời điểm (giây trong file) cần lấy khung hình của một track, theo thứ tự khung xuất. */
 export interface FramePlan {
-  /** Với mỗi khung xuất: đoạn quay và thời điểm nguồn. */
-  frames: { segment: number | null; source: number; output: number }[]
-  /** Với mỗi `${đoạn}:${track}`: các thời điểm trong file theo đúng thứ tự cần lấy. */
+  /**
+   * Với mỗi khung xuất: đoạn quay, thời điểm nguồn và khóa nguồn hình của màn hình / webcam
+   * (`${đoạn}:${track}` hoặc `rev:${file}` khi clip phát ngược).
+   */
+  frames: {
+    segment: number | null
+    source: number
+    output: number
+    keys: { screen?: string; camera?: string }
+  }[]
+  /** Với mỗi khóa nguồn hình: các thời điểm trong file theo đúng thứ tự cần lấy. */
   timestamps: Map<string, number[]>
   /** Với mỗi video meme (theo id lớp): các thời điểm trong file (giây) theo thứ tự khung xuất. */
   overlayTimestamps: Map<string, number[]>
 }
 
-export function planFrames(project: Project, edit: EditState, fps: number): FramePlan {
+export function planFrames(
+  project: Project,
+  edit: EditState,
+  fps: number,
+  reversed: ReversedMap = {},
+): FramePlan {
   const segments = sourceSegments(project.segments)
   const total = Math.max(1, Math.round((outputDuration(edit.clips) / 1000) * fps))
   const frames: FramePlan['frames'] = []
@@ -83,14 +101,21 @@ export function planFrames(project: Project, edit: EditState, fps: number): Fram
     const hit = outputToSource(edit.clips, (i * 1000) / fps)
     const source = hit?.source ?? 0
     const item = segmentAt(segments, source)
-    frames.push({ segment: item?.segment.index ?? null, source, output: (i * 1000) / fps })
+    const keys: FramePlan['frames'][number]['keys'] = {}
+    frames.push({ segment: item?.segment.index ?? null, source, output: (i * 1000) / fps, keys })
     if (!item) continue
+    const clip = hit?.position.clip
+    const rev = clip?.reversed ? reversed[revKeyOf(clip)] : undefined
     for (const kind of ['screen', 'camera'] as const) {
       const t = mediaTime(item, kind, source)
       if (t === null) continue
-      const key = `${item.segment.index}:${kind}`
+      // Clip phát ngược: lấy từ file đảo ngược (giây 0 = cuối clip) để giải mã theo thứ tự.
+      const revFile = rev?.[kind]
+      const key = revFile ? `rev:${revFile}` : `${item.segment.index}:${kind}`
+      const at = revFile && clip ? alongAtSource(clip, source) / 1000 : Math.max(0, t)
+      keys[kind] = key
       const list = timestamps.get(key) ?? []
-      list.push(Math.max(0, t))
+      list.push(at)
       timestamps.set(key, list)
     }
   }
@@ -159,14 +184,23 @@ export async function exportVideo(options: {
     output.addVideoTrack(source, { frameRate: fps })
     await output.start()
 
-    const plan = planFrames(project, edit, fps)
+    // Clip phát ngược: chờ file đảo ngược (tạo nếu chưa có).
+    const reversed: ReversedMap = {}
+    for (const clip of edit.clips)
+      if (clip.reversed && !clip.freeze)
+        reversed[revKeyOf(clip)] = await api.reverseClip(folder, clip.sourceStart, clip.sourceEnd)
+    const plan = planFrames(project, edit, fps, reversed)
     const iterators = new Map<string, AsyncGenerator<VideoSample | null, void, unknown>>()
     for (const [key, times] of plan.timestamps) {
-      const [segText, kind] = key.split(':') as [string, 'screen' | 'camera']
-      const track = project.segments.find((s) => s.index === Number(segText))?.tracks[kind]
-      if (!track) continue
+      let file: string | undefined
+      if (key.startsWith('rev:')) file = key.slice(4)
+      else {
+        const [segText, kind] = key.split(':') as [string, 'screen' | 'camera']
+        file = project.segments.find((s) => s.index === Number(segText))?.tracks[kind]?.file
+      }
+      if (!file) continue
       const input = new Input({
-        source: new UrlSource(mediaUrl(folder, track.file)),
+        source: new UrlSource(mediaUrl(folder, file)),
         formats: ALL_FORMATS,
       })
       inputs.push(input)
@@ -203,13 +237,12 @@ export async function exportVideo(options: {
       return last.get(key) ?? null
     }
 
-    const hasCamera = (segment: number | null) =>
-      segment !== null && iterators.has(`${segment}:camera`)
     for (let i = 0; i < plan.frames.length; i++) {
       if (signal?.aborted) throw new ExportCancelled()
       const frame = plan.frames[i]!
-      const screen = frame.segment === null ? null : await next(`${frame.segment}:screen`)
-      const camera = hasCamera(frame.segment) ? await next(`${frame.segment}:camera`) : null
+      const screen = frame.keys.screen ? await next(frame.keys.screen) : null
+      const camera =
+        frame.keys.camera && iterators.has(frame.keys.camera) ? await next(frame.keys.camera) : null
       const overlayFrames = new Map<string, VideoSample | null>()
       for (const o of overlaysAt(edit.overlays, frame.output))
         if (o.kind === 'video') overlayFrames.set(o.id, await next(`ov:${o.id}`))

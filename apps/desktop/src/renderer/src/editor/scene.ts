@@ -55,6 +55,8 @@ export interface FrameScene {
   orient: Pick<ClipTransform, 'flipH' | 'flipV' | 'rotate'> | null
   /** Bộ lọc màu / điều chỉnh cho video màn hình và webcam (null nếu không có). */
   look: LookLayers | null
+  /** Độ mờ của video màn hình (clip có độ mờ < 1 thì thấy nền phía sau). */
+  opacity: number
   cursor: { x: number; y: number; size: number; opacity: number } | null
   ripple: { x: number; y: number; radius: number; opacity: number } | null
   /** Webcam: bong bóng nổi (`circle`/`rounded`/`square`) hoặc dải ngang (`strip`, không bo góc). */
@@ -196,6 +198,7 @@ export function computeScene(input: SceneInput): FrameScene {
     source: tf ? unorientRect(view, tf) : view,
     orient: tf ? { flipH: tf.flipH, flipV: tf.flipV, rotate: tf.rotate } : null,
     look: lookLayers(clip?.look ?? edit.look),
+    opacity: clip?.opacity ?? 1,
     cursor,
     ripple,
     camera: !showCamera ? null : cameraScene(edit.camera, output, layout.strip),

@@ -56,6 +56,7 @@ export const IPC = {
   assetsAddImage: 'assets:add-image',
   assetsVoiceover: 'assets:voiceover',
   audioProcess: 'audio:process',
+  clipReverse: 'clip:reverse',
   memesList: 'memes:list',
   memesImport: 'memes:import',
   memesRemove: 'memes:remove',
@@ -396,6 +397,12 @@ export interface LumoraApi {
   addVoiceover(folder: string, data: ArrayBuffer): Promise<AudioAsset>
   /** Lọc tạp âm / hiệu ứng giọng cho một file trong dự án; trả về tên file đã xử lý. */
   processAudio(folder: string, file: string, fx: AudioFx): Promise<string>
+  /** Tạo (nếu chưa có) file đảo ngược cho các track của clip; trả tên file theo track. */
+  reverseClip(
+    folder: string,
+    sourceStart: number,
+    sourceEnd: number,
+  ): Promise<Partial<Record<'screen' | 'camera' | 'mic' | 'system', string>>>
   /** Giọng đọc AI có trong tài khoản ElevenLabs. */
   listVoices(): Promise<{ id: string; name: string }[]>
   /** Đọc câu bằng giọng AI và chép vào dự án (meme sound, lời bình). */

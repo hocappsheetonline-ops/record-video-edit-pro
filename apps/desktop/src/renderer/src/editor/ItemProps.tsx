@@ -20,7 +20,6 @@ import {
   EFFECT_KINDS,
   KEY_COLORS,
   overlayPose,
-  SPEEDS,
   TEXT_STYLES,
   TRANSITION_KINDS,
   type AudioClip,
@@ -34,6 +33,7 @@ import {
 import { AudioFxPanel } from './AudioFxPanel'
 import { AdjustPanel, FreezePanel, TransformPanel } from './LookPanels'
 import { AnimSection, BlendSection, KeyframeSection, MaskSection } from './OverlayFxPanels'
+import { PlaybackSection, SpeedSection } from './SpeedPanels'
 import { useEditorStore } from './store'
 import { ghostButton, pct, secs, Section, Segmented, SliderRow, Toggle } from './ui'
 
@@ -103,7 +103,7 @@ export function ClipProps({ clip, index }: { clip: Clip; index: number }) {
   const [chosen, setTab] = useState<ClipTab>('video')
   const tabs: readonly ClipTab[] = clip.freeze ? FREEZE_TABS : CLIP_TABS
   const tab = tabs.includes(chosen) ? chosen : 'video'
-  const { setClipSpeed, splitAtPlayhead, change } = useEditorStore.getState()
+  const { splitAtPlayhead, change } = useEditorStore.getState()
   const audio = clip.audio ?? DEFAULT_CLIP_AUDIO
   const setAudio = (patch: Partial<ClipAudio>, coalesce?: string) =>
     change(
@@ -136,7 +136,10 @@ export function ClipProps({ clip, index }: { clip: Clip; index: number }) {
               {secs(clip.sourceStart)} – {secs(clip.sourceEnd)}
             </dd>
             <dt className="text-muted">{t('editor.speed')}</dt>
-            <dd className="text-right font-mono tabular-nums">{clip.speed}×</dd>
+            <dd className="text-right font-mono tabular-nums">
+              {clip.speedCurve ? t('editor.curve.curve') : `${clip.speed}×`}
+              {clip.reversed && ` · ${t('editor.reverse.short')}`}
+            </dd>
           </dl>
           <button type="button" className={ghostButton} onClick={() => splitAtPlayhead()}>
             <Scissors size={14} aria-hidden />
@@ -144,6 +147,7 @@ export function ClipProps({ clip, index }: { clip: Clip; index: number }) {
           </button>
         </Section>
       )}
+      {tab === 'video' && !clip.freeze && <PlaybackSection clip={clip} />}
       {tab === 'video' && <TransformPanel clip={clip} />}
       {tab === 'adjust' && <AdjustPanel />}
       {tab === 'audio' && (
@@ -183,32 +187,7 @@ export function ClipProps({ clip, index }: { clip: Clip; index: number }) {
           <p className="text-xs text-muted">{t('editor.props.clipAudioHint')}</p>
         </Section>
       )}
-      {tab === 'speed' && (
-        <Section testId="clip-speed">
-          <SliderRow
-            label={t('editor.speed')}
-            value={clip.speed}
-            min={0.25}
-            max={8}
-            step={0.05}
-            format={(v) => `${v}×`}
-            defaultValue={1}
-            testId="clip-speed-slider"
-            onChange={(v) => setClipSpeed(clip.id, v)}
-          />
-          <Segmented
-            label={t('editor.props.speedPresets')}
-            options={SPEEDS.map((v) => ({ value: v, label: `${v}×` }))}
-            value={(SPEEDS as readonly number[]).includes(clip.speed) ? clip.speed : null}
-            onChange={(v) => setClipSpeed(clip.id, v)}
-            testIdPrefix="speed-"
-            columns={3}
-          />
-          <p className="text-xs text-muted">
-            {t('editor.props.length')}: {secs(clipDuration(clip))}
-          </p>
-        </Section>
-      )}
+      {tab === 'speed' && <SpeedSection clip={clip} />}
     </>
   )
 }

@@ -56,6 +56,8 @@ import {
   removeKeyframe,
   setKeyframe,
   type Pose,
+  canReverse,
+  type SpeedCurve,
 } from '@lumora/core'
 import type { AudioAsset, MediaAsset } from '@shared/ipc'
 import { lumora } from '../api'
@@ -83,6 +85,11 @@ interface EditorStore {
    * xử lý, 'error' khi lỗi. Xem trước dùng file đã xử lý khi có.
    */
   fxFiles: Record<string, string>
+  /**
+   * File đảo ngược của clip phát ngược, theo `revKeyOf(clip)`: tên file theo track, hoặc
+   * 'pending' / 'error'.
+   */
+  revFiles: Record<string, ReversedFiles | 'pending' | 'error'>
   /** Giữ nút "nghe bản gốc": xem trước tạm bỏ hiệu ứng âm thanh. */
   bypassFx: boolean
   /** Đang ghi lồng tiếng và tắt tiếng bản gốc trong lúc ghi. */
@@ -128,6 +135,12 @@ interface EditorStore {
   loadAssetPeaks(file: string): void
   /** Bắt đầu xử lý hiệu ứng âm thanh cho file (nếu chưa có); an toàn khi gọi nhiều lần. */
   ensureFx(file: string, fx: AudioFx): void
+  /** Tạo file đảo ngược cho clip (ở nền); trả về khi xong (hoặc lỗi). */
+  ensureReversed(clip: Pick<Clip, 'sourceStart' | 'sourceEnd'>): Promise<ReversedFiles | null>
+  /** Bật / tắt phát ngược (chỉ clip nằm trong một đoạn quay, không quá 2 phút). */
+  setClipReversed(id: string, on: boolean): boolean
+  /** Đường cong tốc độ (undefined = về tốc độ cố định). */
+  setSpeedCurve(id: string, curve: SpeedCurve | undefined, coalesce?: string): void
   setBypassFx(on: boolean): void
   setMuteOriginal(on: boolean): void
   /** Thêm bản lồng tiếng vừa ghi tại thời điểm `at` (ms). */
@@ -188,6 +201,7 @@ const initial = {
   assetPeaks: {},
   tabRequest: { tab: '', n: 0 },
   fxFiles: {},
+  revFiles: {},
   bypassFx: false,
   muteOriginal: false,
   cursor: null,
@@ -202,6 +216,11 @@ const initial = {
 }
 
 /** Đặt file âm thanh vừa thêm vào timeline tại đầu phát và chọn nó. */
+export type ReversedFiles = Partial<Record<'screen' | 'camera' | 'mic' | 'system', string>>
+/** Khóa của clip phát ngược trong `revFiles` (theo khoảng nguồn). */
+export const revKeyOf = (clip: Pick<Clip, 'sourceStart' | 'sourceEnd'>) =>
+  `${Math.round(clip.sourceStart)}-${Math.round(clip.sourceEnd)}`
+
 /** Khóa của một file + bộ hiệu ứng trong `fxFiles`. */
 export const fxKeyOf = (file: string, fx: AudioFx) => `${file}|${audioFxKey(fx)}`
 
@@ -231,6 +250,9 @@ function insertAudio(asset: AudioAsset, kind: AudioClip['kind'], at?: number) {
   useEditorStore.getState().change((e) => ({ ...e, audioClips: [...e.audioClips, clip] }))
   useEditorStore.setState({ selection: { kind: 'audio', id: clip.id } })
 }
+
+/** Yêu cầu tạo file đảo ngược đang chạy (dùng chung khi gọi trùng). */
+const revRequests = new Map<string, Promise<ReversedFiles | 'error'>>()
 
 export const useEditorStore = create<EditorStore>((set, get) => ({
   ...initial,
@@ -277,6 +299,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         if (get().folder === folder) set({ filmstrip })
       })
       .catch(() => undefined)
+    // Clip phát ngược: chuẩn bị file đảo ngược để xem trước.
+    for (const clip of edit.clips) if (clip.reversed) void get().ensureReversed(clip)
   },
 
   reset() {
@@ -417,6 +441,46 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const { folder } = get()
     if (!folder) return
     insertAudio(await lumora().addSoundEffect(folder, id), 'sfx')
+  },
+
+  async ensureReversed(clip) {
+    const { folder } = get()
+    if (!folder) return null
+    const key = revKeyOf(clip)
+    const known = get().revFiles[key]
+    if (known && known !== 'pending' && known !== 'error') return known
+    if (known !== 'pending') {
+      set({ revFiles: { ...get().revFiles, [key]: 'pending' } })
+      revRequests.set(
+        `${folder}|${key}`,
+        lumora()
+          .reverseClip(folder, clip.sourceStart, clip.sourceEnd)
+          .then(
+            (files) => files,
+            () => 'error' as const,
+          )
+          .then((out) => {
+            if (get().folder === folder) set({ revFiles: { ...get().revFiles, [key]: out } })
+            return out
+          }),
+      )
+    }
+    const out = await revRequests.get(`${folder}|${key}`)
+    return out && out !== 'error' ? out : null
+  },
+
+  setClipReversed(id, on) {
+    const { edit, project } = get()
+    const clip = edit?.clips.find((c) => c.id === id)
+    if (!clip || !project) return false
+    if (on && !canReverse(project.segments, clip)) return false
+    get().updateClip(id, { reversed: on ? true : undefined })
+    if (on) void get().ensureReversed(clip)
+    return true
+  },
+
+  setSpeedCurve(id, curve, coalesce) {
+    get().updateClip(id, { speedCurve: curve }, coalesce)
   },
 
   ensureFx(file, fx) {
@@ -661,7 +725,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           if (c.id !== id) return c
           const next: Clip = { ...c, ...patch }
           // Giá trị rỗng: bỏ hẳn trường (file lưu gọn, clip dùng lại cài đặt chung).
-          for (const key of ['look', 'transform', 'audio'] as const)
+          for (const key of [
+            'look',
+            'transform',
+            'audio',
+            'reversed',
+            'speedCurve',
+            'opacity',
+          ] as const)
             if (key in patch && patch[key] === undefined) delete next[key]
           return next
         }),

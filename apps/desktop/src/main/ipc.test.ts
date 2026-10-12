@@ -133,6 +133,7 @@ beforeEach(async () => {
           durationMs: data.byteLength,
         })),
         processAudio: vi.fn(async (_dir: string, file: string) => `fx-${file}`),
+        reverseClip: vi.fn(async () => ({ screen: 'rev-s0-0-1000-screen.mp4' })),
         trash: async (path: string) => {
           trashed.push(path)
         },
@@ -367,5 +368,20 @@ describe('registerIpc', () => {
       'fx-seg0-mic.webm',
     )
     await expect(call(IPC.audioProcess, 'b.lumora', '../x', {})).rejects.toThrow('audio_unreadable')
+  })
+
+  it('phát ngược clip: chỉ nhận khoảng thời gian hợp lệ', async () => {
+    const { mkdir: mk } = await import('node:fs/promises')
+    await mk(join(dir, 'r.lumora'))
+    expect(await call(IPC.clipReverse, 'r.lumora', 0, 1000)).toEqual({
+      screen: 'rev-s0-0-1000-screen.mp4',
+    })
+    for (const bad of [
+      [1000, 500],
+      [-1, 10],
+      ['0', 10],
+      [0, Infinity],
+    ])
+      await expect(call(IPC.clipReverse, 'r.lumora', ...bad)).rejects.toThrow('reverse_failed')
   })
 })

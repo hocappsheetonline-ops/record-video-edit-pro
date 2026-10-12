@@ -35,6 +35,7 @@ function shareable(name: string): boolean {
     !name.endsWith('.peaks.json') &&
     // Âm thanh đã lọc tạp âm / hiệu ứng: máy nhận tự tạo lại.
     !name.startsWith('fx-') &&
+    !name.startsWith('rev-') &&
     !/^edit\.backup-/.test(name)
   )
 }

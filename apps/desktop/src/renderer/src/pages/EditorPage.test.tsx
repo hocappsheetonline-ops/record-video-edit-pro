@@ -818,4 +818,49 @@ describe('EditorPage', () => {
     await userEvent.click(screen.getByTestId('mask-none'))
     expect(ov().mask).toBeUndefined()
   })
+  it('đường cong tốc độ: chọn mẫu, chỉnh điểm bằng phím, về tốc độ cố định', async () => {
+    setup()
+    await screen.findByTestId('editor')
+    const clip = () => useEditorStore.getState().edit!.clips[0]!
+    fireEvent.pointerDown(screen.getAllByTestId('timeline-clip')[0]!)
+    await userEvent.click(screen.getByTestId('clip-tab-speed'))
+    await userEvent.click(screen.getByTestId('speed-mode-curve'))
+    expect(clip().speedCurve?.preset).toBe('montage')
+    expect(screen.getByTestId('clip-curve-badge')).toBeInTheDocument()
+    await userEvent.click(screen.getByTestId('curve-bullet'))
+    expect(clip().speedCurve?.preset).toBe('bullet')
+    const before = screen.getByTestId('clip-length').textContent
+    // Điểm giữa: mũi tên lên = nhanh hơn → clip ngắn lại; mẫu thành "tùy chỉnh".
+    const point = screen.getByTestId('curve-point-2')
+    point.focus()
+    await userEvent.keyboard('{ArrowUp}{ArrowUp}{ArrowUp}')
+    expect(clip().speedCurve?.preset).toBe('custom')
+    expect(clip().speedCurve!.points[2]!.v).toBeGreaterThan(0.25)
+    expect(screen.getByTestId('clip-length').textContent).not.toBe(before)
+    await userEvent.click(screen.getByTestId('speed-mode-fixed'))
+    expect(clip()).not.toHaveProperty('speedCurve')
+    expect(screen.getByTestId('clip-speed-slider')).toBeInTheDocument()
+  })
+
+  it('phát ngược: tạo bản đảo ngược ở nền rồi báo sẵn sàng; độ mờ của clip', async () => {
+    const api = setup()
+    await screen.findByTestId('editor')
+    const clip = () => useEditorStore.getState().edit!.clips[0]!
+    fireEvent.pointerDown(screen.getAllByTestId('timeline-clip')[0]!)
+    await userEvent.click(screen.getByTestId('clip-reverse'))
+    expect(clip().reversed).toBe(true)
+    expect(api.reverseClip).toHaveBeenCalledWith(
+      sampleSummary.folder,
+      clip().sourceStart,
+      clip().sourceEnd,
+    )
+    expect(await screen.findByTestId('clip-reverse-status')).toHaveTextContent('Đã sẵn sàng')
+    expect(screen.getByTestId('clip-reverse-badge')).toBeInTheDocument()
+    await userEvent.click(screen.getByTestId('clip-reverse'))
+    expect(clip()).not.toHaveProperty('reversed')
+    fireEvent.change(screen.getByTestId('clip-opacity'), { target: { value: '0.5' } })
+    expect(clip().opacity).toBe(0.5)
+    fireEvent.change(screen.getByTestId('clip-opacity'), { target: { value: '1' } })
+    expect(clip()).not.toHaveProperty('opacity')
+  })
 })
