@@ -236,6 +236,9 @@ export function createFakeApi(
       name: 'cat',
       width: 400,
       height: 200,
+      kind: 'image',
+      durationMs: 0,
+      hasAudio: false,
     })),
     listMemes: vi.fn<LumoraApi['listMemes']>(async () => [
       {
@@ -243,17 +246,47 @@ export function createFakeApi(
         name: 'Mèo cười',
         width: 300,
         height: 300,
+        kind: 'image',
+        durationMs: 0,
+        hasAudio: false,
+        thumb: 'data:image/jpeg;base64,',
+      },
+      {
+        file: 'meme-b.mp4',
+        name: 'Bruh',
+        width: 640,
+        height: 360,
+        kind: 'video',
+        durationMs: 2500,
+        hasAudio: true,
         thumb: 'data:image/jpeg;base64,',
       },
     ]),
     importMemes: vi.fn<LumoraApi['importMemes']>(async () => []),
+    addMemePaths: vi.fn<LumoraApi['addMemePaths']>(async () => []),
+    pathForFile: vi.fn<LumoraApi['pathForFile']>((file) => `C:/drop/${file.name}`),
     removeMeme: vi.fn<LumoraApi['removeMeme']>(async () => []),
-    useMeme: vi.fn<LumoraApi['useMeme']>(async (_folder, file) => ({
-      file: `asset-${file}`,
-      name: 'Mèo cười',
-      width: 300,
-      height: 300,
-    })),
+    useMeme: vi.fn<LumoraApi['useMeme']>(async (_folder, file) =>
+      file.endsWith('.mp4')
+        ? {
+            file: `asset-${file}`,
+            name: 'Bruh',
+            width: 640,
+            height: 360,
+            kind: 'video',
+            durationMs: 2500,
+            hasAudio: true,
+          }
+        : {
+            file: `asset-${file}`,
+            name: 'Mèo cười',
+            width: 300,
+            height: 300,
+            kind: 'image',
+            durationMs: 0,
+            hasAudio: false,
+          },
+    ),
     importPack: vi.fn<LumoraApi['importPack']>(async () => ({
       folder: sampleSummary.folder,
       status: 'created',

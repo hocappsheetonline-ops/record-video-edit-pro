@@ -124,7 +124,7 @@ describe('xuất video: ghép âm thanh', () => {
       '[f0_0]atrim=start=1.2:end=3.2,asetpts=PTS-STARTPTS,volume=1,adelay=0:all=1[p0]',
       '[f0_1]atrim=start=5:end=7,asetpts=PTS-STARTPTS,atempo=2,volume=1,adelay=2000:all=1[p1]',
       '[f1_0]atrim=start=0:end=1.5,asetpts=PTS-STARTPTS,volume=0.5,adelay=500:all=1[p2]',
-      '[p0][p1][p2]amix=inputs=3:duration=longest:normalize=0,apad=whole_dur=3[aout]',
+      '[p0][p1][p2]amix=inputs=3:duration=longest:normalize=0,apad=whole_dur=3,asetpts=N/SR/TB[aout]',
     ])
     expect(args.join(' ')).toContain('-map 0:v -map [aout] -c:v copy -c:a aac')
     expect(args.slice(-4)).toEqual(['+faststart', '-t', '3', 'o.mp4'])

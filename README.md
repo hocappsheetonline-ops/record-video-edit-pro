@@ -40,22 +40,31 @@ Cách app quay:
 
 ## Chỉnh sửa và xuất video
 
-Mở một dự án và bấm **Chỉnh sửa**:
+Mở một dự án và bấm **Chỉnh sửa**. Giao diện bố trí giống phần mềm dựng phim chuyên nghiệp (CapCut, Premiere):
 
-- **Tự động zoom**: lần đầu mở, app gom các click chuột và đoạn gõ phím liên tục để tự tạo đoạn zoom. Khung nhìn đi theo con trỏ và chuyển vào/ra mượt. Trên timeline, kéo đoạn zoom để di chuyển, kéo mép để đổi độ dài. Mức zoom và kiểu zoom (theo con trỏ hoặc cố định) chỉnh trong tab **Zoom**.
+- **Bên trái — Thư viện**: Meme · Âm thanh · Văn bản · Nhãn dán · Hiệu ứng · Chuyển cảnh · Phụ đề · AI. Bấm một mục để thêm tại đầu phát.
+- **Giữa — Xem trước**: bấm vào chữ, sticker, video meme hoặc **webcam** để chọn; kéo để dời, kéo góc để đổi cỡ, kéo nút tròn để xoay. Thanh điều khiển: về đầu, lùi/tới 1 khung hình, phát/dừng, tới cuối, đổi tỉ lệ khung, toàn màn hình.
+- **Bên phải — Thuộc tính**: chọn một mục thì hiện thuộc tính của mục đó; không chọn gì thì hiện cài đặt chung (Khung hình, Webcam, Con trỏ, Chuyển động, Zoom, Âm lượng).
+- **Dưới — Timeline**: thanh công cụ (hoàn tác, tách, xóa trái/phải, xóa, thêm zoom), phóng to/thu nhỏ timeline (hoặc Ctrl + lăn chuột), kéo mép trên để đổi chiều cao. Các khối trùng giờ tự xếp thành nhiều hàng con.
+- **Xuất** ở góc trên bên phải.
+
+Tính năng:
+
+- **Tự động zoom**: lần đầu mở, app gom các click chuột và đoạn gõ phím liên tục để tự tạo đoạn zoom. Khung nhìn đi theo con trỏ và chuyển vào/ra mượt. Trên timeline, kéo đoạn zoom để di chuyển, kéo mép để đổi độ dài; bấm vào đoạn zoom để chỉnh mức zoom và kiểu zoom.
 - **Con trỏ** được vẽ lại từ dữ liệu chuột, làm mượt bằng mô phỏng lò xo. Có thể phóng to con trỏ, bật hiệu ứng khi click, và tự ẩn khi chuột đứng yên.
-- **Khung**: chọn tỉ lệ 16:9, 9:16, 1:1, 4:3 hoặc giữ tỉ lệ gốc; nền trơn hoặc chuyển màu; lề, bo góc, bóng đổ.
-- **Video dọc 9:16 (TikTok, Shorts, Reels)**: bấm **Dọc 9:16 tự động** ở tab **Khung**. Video màn hình phủ kín khung dọc, phần thừa được cắt và khung nhìn tự đi theo con trỏ (giống Screen Studio), các đoạn zoom vẫn giữ nguyên. Webcam nằm trong khung (bong bóng) hoặc thành một dải riêng ở trên/dưới (tab **Webcam** → **Bố cục** → **Dải riêng**). Tùy chọn **Lấp đầy khung** dùng được cho mọi tỉ lệ.
-- **Webcam**: bong bóng tròn, bo góc hoặc vuông, chỉnh kích thước và góc đặt; hoặc dải webcam chiếm trọn chiều ngang.
+- **Khung hình**: chọn tỉ lệ 16:9, 9:16, 1:1, 4:3 hoặc giữ tỉ lệ gốc; nền trơn hoặc chuyển màu; lề, bo góc, bóng đổ.
+- **Video dọc 9:16 (TikTok, Shorts, Reels)**: bấm **Dọc 9:16 tự động**. Video màn hình phủ kín khung dọc, phần thừa được cắt và khung nhìn tự đi theo con trỏ (giống Screen Studio). Webcam là bong bóng nổi hoặc **Chia đôi khung** (dải webcam ở trên/dưới).
+- **Webcam đặt tự do**: kéo bong bóng webcam tới bất kỳ đâu trên khung xem trước (gần góc / giữa cạnh thì tự hít vào), kéo góc để đổi cỡ, hoặc dùng ô vị trí 9 điểm neo. Hình dạng tròn / bo góc / vuông, viền và màu viền. **Khung mặt**: phóng to mặt và dời khung cắt để mặt nằm giữa bong bóng.
 - Mọi thay đổi hiện ngay trên khung xem trước, không cần bấm phát.
-- **Chuyển động** (tab riêng): tốc độ con trỏ, tốc độ khung nhìn đi theo con trỏ, tốc độ zoom vào/ra — kéo về "Chậm" cho chuyển động mượt kiểu điện ảnh.
-- **Làm đẹp mặt** (tab Webcam): bấm **Làm đẹp tự động** hoặc chỉnh mịn da, làm sáng, tông ấm. Áp dụng cả khi xuất và khi livestream (thanh trượt **Làm đẹp mặt** trong studio).
+- **Chuyển động**: tốc độ con trỏ, tốc độ khung nhìn đi theo con trỏ, tốc độ zoom vào/ra — kéo về "Chậm" cho chuyển động mượt kiểu điện ảnh.
+- **Làm đẹp mặt** (Webcam): bấm **Làm đẹp tự động** hoặc chỉnh mịn da, làm sáng, tông ấm. Áp dụng cả khi xuất và khi livestream.
 - **Timeline kiểu CapCut**: mỗi clip có dải ảnh thu nhỏ của video ở trên và dạng sóng âm thanh ở dưới.
-- **Nhạc nền & hiệu ứng âm thanh** (tab Âm thanh): **Thêm nhạc từ máy** (MP3, WAV, M4A, OGG, FLAC…) hoặc chọn hiệu ứng có sẵn (Vút, Bụp, Ting, Bùm, Ta-da, Vỗ tay, Buồn wah-wah, Bíp che từ…). Mỗi đoạn có hàng riêng trên timeline: kéo để dời, kéo mép để cắt; chỉnh âm lượng, tăng dần/nhỏ dần, lặp lại. Hiệu ứng âm thanh do app tự tổng hợp nên không vướng bản quyền.
-- **Chuyển tiếp** giữa hai clip: bấm nút ◆ ở chỗ nối trên timeline → chọn Mờ qua đen/trắng, Lóe sáng, Phóng to, Làm nhòe, Lướt ngang, Glitch; chỉnh thời gian; áp dụng cho tất cả chỗ nối.
-- **Hiệu ứng hình** (tab Hiệu ứng): Rung lắc, Glitch, VHS cổ, Đen trắng, Cổ điển, Viền tối, Làm mờ, Lóe theo nhịp, Nhún theo nhịp, Pháo giấy — thêm tại đầu phát, kéo trên hàng Hiệu ứng để dời/đổi độ dài, chỉnh độ mạnh.
-- **Chữ & sticker & meme** (tab Chữ & sticker): chữ kiểu Meme (Impact viền đen), Tiêu đề, Bong bóng, Neon; câu meme có sẵn ("Hết cứu", "Đỉnh nóc kịch trần", "Plot twist"…); 30 sticker emoji; ảnh/GIF động từ máy; **Thư viện meme của tôi** — thêm ảnh/GIF meme yêu thích một lần, dùng lại ở mọi dự án. Hiệu ứng xuất hiện: Bật ra, Nhún, Lắc, Mờ dần, Trượt vào. **Kéo trực tiếp trên khung xem trước** để đặt vị trí. Lumora không kèm sẵn ảnh meme có bản quyền — hãy dùng ảnh bạn có quyền sử dụng.
-- **Phím tắt**: Space phát/dừng · S tách · **A xóa phần bên trái đầu phát** · **D xóa phần bên phải đầu phát** · Delete xóa clip · Ctrl+Z / Ctrl+Y.
+- **Meme video** (Thư viện → Meme): **kéo thả** video meme (MP4, MOV, WEBM, MKV…) hoặc ảnh / GIF vào thư viện một lần, dùng lại ở mọi dự án. Video được chuẩn hóa sang MP4 (tối đa 1280px, 2 phút). Bấm để thêm vào timeline tại đầu phát — video **có tiếng** (chỉnh âm lượng), cắt đầu/cuối trên timeline, **Phủ kín khung** hoặc **Vừa khung**, và **Xóa phông** (phông xanh lá / xanh dương / đen / trắng, chỉnh độ mạnh) để chỉ giữ lại nhân vật. Lumora không kèm sẵn meme có bản quyền — hãy dùng video bạn có quyền sử dụng.
+- **Nhạc nền & hiệu ứng âm thanh** (Thư viện → Âm thanh): **Thêm nhạc từ máy** (MP3, WAV, M4A, OGG, FLAC…) hoặc chọn hiệu ứng có sẵn (Vút, Bụp, Ting, Bùm, Ta-da, Vỗ tay, Buồn wah-wah, Bíp che từ…). Kéo để dời, kéo mép để cắt; chỉnh âm lượng, tăng dần/nhỏ dần, lặp lại. Hiệu ứng âm thanh do app tự tổng hợp nên không vướng bản quyền.
+- **Chuyển cảnh** giữa hai clip: bấm nút ◆ ở chỗ nối trên timeline (hoặc Thư viện → Chuyển cảnh) → Mờ qua đen/trắng, Lóe sáng, Phóng to, Làm nhòe, Lướt ngang, Glitch; chỉnh thời gian; áp dụng cho tất cả chỗ nối.
+- **Hiệu ứng hình**: Rung lắc, Glitch, VHS cổ, Đen trắng, Cổ điển, Viền tối, Làm mờ, Lóe theo nhịp, Nhún theo nhịp, Pháo giấy — thêm tại đầu phát, kéo trên hàng Hiệu ứng để dời/đổi độ dài, chỉnh độ mạnh.
+- **Văn bản & nhãn dán**: mẫu chữ Meme (Impact viền đen), Tiêu đề, Bong bóng, Neon; 30 sticker emoji. Hiệu ứng xuất hiện: Bật ra, Nhún, Lắc, Mờ dần, Trượt vào.
+- **Phím tắt**: Space phát/dừng · S tách · **A xóa phần bên trái đầu phát** · **D xóa phần bên phải đầu phát** · Delete xóa mục đang chọn · Esc bỏ chọn · Home/End về đầu/cuối · ←/→ lùi/tới 1 giây · Ctrl+Z / Ctrl+Y.
 - **Dạng sóng âm thanh** hiện ngay trong từng clip video trên timeline (micro + âm thanh máy), nên dễ thấy chỗ đang nói và chỗ im lặng để cắt.
 - **Timeline**: tách (phím S), xóa (Delete), đổi tốc độ từng đoạn, hoàn tác/làm lại (Ctrl+Z / Ctrl+Y). Bản chỉnh sửa được tự lưu vào `edit.json`.
 - **Xuất**: MP4 (H.264 + AAC) hoặc GIF; 720p, 1080p, 1440p hoặc 4K; 30 hoặc 60 fps. File được lưu trong thư mục `exports` của dự án.

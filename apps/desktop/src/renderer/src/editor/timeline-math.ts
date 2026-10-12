@@ -32,3 +32,29 @@ export function formatTimecode(ms: number): string {
   const s = total - m * 60
   return `${m}:${s.toFixed(1).padStart(4, '0')}`
 }
+
+/**
+ * Xếp các khối trùng thời gian vào nhiều hàng con (giống CapCut): mỗi khối vào hàng con đầu tiên
+ * còn trống tại thời điểm bắt đầu của nó. Trả về số hàng con của từng khối (theo thứ tự đầu vào).
+ */
+export function assignLanes(items: readonly { start: number; end: number }[]): number[] {
+  const laneEnds: number[] = []
+  const lanes: number[] = items.map(() => 0)
+  const order = items.map((_, i) => i).sort((a, b) => items[a]!.start - items[b]!.start || a - b)
+  for (const i of order) {
+    const item = items[i]!
+    let lane = laneEnds.findIndex((end) => end <= item.start)
+    if (lane < 0) {
+      lane = laneEnds.length
+      laneEnds.push(0)
+    }
+    laneEnds[lane] = item.end
+    lanes[i] = lane
+  }
+  return lanes
+}
+
+/** Số hàng con cần để hiện hết các khối (ít nhất 1). */
+export function laneCount(items: readonly { start: number; end: number }[]): number {
+  return items.length === 0 ? 1 : Math.max(...assignLanes(items)) + 1
+}

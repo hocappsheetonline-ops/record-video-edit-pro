@@ -1,6 +1,6 @@
-import { beautyLayers, coverSource, type BeautyStyle } from '@lumora/core'
+import { beautyLayers, cameraCrop, type BeautyStyle } from '@lumora/core'
 import { applyEffects } from './effects-draw'
-import { drawOverlays } from './overlay-draw'
+import { drawOverlays, type OverlayMediaFn } from './overlay-draw'
 import type { FrameScene } from './scene'
 
 export type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
@@ -162,8 +162,8 @@ export function drawScene(
   frames: {
     screen: FrameSource | null
     camera: FrameSource | null
-    /** Ảnh / khung GIF của lớp nổi (null nếu chưa tải xong). */
-    overlayImage?: (file: string, local: number) => CanvasImageSource | null
+    /** Ảnh / khung GIF / khung video của lớp nổi (null nếu chưa tải xong). */
+    overlayMedia?: OverlayMediaFn
   },
 ) {
   drawBackground(ctx, scene)
@@ -229,16 +229,29 @@ export function drawScene(
     ctx.fill()
     ctx.shadowColor = 'transparent'
     ctx.clip()
-    // Cắt giữa khung webcam cho vừa ô hiển thị (cover).
-    const crop = coverSource({ width: camFrame.width, height: camFrame.height }, cam.rect)
+    // Cắt khung webcam cho vừa ô hiển thị (cover), phóng to / dời tâm tới mặt nếu có chỉnh.
+    const crop = cameraCrop(
+      { width: camFrame.width, height: camFrame.height },
+      cam.rect,
+      cam.framing,
+    )
     drawBeautified(ctx, cam.beauty, width, () =>
       camFrame.draw(ctx, crop.x, crop.y, crop.width, crop.height, x, y, width, height),
     )
     ctx.restore()
+    if (cam.border > 0) {
+      ctx.save()
+      const b = cam.border
+      roundedRect(ctx, x + b / 2, y + b / 2, width - b, height - b, Math.max(0, r - b / 2))
+      ctx.lineWidth = b
+      ctx.strokeStyle = cam.borderColor
+      ctx.stroke()
+      ctx.restore()
+    }
   }
   applyTransition(ctx, scene)
   applyEffects(ctx, scene)
-  drawOverlays(ctx, scene.overlays, scene.width, scene.height, frames.overlayImage ?? (() => null))
+  drawOverlays(ctx, scene.overlays, scene.width, scene.height, frames.overlayMedia ?? (() => null))
   drawCaptions(ctx, scene)
 }
 

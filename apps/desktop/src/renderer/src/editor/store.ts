@@ -40,12 +40,12 @@ import {
   type Transcript,
   type Waveform,
 } from '@lumora/core'
-import type { AudioAsset } from '@shared/ipc'
+import type { AudioAsset, MediaAsset } from '@shared/ipc'
 import { lumora } from '../api'
 
-/** `transition`: id là clip đứng trước chỗ nối. */
+/** `transition`: id là clip đứng trước chỗ nối. `camera`: bong bóng webcam (id rỗng). */
 export type Selection = {
-  kind: 'clip' | 'zoom' | 'audio' | 'transition' | 'effect' | 'overlay'
+  kind: 'clip' | 'zoom' | 'audio' | 'transition' | 'effect' | 'overlay' | 'camera'
   id: string
 } | null
 
@@ -105,6 +105,8 @@ interface EditorStore {
   /** Thêm chữ / emoji / ảnh tại đầu phát (3 giây) và chọn nó. */
   addOverlay(init: Partial<Overlay> & Pick<Overlay, 'kind'>): void
   updateOverlay(id: string, patch: Partial<Overlay>, coalesce?: string): void
+  /** Thêm ảnh / GIF / video meme (đã chép vào dự án) tại đầu phát. */
+  addMediaOverlay(asset: MediaAsset): void
   deleteSelection(): void
   setClipSpeed(id: string, speed: number): void
   addZoomAtPlayhead(): void
@@ -398,20 +400,39 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!edit) return
     const total = outputDuration(edit.clips)
     const start = Math.min(time, Math.max(0, total - 200))
+    const video = init.kind === 'video'
+    // Video meme dài đúng bằng phần còn lại của file (không vượt cuối video).
+    const length = video
+      ? Math.max(200, (init.sourceDuration ?? 0) - (init.mediaOffset ?? 0))
+      : DEFAULT_OVERLAY_MS
     const overlay: Overlay = {
       id: newOverlayId(),
       start,
-      end: Math.min(total, start + DEFAULT_OVERLAY_MS),
+      end: Math.min(total, start + length),
       x: 0.5,
       y: init.kind === 'text' ? 0.15 : 0.5,
-      size: init.kind === 'image' ? 0.35 : init.kind === 'emoji' ? 0.18 : 0.09,
+      size: video
+        ? (init.aspect ?? 1) < 1
+          ? 0.7
+          : 0.45
+        : init.kind === 'image'
+          ? 0.35
+          : init.kind === 'emoji'
+            ? 0.18
+            : 0.09,
       rotation: 0,
-      animation: 'pop',
+      animation: video ? 'none' : 'pop',
       text: '',
       style: 'meme',
       color: '#ffffff',
       file: '',
       aspect: 1,
+      mediaOffset: 0,
+      sourceDuration: 0,
+      hasAudio: false,
+      volume: 1,
+      keyColor: '',
+      keyStrength: 0.4,
       ...init,
     }
     get().change((e) => ({ ...e, overlays: [...e.overlays, overlay] }))
@@ -423,6 +444,17 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       (e) => ({ ...e, overlays: e.overlays.map((o) => (o.id === id ? { ...o, ...patch } : o)) }),
       coalesce,
     )
+  },
+
+  addMediaOverlay(asset) {
+    get().addOverlay({
+      kind: asset.kind,
+      file: asset.file,
+      text: asset.name,
+      aspect: asset.width / Math.max(1, asset.height),
+      sourceDuration: asset.kind === 'video' ? asset.durationMs : 0,
+      hasAudio: asset.hasAudio,
+    })
   },
 
   requestTab(tab) {
@@ -454,6 +486,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       get().change((e) =>
         e.clips.length > 1 ? { ...e, clips: removeClip(e.clips, selection.id) } : e,
       )
+    } else if (selection.kind === 'transition') {
+      get().setTransition(selection.id, null)
+    } else if (selection.kind === 'camera') {
+      get().change((e) => ({ ...e, camera: { ...e.camera, visible: false } }))
     } else {
       get().change((e) => ({ ...e, zooms: e.zooms.filter((z) => z.id !== selection.id) }))
     }

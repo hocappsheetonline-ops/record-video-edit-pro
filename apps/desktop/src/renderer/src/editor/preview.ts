@@ -4,9 +4,11 @@ import {
   mediaTime,
   outputDuration,
   outputToSource,
+  overlayMediaTime,
   segmentAt,
   sourceSegments,
   type EditState,
+  type Overlay,
   type Project,
   type Size,
   type SourceSegment,
@@ -14,6 +16,7 @@ import {
 } from '@lumora/core'
 import { mediaUrl } from '../lib/media'
 import { drawScene, videoElementSource } from './draw'
+import { imageSource } from './overlay-draw'
 import { OverlayImages } from './overlay-images'
 import { computeScene } from './scene'
 import { useEditorStore } from './store'
@@ -36,6 +39,8 @@ export class PreviewEngine {
   private readonly images: OverlayImages
   /** Thẻ audio cho từng đoạn nhạc/hiệu ứng (theo id đoạn). */
   private readonly audioClips = new Map<string, HTMLAudioElement>()
+  /** Thẻ video cho từng video meme (theo id lớp), phát cả tiếng. */
+  private readonly overlayVideos = new Map<string, HTMLVideoElement>()
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -80,7 +85,7 @@ export class PreviewEngine {
   private drawn: unknown[] = []
   private changedSinceDraw(): boolean {
     const s = useEditorStore.getState()
-    const deps = [s.edit, s.time, s.videoSize, s.cursor, s.follow]
+    const deps = [s.edit, s.time, s.videoSize, s.cursor, s.follow, s.selection, s.playing]
     return deps.some((d, i) => d !== this.drawn[i])
   }
 
@@ -106,6 +111,7 @@ export class PreviewEngine {
       this.lastTick = playing ? now : 0
       this.sync(edit, useEditorStore.getState().time, playing)
       this.syncAudioClips(edit, useEditorStore.getState().time, playing)
+      this.syncOverlayVideos(edit.overlays, useEditorStore.getState().time, playing)
       if (this.needsDraw || playing || this.changedSinceDraw())
         this.draw(edit, useEditorStore.getState().time)
     }
@@ -168,12 +174,67 @@ export class PreviewEngine {
     }
   }
 
+  /** Video meme: đúng khung theo đầu phát (kể cả khi đang dừng / kéo), phát kèm tiếng. */
+  private syncOverlayVideos(overlays: readonly Overlay[], time: number, playing: boolean) {
+    const videos = overlays.filter((o) => o.kind === 'video')
+    const ids = new Set(videos.map((o) => o.id))
+    for (const [id, el] of this.overlayVideos) {
+      if (ids.has(id)) continue
+      el.pause()
+      el.removeAttribute('src')
+      el.load()
+      this.overlayVideos.delete(id)
+    }
+    for (const o of videos) {
+      const src = mediaUrl(this.folder, o.file)
+      let el = this.overlayVideos.get(o.id)
+      if (!el || el.dataset.src !== src) {
+        el?.pause()
+        el = document.createElement('video')
+        // Cùng gốc với canvas nháp để đọc được điểm ảnh khi xóa phông.
+        el.crossOrigin = 'anonymous'
+        el.preload = 'auto'
+        el.playsInline = true
+        el.dataset.src = src
+        el.src = src
+        el.addEventListener('loadeddata', () => this.requestDraw())
+        el.addEventListener('seeked', () => this.requestDraw())
+        this.overlayVideos.set(o.id, el)
+      }
+      const active = time >= o.start && time < o.end
+      if (!active) {
+        if (!el.paused) el.pause()
+        continue
+      }
+      el.muted = !o.hasAudio || o.volume <= 0
+      el.volume = Math.min(1, o.volume)
+      const target = overlayMediaTime(o, time) / 1000
+      const drift = Math.abs(el.currentTime - target)
+      if (playing) {
+        if (drift > RESYNC_S) el.currentTime = target
+        if (el.paused) void el.play().catch(() => undefined)
+        this.needsDraw = true
+      } else {
+        if (!el.paused) el.pause()
+        if (drift > 0.02) el.currentTime = target
+      }
+    }
+  }
+
   private draw(edit: EditState, time: number) {
     const ctx = this.canvas.getContext('2d')
     if (!ctx) return
     this.needsDraw = false
     const store = useEditorStore.getState()
-    this.drawn = [store.edit, store.time, store.videoSize, store.cursor, store.follow]
+    this.drawn = [
+      store.edit,
+      store.time,
+      store.videoSize,
+      store.cursor,
+      store.follow,
+      store.selection,
+      store.playing,
+    ]
     const hit = outputToSource(edit.clips, time)
     const source = hit?.source ?? 0
     const item = segmentAt(this.segments, source)
@@ -196,10 +257,21 @@ export class PreviewEngine {
     })
     for (const item of scene.overlays)
       if (item.overlay.kind === 'image') void this.images.load(item.overlay.file)
+    // Lớp đang chọn khi tạm dừng: hiện đứng yên để thấy và chỉnh được.
+    const { selection, playing } = store
+    if (!playing && selection?.kind === 'overlay')
+      scene.overlays = scene.overlays.map((item) =>
+        item.overlay.id === selection.id ? { ...item, still: true } : item,
+      )
+    const overlayVideos = this.overlayVideos
     drawScene(ctx, scene, {
       screen: screen instanceof HTMLVideoElement ? videoElementSource(screen) : null,
       camera: camera instanceof HTMLVideoElement ? videoElementSource(camera) : null,
-      overlayImage: (file, local) => this.images.frameAt(file, local),
+      overlayMedia: (o, local) => {
+        if (o.kind !== 'video') return imageSource(this.images.frameAt(o.file, local))
+        const el = overlayVideos.get(o.id)
+        return el ? videoElementSource(el) : null
+      },
     })
   }
 
@@ -236,6 +308,12 @@ export class PreviewEngine {
       el.removeAttribute('src')
     }
     this.audioClips.clear()
+    for (const el of this.overlayVideos.values()) {
+      el.pause()
+      el.removeAttribute('src')
+      el.load()
+    }
+    this.overlayVideos.clear()
     this.images.dispose()
   }
 }

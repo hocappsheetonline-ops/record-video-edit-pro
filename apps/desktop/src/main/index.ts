@@ -23,7 +23,7 @@ import { Vault } from './vault'
 import { handleMediaRequest, MEDIA_SCHEME } from './projects/media-protocol'
 import { assetPeaks, AUDIO_EXTENSIONS, createSoundEffect, importAudioFile } from './projects/assets'
 import { loadFilmstrip } from './projects/filmstrip'
-import { IMAGE_EXTENSIONS, importImageFile, MemeLibrary } from './projects/images'
+import { importImageFile, MEDIA_EXTENSIONS, MemeLibrary } from './projects/images'
 import { PACK_EXTENSION } from './projects/share'
 import { loadWaveform } from './projects/waveform'
 import { RecordingController } from './recording/controller'
@@ -148,7 +148,7 @@ if (!app.requestSingleInstanceLock()) {
     const pickFiles = async (extensions: string[], multiple: boolean): Promise<string[]> => {
       const options = {
         properties: multiple ? (['openFile', 'multiSelections'] as const) : (['openFile'] as const),
-        filters: [{ name: 'Images', extensions }],
+        filters: [{ name: 'Media', extensions }],
       }
       const r = mainWindow
         ? await dialog.showOpenDialog(mainWindow, {
@@ -164,9 +164,10 @@ if (!app.requestSingleInstanceLock()) {
       memes: {
         list: () => memes.list(),
         pickAndAdd: async () => {
-          const files = await pickFiles(IMAGE_EXTENSIONS, true)
+          const files = await pickFiles(MEDIA_EXTENSIONS, true)
           return files.length > 0 ? memes.add(files) : memes.list()
         },
+        add: (paths) => memes.add(paths),
         remove: (file) => memes.remove(file),
         useInProject: (file, dir) => memes.useInProject(file, dir),
       },
@@ -207,7 +208,7 @@ if (!app.requestSingleInstanceLock()) {
         },
         soundEffect: (dir, id) => createSoundEffect(id, dir, runFfmpeg),
         importImage: async (dir) => {
-          const file = await pickFiles(IMAGE_EXTENSIONS, false)
+          const file = await pickFiles(MEDIA_EXTENSIONS, false)
           return file[0] ? importImageFile(file[0], dir, runFfmpeg) : null
         },
         assetPeaks: (dir, file) => assetPeaks(dir, file, runFfmpeg),

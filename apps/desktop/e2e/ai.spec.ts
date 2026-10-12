@@ -44,7 +44,7 @@ test('AI: nhập key, tạo phụ đề, cắt từ thừa, tạo chương, lưu
   await page.getByTestId('open-editor').click()
 
   // Phụ đề.
-  await page.getByTestId('tab-captions').click()
+  await page.getByTestId('lib-captions').click()
   await page.getByTestId('captions-generate').click()
   await expect(page.getByTestId('caption-line')).toHaveCount(2)
   await expect(page.getByTestId('caption-line').first()).toHaveValue('Xin chào ừm các bạn.')
@@ -56,7 +56,7 @@ test('AI: nhập key, tạo phụ đề, cắt từ thừa, tạo chương, lưu
   expect(stt.body.length).toBeGreaterThan(5000) // có âm thanh thật
 
   // AI cắt từ thừa.
-  await page.getByTestId('tab-ai').click()
+  await page.getByTestId('lib-ai').click()
   await page.getByTestId('ai-suggest').click()
   await expect(page.getByTestId('ai-suggestion')).toHaveCount(1)
   await expect(page.getByTestId('ai-suggestion')).toContainText('ừm')
@@ -76,7 +76,7 @@ test('AI: nhập key, tạo phụ đề, cắt từ thừa, tạo chương, lưu
   await expect(page.getByTestId('ai-chapters')).toHaveText('0:00 Chào hỏi\n0:02 Demo')
 
   // Lưu SRT (theo thời gian video đã cắt).
-  await page.getByTestId('tab-captions').click()
+  await page.getByTestId('lib-captions').click()
   await page.getByTestId('captions-srt').click()
   await expect(page.getByTestId('captions-saved')).toBeVisible()
   const srtName = readdirSync(join(projectDir, 'exports')).find((f) => f.endsWith('.srt'))!
@@ -89,7 +89,7 @@ test('AI: nhập key, tạo phụ đề, cắt từ thừa, tạo chương, lưu
   await page.getByTestId('tab-frame').click()
   await page.getByTestId('bg-preset-6').click()
   await page.getByTestId('padding').fill('0.2')
-  await page.getByTestId('tab-export').click()
+  await page.getByTestId('export-open').click()
   await page.getByTestId('resolution-720').click()
   await page.getByTestId('export-start').click()
   await expect(page.getByTestId('export-result')).toBeVisible({ timeout: 150_000 })

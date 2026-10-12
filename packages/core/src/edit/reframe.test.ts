@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { coverSource, fillBaseView, fillViewRect, frameLayout } from './reframe'
+import { cameraCrop, coverSource, fillBaseView, fillViewRect, frameLayout } from './reframe'
 import { cameraAt, type ZoomRegion } from './zoom'
 
 const FHD = { width: 1920, height: 1080 }
@@ -124,5 +124,27 @@ describe('coverSource', () => {
     const tall = coverSource({ width: 720, height: 1280 }, { width: 1080, height: 672 })
     expect(tall.width).toBe(720)
     expect(tall.y).toBeCloseTo((1280 - (720 * 672) / 1080) / 2)
+  })
+})
+
+describe('cameraCrop', () => {
+  const src = { width: 1280, height: 720 }
+  const box = { width: 300, height: 300 }
+  it('mặc định giống cắt cover ở giữa', () => {
+    expect(cameraCrop(src, box, { zoom: 1, focusX: 0.5, focusY: 0.5 })).toEqual(
+      coverSource(src, box),
+    )
+  })
+  it('phóng to và dời tâm tới mặt, không cắt ra ngoài khung nguồn', () => {
+    const c = cameraCrop(src, box, { zoom: 2, focusX: 0.3, focusY: 0.4 })
+    expect(c.width).toBe(360)
+    expect(c.height).toBe(360)
+    expect(c.x + c.width / 2).toBeCloseTo(384)
+    expect(c.y + c.height / 2).toBeCloseTo(288)
+    const edge = cameraCrop(src, box, { zoom: 2, focusX: 0, focusY: 1 })
+    expect(edge.x).toBe(0)
+    expect(edge.y + edge.height).toBe(720)
+    // zoom < 1 bị kẹp về 1 (không lộ viền đen).
+    expect(cameraCrop(src, box, { zoom: 0.2, focusX: 0.5, focusY: 0.5 }).height).toBe(720)
   })
 })

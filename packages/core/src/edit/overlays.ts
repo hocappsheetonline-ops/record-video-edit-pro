@@ -1,5 +1,11 @@
-/** Chữ, sticker (emoji) và ảnh meme nổi trên video (kiểu CapCut "Văn bản" / "Nhãn dán"). */
-export const OVERLAY_KINDS = ['text', 'emoji', 'image'] as const
+import { dragRegion } from './effects'
+import type { AudioClip } from './audio-clips'
+
+/**
+ * Lớp nổi trên video (kiểu CapCut "Văn bản" / "Nhãn dán" / "Lớp phủ"): chữ, emoji, ảnh/GIF và
+ * video meme (có tiếng, xóa được phông xanh).
+ */
+export const OVERLAY_KINDS = ['text', 'emoji', 'image', 'video'] as const
 export type OverlayKind = (typeof OVERLAY_KINDS)[number]
 
 export const TEXT_STYLES = ['meme', 'title', 'bubble', 'neon'] as const
@@ -17,7 +23,7 @@ export interface Overlay {
   /** Tâm, tỉ lệ theo khung hình (0..1). */
   x: number
   y: number
-  /** Cỡ: chiều cao chữ / emoji / ảnh, tỉ lệ theo chiều cao khung (0.03..1). */
+  /** Cỡ: chiều cao chữ / emoji / ảnh / video, tỉ lệ theo chiều cao khung (0.03..4; >1 để phủ kín khung). */
   size: number
   /** Góc xoay (độ). */
   rotation: number
@@ -26,11 +32,22 @@ export interface Overlay {
   text: string
   style: TextStyle
   color: string
-  /** File ảnh trong thư mục dự án (kind = image). */
+  /** File ảnh / video trong thư mục dự án (kind = image | video). */
   file: string
-  /** Tỉ lệ rộng/cao của ảnh (để vẽ đúng hình). */
+  /** Tỉ lệ rộng/cao của ảnh / video (để vẽ đúng hình). */
   aspect: number
+  /** Video: phát từ ms thứ mấy của file, độ dài file, có tiếng không và âm lượng (0..2). */
+  mediaOffset: number
+  sourceDuration: number
+  hasAudio: boolean
+  volume: number
+  /** Xóa phông (chroma key): màu nền cần xóa ('' = không xóa) và độ mạnh 0..1. */
+  keyColor: string
+  keyStrength: number
 }
+
+/** Màu phông có sẵn để xóa: xanh lá (phổ biến nhất ở video meme), xanh dương, đen, trắng. */
+export const KEY_COLORS = ['#00ff00', '#0000ff', '#000000', '#ffffff'] as const
 
 export const DEFAULT_OVERLAY_MS = 3000
 
@@ -84,6 +101,66 @@ export function overlayMotion(
   }
 }
 
+/** Vị trí cần phát trong file video (ms) tại thời điểm xuất `t`; giữ khung cuối khi hết file. */
+export function overlayMediaTime(
+  o: Pick<Overlay, 'start' | 'mediaOffset' | 'sourceDuration'>,
+  t: number,
+): number {
+  const raw = o.mediaOffset + Math.max(0, t - o.start)
+  return Math.max(0, Math.min(raw, o.sourceDuration > 0 ? o.sourceDuration - 1 : raw))
+}
+
+/** Video meme dài nhất có thể đặt từ `mediaOffset` (ms). */
+export function overlayMaxDuration(o: Pick<Overlay, 'kind' | 'mediaOffset' | 'sourceDuration'>) {
+  return o.kind === 'video' ? Math.max(0, o.sourceDuration - o.mediaOffset) : Infinity
+}
+
+/**
+ * Kéo lớp nổi trên timeline. Với video: cắt đầu thì bỏ bớt đầu file tương ứng, kéo dài không quá
+ * phần còn lại của file.
+ */
+export function dragOverlay(
+  origin: Overlay,
+  mode: 'move' | 'start' | 'end',
+  delta: number,
+  total: number,
+): Overlay {
+  if (origin.kind !== 'video') return dragRegion(origin, mode, delta, total)
+  if (mode === 'move') return dragRegion(origin, mode, delta, total)
+  if (mode === 'start') {
+    // Không lùi đầu quá điểm 0 của file.
+    const d = Math.max(-origin.mediaOffset, delta)
+    const next = dragRegion(origin, 'start', d, total)
+    return { ...next, mediaOffset: origin.mediaOffset + (next.start - origin.start) }
+  }
+  const next = dragRegion(origin, 'end', delta, total)
+  return { ...next, end: Math.min(next.end, origin.start + overlayMaxDuration(origin)) }
+}
+
+/** Tiếng của các video meme, dạng đoạn âm thanh để trộn khi xuất (giống nhạc / hiệu ứng). */
+export function overlayAudioClips(overlays: readonly Overlay[]): AudioClip[] {
+  return overlays.flatMap((o): AudioClip[] =>
+    o.kind === 'video' && o.hasAudio && o.volume > 0 && o.sourceDuration > 0
+      ? [
+          {
+            id: `ov-${o.id}`,
+            file: o.file,
+            name: o.text,
+            kind: 'sfx',
+            start: o.start,
+            offset: o.mediaOffset,
+            duration: Math.min(o.end - o.start, overlayMaxDuration(o)),
+            sourceDuration: o.sourceDuration,
+            volume: o.volume,
+            fadeIn: 0,
+            fadeOut: 0,
+            loop: false,
+          },
+        ]
+      : [],
+  )
+}
+
 /** Các lớp nổi đang hiện tại thời điểm `t`, theo thứ tự thêm (lớp sau đè lớp trước). */
 export function overlaysAt(overlays: readonly Overlay[], t: number): Overlay[] {
   return overlays.filter((o) => t >= o.start && t < o.end)
@@ -103,7 +180,9 @@ export function parseOverlays(value: unknown): Overlay[] {
     if (!(end - start >= 100)) return []
     const kind = o.kind as OverlayKind
     const file = typeof o.file === 'string' && /^[\w.-]+$/.test(o.file) ? o.file : ''
-    if (kind === 'image' && !file) return []
+    if ((kind === 'image' || kind === 'video') && !file) return []
+    const sourceDuration = num(o.sourceDuration, 0, 0, 24 * 3600_000)
+    if (kind === 'video' && sourceDuration <= 0) return []
     return [
       {
         id: o.id,
@@ -112,7 +191,7 @@ export function parseOverlays(value: unknown): Overlay[] {
         end,
         x: num(o.x, 0.5, 0, 1),
         y: num(o.y, 0.5, 0, 1),
-        size: num(o.size, 0.12, 0.03, 1),
+        size: num(o.size, 0.12, 0.03, 4),
         rotation: num(o.rotation, 0, -180, 180),
         animation: OVERLAY_ANIMATIONS.includes(o.animation as OverlayAnimation)
           ? (o.animation as OverlayAnimation)
@@ -122,6 +201,15 @@ export function parseOverlays(value: unknown): Overlay[] {
         color: typeof o.color === 'string' && /^#[0-9a-f]{6}$/i.test(o.color) ? o.color : '#ffffff',
         file,
         aspect: num(o.aspect, 1, 0.05, 20),
+        mediaOffset: num(o.mediaOffset, 0, 0, Math.max(0, sourceDuration - 100)),
+        sourceDuration,
+        hasAudio: o.hasAudio === true,
+        volume: num(o.volume, 1, 0, 2),
+        keyColor:
+          typeof o.keyColor === 'string' && /^#[0-9a-f]{6}$/i.test(o.keyColor)
+            ? o.keyColor.toLowerCase()
+            : '',
+        keyStrength: num(o.keyStrength, 0.4, 0, 1),
       },
     ]
   })
@@ -159,20 +247,4 @@ export const EMOJI_STICKERS = [
   '❗',
   '❓',
   '✅',
-] as const
-
-/** Câu meme / chữ nổi bật hay dùng (chỉ là chữ, không vướng bản quyền). */
-export const MEME_PHRASES = [
-  'Ủa alo?',
-  'Hết cứu',
-  'Đỉnh nóc kịch trần',
-  'Ối dồi ôi',
-  'Chấm hết',
-  'Khoan đã…',
-  'Plot twist',
-  'Bruh',
-  'Wait for it…',
-  'Mind blown',
-  'Easy peasy',
-  'POV:',
 ] as const

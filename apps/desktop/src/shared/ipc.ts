@@ -57,6 +57,7 @@ export const IPC = {
   memesImport: 'memes:import',
   memesRemove: 'memes:remove',
   memesUse: 'memes:use',
+  memesAddPaths: 'memes:add-paths',
   exportStart: 'export:start',
   exportWrite: 'export:write',
   exportFinish: 'export:finish',
@@ -248,14 +249,19 @@ export interface AudioAsset {
   durationMs: number
 }
 
-export interface ImageAsset {
+/** Ảnh / GIF / video meme đã chép vào dự án hoặc thư viện. */
+export interface MediaAsset {
   file: string
   name: string
   width: number
   height: number
+  kind: 'image' | 'video'
+  /** Video: độ dài (ms) và có tiếng hay không. Ảnh: 0 / false. */
+  durationMs: number
+  hasAudio: boolean
 }
 
-export interface MemeItem extends ImageAsset {
+export interface MemeItem extends MediaAsset {
   /** Ảnh thu nhỏ (data URL). */
   thumb: string
 }
@@ -320,13 +326,17 @@ export interface LumoraApi {
   addSoundEffect(folder: string, id: string): Promise<AudioAsset>
   /** Dạng sóng của một file âm thanh đã thêm vào dự án. */
   getAssetPeaks(folder: string, file: string): Promise<Waveform | null>
-  /** Chọn ảnh/GIF trên máy và chép vào dự án. null nếu người dùng hủy. */
-  addImageFile(folder: string): Promise<ImageAsset | null>
+  /** Chọn ảnh / GIF / video trên máy và chép vào dự án. null nếu người dùng hủy. */
+  addImageFile(folder: string): Promise<MediaAsset | null>
   /** Thư viện meme của riêng bạn (dùng lại ở mọi dự án). */
   listMemes(): Promise<MemeItem[]>
   importMemes(): Promise<MemeItem[]>
+  /** Thêm file kéo thả vào thư viện (đường dẫn lấy bằng `pathForFile`). */
+  addMemePaths(paths: string[]): Promise<MemeItem[]>
+  /** Đường dẫn thật của file kéo thả vào cửa sổ ('' nếu không có). */
+  pathForFile(file: File): string
   removeMeme(file: string): Promise<MemeItem[]>
-  useMeme(folder: string, file: string): Promise<ImageAsset>
+  useMeme(folder: string, file: string): Promise<MediaAsset>
   startExport(folder: string): Promise<string>
   writeExport(id: string, position: number, data: ArrayBuffer): Promise<void>
   finishExport(id: string, folder: string, edit: EditState): Promise<ExportResult>

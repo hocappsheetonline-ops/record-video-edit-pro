@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cameraRect, contentRect, outputSize } from './layout'
+import { cameraRect, contentRect, outputSize, placementAt, placementCorner } from './layout'
 
 describe('layout', () => {
   it('kích thước xuất theo tỉ lệ và độ phân giải (cạnh ngắn)', () => {
@@ -27,5 +27,40 @@ describe('layout', () => {
     expect(br.width).toBe(270)
     expect(br.x + br.width).toBeCloseTo(1920 - 1080 * 0.035)
     expect(cameraRect(out, 0.25, 'top-left')).toMatchObject({ x: 1080 * 0.035, y: 1080 * 0.035 })
+  })
+
+  it('bong bóng webcam đặt tự do, không bao giờ ra ngoài khung', () => {
+    const out = { width: 1920, height: 1080 }
+    const m = 1080 * 0.035
+    // Giữa khung.
+    const mid = cameraRect(out, 0.25, { x: 0.5, y: 0.5 })
+    expect(mid.x + mid.width / 2).toBeCloseTo(960)
+    expect(mid.y + mid.height / 2).toBeCloseTo(540)
+    // Vị trí góc giống hệt nút góc cũ.
+    expect(cameraRect(out, 0.25, { x: 1, y: 1 })).toEqual(cameraRect(out, 0.25, 'bottom-right'))
+    // Giá trị ngoài 0..1 bị kẹp lại trong khung.
+    const far = cameraRect(out, 0.25, { x: 5, y: -3 })
+    expect(far.x + far.width).toBeCloseTo(1920 - m)
+    expect(far.y).toBeCloseTo(m)
+    // Khung dọc: vẫn đúng góc dưới trái.
+    const tall = cameraRect({ width: 1080, height: 1920 }, 0.4, { x: 0, y: 1 })
+    expect(tall.x).toBeCloseTo(m)
+    expect(tall.y + tall.height).toBeCloseTo(1920 - m)
+  })
+
+  it('kéo webcam: tâm ở đâu thì đặt ở đó, gần góc / giữa thì hít vào', () => {
+    const out = { width: 1920, height: 1080 }
+    const rect = cameraRect(out, 0.3, { x: 0.37, y: 0.81 })
+    const back = placementAt(out, 0.3, {
+      x: rect.x + rect.width / 2,
+      y: rect.y + rect.height / 2,
+    })
+    expect(back.x).toBeCloseTo(0.37)
+    expect(back.y).toBeCloseTo(0.81)
+    expect(placementAt(out, 0.3, { x: 958, y: 543 })).toEqual({ x: 0.5, y: 0.5 })
+    expect(placementAt(out, 0.3, { x: 99999, y: -50 })).toEqual({ x: 1, y: 0 })
+    expect(placementCorner({ x: 1, y: 0 })).toBe('top-right')
+    expect(placementCorner({ x: 0, y: 1 })).toBe('bottom-left')
+    expect(placementCorner({ x: 0.5, y: 1 })).toBeNull()
   })
 })

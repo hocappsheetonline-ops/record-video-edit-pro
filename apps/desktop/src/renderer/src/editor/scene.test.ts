@@ -253,7 +253,7 @@ describe('computeScene — video dọc tự cắt theo con trỏ', () => {
 
   it('webcam bong bóng nằm trong khung dọc', () => {
     const edit = verticalEdit()
-    edit.camera = { ...edit.camera, size: 0.32, position: 'top-left' }
+    edit.camera = { ...edit.camera, size: 0.32, position: 'top-left', x: 0, y: 0 }
     const scene = computeScene({
       time: 0,
       edit,
@@ -268,6 +268,40 @@ describe('computeScene — video dọc tự cắt theo con trỏ', () => {
     expect(scene.camera!.rect.x).toBeLessThan(100)
     expect(scene.camera!.rect.width).toBeCloseTo(0.32 * 1080)
     expect(scene.content.height).toBe(1920)
+  })
+
+  it('webcam đặt tự do (kéo trên khung xem trước), có viền và khung cắt mặt', () => {
+    const edit = verticalEdit()
+    edit.camera = {
+      ...edit.camera,
+      size: 0.4,
+      x: 0.5,
+      y: 0.62,
+      border: 1,
+      borderColor: '#ff0000',
+      zoom: 1.6,
+      focusX: 0.4,
+    }
+    const scene = computeScene({
+      time: 0,
+      edit,
+      output: vertical,
+      video,
+      source: 2000,
+      cursor: null,
+      follow: null,
+      hasCamera: true,
+    })
+    const rect = scene.camera!.rect
+    expect(rect.x + rect.width / 2).toBeCloseTo(540)
+    expect(rect.width).toBeCloseTo(432)
+    expect(rect.y).toBeGreaterThan(900)
+    expect(rect.y + rect.height).toBeLessThan(1920)
+    expect(scene.camera).toMatchObject({
+      border: expect.closeTo(432 * 0.06),
+      borderColor: '#ff0000',
+      framing: { zoom: 1.6, focusX: 0.4, focusY: 0.5 },
+    })
   })
 
   it('webcam dạng dải ở trên: video màn hình lấp phần bên dưới', () => {

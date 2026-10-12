@@ -106,7 +106,7 @@ describe('EditorPage', () => {
   it('nhạc nền và hiệu ứng âm thanh: thêm, chỉnh, xóa, hoàn tác', async () => {
     const api = setup()
     await screen.findByTestId('editor-title')
-    await userEvent.click(screen.getByTestId('tab-audio'))
+    await userEvent.click(screen.getByTestId('lib-audio'))
 
     // Nhạc nền từ máy: phủ hết video (7 giây), tự lặp, nhỏ dần cuối bài.
     await userEvent.click(screen.getByTestId('add-music'))
@@ -131,7 +131,8 @@ describe('EditorPage', () => {
     expect(api.getAssetPeaks).toHaveBeenCalledWith(sampleSummary.folder, 'asset-sfx-pop.m4a')
 
     // Xóa hiệu ứng đang chọn rồi hoàn tác.
-    await userEvent.click(screen.getByTestId('audio-remove'))
+    expect(screen.getByTestId('props-title')).toHaveTextContent('pop')
+    await userEvent.click(screen.getByTestId('props-delete'))
     expect(screen.getAllByTestId('timeline-audio')).toHaveLength(1)
     act(() => useEditorStore.getState().undo())
     expect(screen.getAllByTestId('timeline-audio')).toHaveLength(2)
@@ -140,7 +141,7 @@ describe('EditorPage', () => {
   it('thêm nhạc lỗi định dạng: báo lỗi dễ hiểu', async () => {
     const api = setup()
     await screen.findByTestId('editor-title')
-    await userEvent.click(screen.getByTestId('tab-audio'))
+    await userEvent.click(screen.getByTestId('lib-audio'))
     api.addAudioFile.mockRejectedValueOnce(
       new Error("Error invoking remote method 'assets:add-audio': Error: audio_unreadable"),
     )
@@ -168,7 +169,7 @@ describe('EditorPage', () => {
   it('hiệu ứng hình: thêm tại đầu phát, chỉnh độ mạnh, chọn trên timeline, xóa', async () => {
     setup()
     await screen.findByTestId('editor-title')
-    await userEvent.click(screen.getByTestId('tab-effects'))
+    await userEvent.click(screen.getByTestId('lib-effects'))
     act(() => useEditorStore.getState().setTime(6000))
     await userEvent.click(screen.getByTestId('effect-add-vhs'))
     // Gần cuối video: hiệu ứng bị giới hạn trong video (6s → 7s).
@@ -188,63 +189,133 @@ describe('EditorPage', () => {
     expect(screen.getAllByTestId('timeline-effect')).toHaveLength(2)
     // Bấm khối hiệu ứng trên timeline để chọn lại hiệu ứng đầu tiên.
     fireEvent.pointerDown(screen.getAllByTestId('timeline-effect')[0]!)
-    expect(screen.getByTestId('effect-selected')).toHaveTextContent('VHS cổ')
-    await userEvent.click(screen.getByTestId('effect-remove'))
+    expect(screen.getByTestId('props-title')).toHaveTextContent('VHS cổ')
+    expect(screen.getByTestId('effect-kind')).toHaveValue('vhs')
+    await userEvent.click(screen.getByTestId('props-delete'))
     expect(useEditorStore.getState().edit!.effects.map((e) => e.kind)).toEqual(['confetti'])
   })
 
-  it('chữ, sticker và meme: thêm, chỉnh, đặt vị trí, xóa', async () => {
-    const api = setup()
+  it('chữ và nhãn dán: thêm từ thư viện bên trái, chỉnh ở bảng bên phải, xóa', async () => {
+    setup()
     await screen.findByTestId('editor-title')
-    await userEvent.click(screen.getByTestId('tab-stickers'))
-    // Thư viện meme cá nhân hiện ra.
-    expect(await screen.findByTestId('meme-item')).toHaveAttribute('title', 'Mèo cười')
-
-    await userEvent.type(screen.getByTestId('overlay-text-input'), 'Hết cứu')
-    await userEvent.click(screen.getByTestId('text-style-neon'))
-    await userEvent.click(screen.getByTestId('overlay-add-text'))
+    await userEvent.click(screen.getByTestId('lib-text'))
+    await userEvent.click(screen.getByTestId('text-add-neon'))
     let o = useEditorStore.getState().edit!.overlays[0]!
-    expect(o).toMatchObject({
-      kind: 'text',
-      text: 'Hết cứu',
-      style: 'neon',
-      start: 0,
-      end: 3000,
-      animation: 'pop',
-    })
-    expect(screen.getByTestId('timeline-overlay')).toHaveTextContent('Hết cứu')
+    expect(o).toMatchObject({ kind: 'text', text: 'Nhập chữ', style: 'neon', start: 0, end: 3000 })
+    expect(screen.getByTestId('timeline-overlay')).toHaveTextContent('Nhập chữ')
+    // Thêm xong thì bảng bên phải hiện thuộc tính của chữ vừa thêm.
+    expect(screen.getByTestId('props-title')).toHaveTextContent('Văn bản')
 
-    // Chỉnh lớp đang chọn.
     await userEvent.clear(screen.getByTestId('overlay-edit-text'))
     await userEvent.type(screen.getByTestId('overlay-edit-text'), 'Đỉnh')
+    await userEvent.click(screen.getByTestId('overlay-style-meme'))
     fireEvent.change(screen.getByTestId('overlay-size'), { target: { value: '0.2' } })
     await userEvent.click(screen.getByTestId('anim-shake'))
     await userEvent.click(screen.getByTestId('pos-bottom'))
     o = useEditorStore.getState().edit!.overlays[0]!
-    expect(o).toMatchObject({ text: 'Đỉnh', size: 0.2, animation: 'shake', y: 0.85 })
+    expect(o).toMatchObject({ text: 'Đỉnh', style: 'meme', size: 0.2, animation: 'shake', y: 0.85 })
+    // Chữ không có phần xóa phông / âm lượng của video.
+    expect(screen.queryByTestId('key-00ff00')).not.toBeInTheDocument()
 
-    // Emoji, câu meme có sẵn, meme trong thư viện, ảnh từ máy.
+    await userEvent.click(screen.getByTestId('lib-stickers'))
     await userEvent.click(screen.getByTestId('emoji-0'))
-    await userEvent.click(screen.getByTestId('phrase-1'))
-    await userEvent.click(screen.getByTestId('meme-item'))
-    expect(api.useMeme).toHaveBeenCalledWith(sampleSummary.folder, 'meme-a.gif')
-    await waitFor(() => expect(useEditorStore.getState().edit!.overlays).toHaveLength(4))
-    await userEvent.click(screen.getByTestId('overlay-add-image'))
-    await waitFor(() => expect(useEditorStore.getState().edit!.overlays).toHaveLength(5))
-    const kinds = useEditorStore.getState().edit!.overlays.map((x) => [x.kind, x.text])
-    expect(kinds).toEqual([
-      ['text', 'Đỉnh'],
-      ['emoji', '😂'],
-      ['text', 'Hết cứu'],
-      ['image', 'Mèo cười'],
-      ['image', 'cat'],
-    ])
-    // Ảnh giữ đúng tỉ lệ (400×200).
-    expect(useEditorStore.getState().edit!.overlays[4]!.aspect).toBe(2)
-    expect(screen.getAllByTestId('timeline-overlay')).toHaveLength(5)
+    expect(useEditorStore.getState().edit!.overlays.map((x) => x.kind)).toEqual(['text', 'emoji'])
+    expect(screen.getByTestId('props-title')).toHaveTextContent('Nhãn dán')
+    await userEvent.click(screen.getByTestId('props-delete'))
+    expect(useEditorStore.getState().edit!.overlays).toHaveLength(1)
+    // Quay lại cài đặt chung.
+    fireEvent.pointerDown(screen.getAllByTestId('timeline-overlay')[0]!)
+    await userEvent.click(screen.getByTestId('props-back'))
+    expect(screen.getByTestId('tab-frame')).toBeInTheDocument()
+  })
 
-    await userEvent.click(screen.getByTestId('overlay-remove'))
-    expect(useEditorStore.getState().edit!.overlays).toHaveLength(4)
+  it('meme video: thư viện có video, thêm vào timeline với tiếng, xóa phông xanh, phủ kín khung', async () => {
+    const api = setup()
+    await screen.findByTestId('editor-title')
+    // Mặc định mở mục Meme: thư viện có ảnh GIF và video.
+    const items = await screen.findAllByTestId('meme-item')
+    expect(items.map((i) => i.getAttribute('data-kind'))).toEqual(['image', 'video'])
+    expect(items[1]).toHaveTextContent('0:03')
+    await userEvent.click(screen.getByTestId('media-filter-video'))
+    expect(screen.getAllByTestId('meme-item')).toHaveLength(1)
+
+    act(() => useEditorStore.getState().setTime(1000))
+    await userEvent.click(screen.getByTestId('meme-item'))
+    expect(api.useMeme).toHaveBeenCalledWith(sampleSummary.folder, 'meme-b.mp4')
+    await waitFor(() => expect(useEditorStore.getState().edit!.overlays).toHaveLength(1))
+    let o = useEditorStore.getState().edit!.overlays[0]!
+    // Dài đúng bằng video (2.5 giây), có tiếng, không hiệu ứng bật ra.
+    expect(o).toMatchObject({
+      kind: 'video',
+      file: 'asset-meme-b.mp4',
+      start: 1000,
+      end: 3500,
+      sourceDuration: 2500,
+      hasAudio: true,
+      animation: 'none',
+      keyColor: '',
+    })
+    expect(o.aspect).toBeCloseTo(16 / 9)
+    expect(screen.getByTestId('timeline-overlay')).toHaveAttribute('data-kind', 'video')
+    expect(screen.getByTestId('props-title')).toHaveTextContent('Bruh')
+
+    await userEvent.click(screen.getByTestId('key-00ff00'))
+    fireEvent.change(screen.getByTestId('key-strength'), { target: { value: '0.8' } })
+    fireEvent.change(screen.getByTestId('overlay-volume'), { target: { value: '0.5' } })
+    await userEvent.click(screen.getByTestId('overlay-fill'))
+    o = useEditorStore.getState().edit!.overlays[0]!
+    // Khung 16:9 và video 16:9: phủ kín = cao bằng khung.
+    expect(o).toMatchObject({ keyColor: '#00ff00', keyStrength: 0.8, volume: 0.5, size: 1, x: 0.5 })
+
+    // Ảnh từ máy (vào riêng dự án) cũng thêm được.
+    await userEvent.click(screen.getByTestId('overlay-add-image'))
+    await waitFor(() => expect(useEditorStore.getState().edit!.overlays).toHaveLength(2))
+    expect(useEditorStore.getState().edit!.overlays[1]).toMatchObject({ kind: 'image', aspect: 2 })
+  })
+
+  it('kéo thả file vào thư viện meme', async () => {
+    const api = setup()
+    await screen.findByTestId('editor-title')
+    const zone = await screen.findByTestId('media-tab')
+    const file = new File(['x'], 'bruh.mp4', { type: 'video/mp4' })
+    fireEvent.dragOver(zone, { dataTransfer: { files: [file] } })
+    expect(screen.getByText('Thả để thêm vào thư viện meme')).toBeInTheDocument()
+    fireEvent.drop(zone, { dataTransfer: { files: [file] } })
+    await waitFor(() => expect(api.addMemePaths).toHaveBeenCalledWith(['C:/drop/bruh.mp4']))
+    api.addMemePaths.mockRejectedValueOnce(
+      new Error("Error invoking remote method 'memes:add-paths': Error: video_unreadable"),
+    )
+    fireEvent.drop(zone, { dataTransfer: { files: [file] } })
+    expect(await screen.findByRole('alert')).toHaveTextContent('Không đọc được video này')
+  })
+
+  it('webcam: chọn trên khung xem trước mở phần Webcam; đặt vị trí tự do, khung mặt, viền', async () => {
+    setup()
+    await screen.findByTestId('editor-title')
+    act(() => useEditorStore.getState().select({ kind: 'camera', id: '' }))
+    expect(screen.getByTestId('tab-camera')).toHaveAttribute('aria-selected', 'true')
+    fireEvent.pointerDown(screen.getByTestId('cam-pos-0.5-1'))
+    expect(useEditorStore.getState().edit!.camera).toMatchObject({ x: 0.5, y: 1 })
+    fireEvent.pointerDown(screen.getByTestId('cam-pos-0-0'))
+    // Đúng góc thì nhớ cả góc.
+    expect(useEditorStore.getState().edit!.camera).toMatchObject({
+      x: 0,
+      y: 0,
+      position: 'top-left',
+    })
+    fireEvent.change(screen.getByTestId('cam-size'), { target: { value: '0.4' } })
+    fireEvent.change(screen.getByTestId('cam-zoom'), { target: { value: '1.5' } })
+    fireEvent.change(screen.getByTestId('cam-focus-y'), { target: { value: '0.35' } })
+    fireEvent.change(screen.getByTestId('cam-border'), { target: { value: '0.5' } })
+    expect(useEditorStore.getState().edit!.camera).toMatchObject({
+      size: 0.4,
+      zoom: 1.5,
+      focusY: 0.35,
+      border: 0.5,
+    })
+    // Delete khi đang chọn webcam: ẩn webcam.
+    await userEvent.keyboard('{Delete}')
+    expect(useEditorStore.getState().edit!.camera.visible).toBe(false)
   })
 
   it('không có âm thanh thì không vẽ sóng', async () => {
@@ -258,8 +329,12 @@ describe('EditorPage', () => {
     setup()
     await screen.findByTestId('editor')
     await userEvent.click(screen.getByTestId('aspect-9:16'))
-    await userEvent.click(screen.getByTestId('tab-export'))
+    await userEvent.click(screen.getByTestId('export-open'))
+    expect(screen.getByTestId('export-dialog')).toBeVisible()
     expect(screen.getByTestId('export-size')).toHaveTextContent('1080 × 1920')
+    // Đóng hộp thoại bằng Esc.
+    await userEvent.keyboard('{Escape}')
+    expect(screen.getByTestId('export-dialog').parentElement).not.toBeVisible()
   })
 
   it('tự lưu bản chỉnh sửa sau khi thay đổi', async () => {
@@ -287,7 +362,8 @@ describe('EditorPage', () => {
       keys: '[MouseLeft]',
       target: screen.getAllByTestId('timeline-clip')[0]!,
     })
-    await userEvent.selectOptions(screen.getByTestId('clip-speed'), '2')
+    expect(screen.getByTestId('props-title')).toHaveTextContent('Video')
+    await userEvent.click(screen.getByTestId('speed-2'))
     expect(screen.getByTestId('timecode')).toHaveTextContent('/ 0:04.5')
   })
 })

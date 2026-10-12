@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { contextBridge, ipcRenderer, webUtils, type IpcRendererEvent } from 'electron'
 import { EVENTS, IPC, type LumoraApi, type Unsubscribe } from '@shared/ipc'
 
 function subscribe<T>(channel: string, listener: (payload: T) => void): Unsubscribe {
@@ -57,6 +57,14 @@ const api: LumoraApi = {
   addImageFile: (folder) => ipcRenderer.invoke(IPC.assetsAddImage, folder),
   listMemes: () => ipcRenderer.invoke(IPC.memesList),
   importMemes: () => ipcRenderer.invoke(IPC.memesImport),
+  addMemePaths: (paths) => ipcRenderer.invoke(IPC.memesAddPaths, paths),
+  pathForFile: (file) => {
+    try {
+      return webUtils.getPathForFile(file)
+    } catch {
+      return ''
+    }
+  },
   removeMeme: (file) => ipcRenderer.invoke(IPC.memesRemove, file),
   useMeme: (folder, file) => ipcRenderer.invoke(IPC.memesUse, folder, file),
   startExport: (folder) => ipcRenderer.invoke(IPC.exportStart, folder),

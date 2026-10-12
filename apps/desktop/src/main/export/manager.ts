@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import {
   outputDuration,
   planAudio,
+  overlayAudioClips,
   planAudioClips,
   type EditState,
   type Project,
@@ -90,7 +91,11 @@ export class ExportManager {
           volume: p.volume,
         })),
         // Nhạc nền và hiệu ứng âm thanh thêm vào.
-        ...planAudioClips(edit.audioClips, durationS * 1000).map((p) => ({
+        // Nhạc nền, hiệu ứng âm thanh và tiếng của video meme.
+        ...planAudioClips(
+          [...edit.audioClips, ...overlayAudioClips(edit.overlays)],
+          durationS * 1000,
+        ).map((p) => ({
           ...p,
           path: join(projectDir, p.file),
           speed: 1,

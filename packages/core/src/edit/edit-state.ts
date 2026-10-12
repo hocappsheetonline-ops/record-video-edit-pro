@@ -10,7 +10,15 @@ import { NO_BEAUTY, parseBeauty, type BeautyStyle } from './beauty'
 import { parseEffects, type EffectRegion } from './effects'
 import { parseOverlays, type Overlay } from './overlays'
 import { parseTransitions, pruneTransitions, type Transition } from './transitions'
-import { ASPECTS, CORNERS, RESOLUTIONS, type Aspect, type Corner, type Resolution } from './layout'
+import {
+  ASPECTS,
+  cornerPlacement,
+  CORNERS,
+  RESOLUTIONS,
+  type Aspect,
+  type Corner,
+  type Resolution,
+} from './layout'
 import { initialClips, MIN_CLIP_MS, sourceDuration, type Clip } from './timeline'
 import { normalizeZooms, type ZoomRegion } from './zoom'
 
@@ -56,7 +64,18 @@ export interface CameraStyle {
   shape: 'circle' | 'rounded' | 'square'
   /** Cạnh bong bóng, tỉ lệ theo cạnh ngắn của khung (0.05..0.6). */
   size: number
+  /** Góc gần nhất (giữ cho tương thích; bố cục `stack` dùng trên/dưới). */
   position: Corner
+  /** Vị trí tự do của bong bóng: 0 = sát trái/trên, 1 = sát phải/dưới (xem `cameraRect`). */
+  x: number
+  y: number
+  /** Phóng to mặt trong bong bóng (1..3) và tâm khung cắt trong video webcam (0..1). */
+  zoom: number
+  focusX: number
+  focusY: number
+  /** Viền quanh bong bóng: độ dày 0..1 (0 = không viền) và màu. */
+  border: number
+  borderColor: string
   /** `bubble`: bong bóng nổi trên video. `stack`: dải webcam chiếm trọn chiều ngang ở trên/dưới. */
   layout: CameraLayout
   /** Chiều cao dải webcam khi `stack`, tỉ lệ theo chiều cao khung (0.2..0.6). */
@@ -148,6 +167,13 @@ export function createDefaultEdit(
       shape: 'circle',
       size: 0.22,
       position: 'bottom-right',
+      x: 1,
+      y: 1,
+      zoom: 1,
+      focusX: 0.5,
+      focusY: 0.5,
+      border: 0,
+      borderColor: '#ffffff',
       layout: 'bubble',
       split: 0.4,
       beauty: { ...NO_BEAUTY },
@@ -267,6 +293,9 @@ export function parseEditState(
   const bg = isObj(f.background) ? f.background : {}
   const c = isObj(input.cursor) ? input.cursor : {}
   const cam = isObj(input.camera) ? input.camera : {}
+  const camPosition = pick(CORNERS, cam.position, base.camera.position)
+  // Bản chỉnh sửa cũ chỉ có góc: đặt vị trí tự do đúng góc đó.
+  const camPlace = cornerPlacement(camPosition)
   const a = isObj(input.audio) ? input.audio : {}
   const m = isObj(input.motion) ? input.motion : {}
   const e = isObj(input.export) ? input.export : {}
@@ -304,7 +333,14 @@ export function parseEditState(
       visible: bool(cam.visible, base.camera.visible),
       shape: pick(['circle', 'rounded', 'square'] as const, cam.shape, base.camera.shape),
       size: num(cam.size, base.camera.size, 0.05, 0.6),
-      position: pick(CORNERS, cam.position, base.camera.position),
+      position: camPosition,
+      x: num(cam.x, camPlace.x, 0, 1),
+      y: num(cam.y, camPlace.y, 0, 1),
+      zoom: num(cam.zoom, 1, 1, 3),
+      focusX: num(cam.focusX, 0.5, 0, 1),
+      focusY: num(cam.focusY, 0.5, 0, 1),
+      border: num(cam.border, 0, 0, 1),
+      borderColor: color(cam.borderColor, '#ffffff'),
       layout: pick(CAMERA_LAYOUTS, cam.layout, base.camera.layout),
       split: num(cam.split, base.camera.split, 0.2, 0.6),
       beauty: parseBeauty(cam.beauty),

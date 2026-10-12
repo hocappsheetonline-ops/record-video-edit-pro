@@ -63,3 +63,24 @@ export function coverSource(source: Size, target: Size): Rect {
   const height = source.width / ratio
   return { x: 0, y: (source.height - height) / 2, width: source.width, height }
 }
+
+/**
+ * Phần khung webcam vẽ vào ô hiển thị: cắt kiểu cover, phóng to thêm `zoom` lần và dời tâm tới
+ * (`focusX`, `focusY`) để mặt nằm giữa bong bóng; không bao giờ cắt ra ngoài khung nguồn.
+ */
+export function cameraCrop(
+  source: Size,
+  target: Size,
+  framing: { zoom: number; focusX: number; focusY: number },
+): Rect {
+  const cover = coverSource(source, target)
+  const zoom = Math.max(1, Math.min(4, framing.zoom))
+  const width = cover.width / zoom
+  const height = cover.height / zoom
+  const cx = Math.max(width / 2, Math.min(source.width - width / 2, framing.focusX * source.width))
+  const cy = Math.max(
+    height / 2,
+    Math.min(source.height - height / 2, framing.focusY * source.height),
+  )
+  return { x: cx - width / 2, y: cy - height / 2, width, height }
+}

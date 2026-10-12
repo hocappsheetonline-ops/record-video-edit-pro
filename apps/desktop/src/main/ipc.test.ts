@@ -114,12 +114,16 @@ beforeEach(async () => {
       memes: {
         list: vi.fn(async () => []),
         pickAndAdd: vi.fn(async () => []),
+        add: vi.fn(async () => []),
         remove: vi.fn(async () => []),
         useInProject: vi.fn(async (file: string) => ({
           file: `asset-${file}`,
           name: 'm',
           width: 10,
           height: 10,
+          kind: 'image' as const,
+          durationMs: 0,
+          hasAudio: false,
         })),
       },
       openLogs: vi.fn(async () => {}),
@@ -180,6 +184,10 @@ describe('registerIpc', () => {
       file: 'asset-meme-a.png',
     })
     expect(await call(IPC.memesList)).toEqual([])
+    // Kéo thả: chỉ nhận danh sách đường dẫn dạng chữ.
+    await expect(call(IPC.memesAddPaths, 'C:/a.mp4')).rejects.toThrow('image_unsupported')
+    await expect(call(IPC.memesAddPaths, [1])).rejects.toThrow('image_unsupported')
+    expect(await call(IPC.memesAddPaths, ['/tmp/a.mp4'])).toEqual([])
   })
 
   it('cập nhật settings', async () => {

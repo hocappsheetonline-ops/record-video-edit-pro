@@ -177,6 +177,101 @@ describe('ExportManager', () => {
     expect(fadingOut).toBeLessThan(full - 6)
   }, 60_000)
 
+  it('tiếng của video meme được trộn đúng đoạn (bỏ phần đã cắt đầu, dừng khi hết lớp)', async () => {
+    const rendered = join(dir, 'rendered.mp4')
+    await ffmpeg([
+      '-f',
+      'lavfi',
+      '-i',
+      'testsrc=size=320x240:rate=30:duration=5',
+      '-pix_fmt',
+      'yuv420p',
+      '-c:v',
+      'libx264',
+      rendered,
+    ])
+    // Video meme 3 giây: 1 giây đầu im lặng, sau đó có tiếng.
+    await ffmpeg([
+      '-f',
+      'lavfi',
+      '-i',
+      'testsrc=size=160x90:rate=30:duration=3',
+      '-f',
+      'lavfi',
+      '-i',
+      'aevalsrc=if(gt(t\\,1)\\,0.5*sin(2*PI*440*t)\\,0):s=48000:d=3',
+      '-pix_fmt',
+      'yuv420p',
+      '-c:v',
+      'libx264',
+      '-c:a',
+      'aac',
+      join(dir, 'asset-meme.mp4'),
+    ])
+    const silent: Project = {
+      ...project,
+      segments: [{ index: 0, startedAt: 0, endedAt: 5000, tracks: {} }],
+      durationMs: 5000,
+    }
+    const manager = new ExportManager(runFfmpeg)
+    const id = await manager.start(dir)
+    await manager.write(id, 0, await readFile(rendered))
+    const edit = createDefaultEdit(silent)
+    // Hiện từ 2s tới 3.5s, bắt đầu từ giây thứ 1 của video meme (đúng chỗ có tiếng).
+    edit.overlays = [
+      {
+        id: 'v',
+        kind: 'video',
+        start: 2000,
+        end: 3500,
+        x: 0.5,
+        y: 0.5,
+        size: 0.4,
+        rotation: 0,
+        animation: 'none',
+        text: 'Bruh',
+        style: 'meme',
+        color: '#ffffff',
+        file: 'asset-meme.mp4',
+        aspect: 16 / 9,
+        mediaOffset: 1000,
+        sourceDuration: 3000,
+        hasAudio: true,
+        volume: 1,
+        keyColor: '',
+        keyStrength: 0.4,
+      },
+    ]
+    const result = await manager.finish(id, silent, edit, dir, 'Meme')
+    const loudness = async (from: number, len: number) => {
+      const r = await runFfmpeg([
+        '-hide_banner',
+        '-ss',
+        String(from),
+        '-t',
+        String(len),
+        '-i',
+        result.path,
+        '-af',
+        'volumedetect',
+        '-f',
+        'null',
+        '-',
+      ])
+      return Number(/mean_volume: (-?[\d.]+) dB/.exec(r.stderr)?.[1] ?? -100)
+    }
+    expect(await loudness(0.3, 1.4)).toBeLessThan(-60)
+    expect(await loudness(2.2, 1)).toBeGreaterThan(-20)
+    expect(await loudness(3.7, 1)).toBeLessThan(-60)
+    // Không có tiếng (hasAudio false) thì bỏ qua, xuất vẫn chạy.
+    const id2 = await manager.start(dir)
+    await manager.write(id2, 0, await readFile(rendered))
+    edit.overlays = [{ ...edit.overlays[0]!, hasAudio: false }]
+    const muted = await manager.finish(id2, silent, edit, dir, 'Meme2')
+    const probe = await runFfmpeg(['-hide_banner', '-i', muted.path])
+    expect(probe.stderr).not.toMatch(/Audio:/)
+  }, 60_000)
+
   it('hai clip liền nhau cùng lấy từ một file micro (tách clip): ghép xong, không bị treo', async () => {
     await ffmpeg([
       '-f',

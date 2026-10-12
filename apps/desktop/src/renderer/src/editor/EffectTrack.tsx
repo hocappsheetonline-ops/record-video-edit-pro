@@ -2,6 +2,7 @@ import { useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { dragRegion, type EffectRegion } from '@lumora/core'
 import { useEditorStore } from './store'
+import { assignLanes } from './timeline-math'
 
 type Drag = { id: string; mode: 'move' | 'start' | 'end'; originX: number; origin: EffectRegion }
 
@@ -25,7 +26,6 @@ export function EffectTrack({
     e.stopPropagation()
     ;(e.target as Element).setPointerCapture?.(e.pointerId)
     store().select({ kind: 'effect', id: fx.id })
-    store().requestTab('effects')
     setDrag({ id: fx.id, mode, originX: e.clientX, origin: fx })
   }
   const move = (e: ReactPointerEvent) => {
@@ -34,14 +34,16 @@ export function EffectTrack({
     store().updateEffect(drag.id, { start: next.start, end: next.end }, `fx-drag-${drag.id}`)
   }
 
+  const lanes = assignLanes(effects)
   return (
     <div
-      className="relative h-7 flex-1"
+      className="relative h-full flex-1"
       onPointerDown={onSeek}
       onPointerMove={move}
       onPointerUp={() => setDrag(null)}
     >
-      {effects.map((fx) => {
+      {effects.map((fx, index) => {
+        const lane = lanes[index] ?? 0
         const selected = selection?.kind === 'effect' && selection.id === fx.id
         const end = Math.min(fx.end, duration)
         if (end <= fx.start) return null
@@ -51,10 +53,12 @@ export function EffectTrack({
             data-testid="timeline-effect"
             data-kind={fx.kind}
             onPointerDown={(e) => down(e, fx, 'move')}
-            className={`absolute top-0 flex h-full cursor-grab items-center justify-center overflow-hidden rounded-md border-2 bg-fuchsia-500/25 text-[11px] text-fuchsia-200 ${
+            className={`absolute flex cursor-grab items-center justify-center overflow-hidden rounded-md border-2 bg-fuchsia-500/25 text-[11px] text-fuchsia-200 ${
               selected ? 'border-white' : 'border-transparent hover:border-white/40'
             }`}
             style={{
+              top: lane * 28 + 2,
+              height: 24,
               left: `${(fx.start / duration) * 100}%`,
               width: `${((end - fx.start) / duration) * 100}%`,
             }}

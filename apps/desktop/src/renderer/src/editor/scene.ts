@@ -42,6 +42,11 @@ export interface FrameScene {
     rect: Rect
     shape: EditState['camera']['shape'] | 'strip'
     beauty: BeautyStyle
+    /** Khung cắt mặt trong video webcam. */
+    framing: { zoom: number; focusX: number; focusY: number }
+    /** Viền (px, 0 = không) và màu. */
+    border: number
+    borderColor: string
   } | null
   /** Chuyển tiếp đang diễn ra quanh chỗ nối giữa hai clip. */
   transition: ActiveTransition | null
@@ -159,14 +164,32 @@ export function computeScene(input: SceneInput): FrameScene {
     view,
     cursor,
     ripple,
-    camera: !showCamera
-      ? null
-      : layout.strip
-        ? { rect: layout.strip, shape: 'strip', beauty: edit.camera.beauty }
-        : {
-            rect: cameraRect(output, edit.camera.size, edit.camera.position),
-            shape: edit.camera.shape,
-            beauty: edit.camera.beauty,
-          },
+    camera: !showCamera ? null : cameraScene(edit.camera, output, layout.strip),
+  }
+}
+
+function cameraScene(
+  cam: EditState['camera'],
+  output: Size,
+  strip: Rect | null,
+): NonNullable<FrameScene['camera']> {
+  const framing = { zoom: cam.zoom, focusX: cam.focusX, focusY: cam.focusY }
+  if (strip)
+    return {
+      rect: strip,
+      shape: 'strip',
+      beauty: cam.beauty,
+      framing,
+      border: 0,
+      borderColor: cam.borderColor,
+    }
+  const rect = cameraRect(output, cam.size, { x: cam.x, y: cam.y })
+  return {
+    rect,
+    shape: cam.shape,
+    beauty: cam.beauty,
+    framing,
+    border: cam.border * rect.width * 0.06,
+    borderColor: cam.borderColor,
   }
 }

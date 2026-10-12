@@ -50,7 +50,38 @@ describe('edit-state', () => {
     expect(parsed.frame.background.color).toBe('#7c3aed')
     expect(parsed.cursor.size).toBe(0.5)
     expect(parsed.camera.position).toBe('bottom-right')
+    expect(parsed.camera).toMatchObject({ x: 1, y: 1, zoom: 1, border: 0 })
     expect(parsed.export).toEqual({ resolution: 1080, fps: 60, format: 'mp4' })
+  })
+
+  it('webcam: bản cũ chỉ có góc → vị trí tự do đúng góc; giá trị tự do được giữ và kẹp', () => {
+    const old = parseEditState({ version: 1, camera: { position: 'top-left' } }, project)
+    expect(old.camera).toMatchObject({ position: 'top-left', x: 0, y: 0 })
+    const free = parseEditState(
+      {
+        version: 1,
+        camera: {
+          position: 'top-left',
+          x: 0.42,
+          y: 7,
+          zoom: 9,
+          focusX: 0.3,
+          focusY: -1,
+          border: 0.5,
+          borderColor: 'nope',
+        },
+      },
+      project,
+    )
+    expect(free.camera).toMatchObject({
+      x: 0.42,
+      y: 1,
+      zoom: 3,
+      focusX: 0.3,
+      focusY: 0,
+      border: 0.5,
+      borderColor: '#ffffff',
+    })
   })
 
   it('file sai phiên bản thì dùng mặc định', () => {

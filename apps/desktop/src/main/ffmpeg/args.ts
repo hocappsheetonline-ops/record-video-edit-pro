@@ -262,7 +262,9 @@ export function buildExportMuxArgs(options: {
   filters.push(
     // apad chỉ đệm im lặng tới đúng độ dài video: `apad` không giới hạn có thể làm FFmpeg chạy
     // mãi (bỏ qua -t, ngốn RAM) khi hai mảnh liền nhau cùng lấy từ một file.
-    `${mixed.join('')}amix=inputs=${mixed.length}:duration=longest:normalize=0,apad=whole_dur=${sec(durationS)}[aout]`,
+    // asetpts=N/SR/TB đánh lại mốc thời gian liền mạch: mảnh bị cắt đầu (atrim start > 0) làm amix
+    // ra mốc thời gian lệch, trình ghép MP4 bỏ hết phần tiếng phía sau (video xuất bị câm).
+    `${mixed.join('')}amix=inputs=${mixed.length}:duration=longest:normalize=0,apad=whole_dur=${sec(durationS)},asetpts=N/SR/TB[aout]`,
   )
   return [
     ...head,

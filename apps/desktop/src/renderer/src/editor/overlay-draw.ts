@@ -1,11 +1,31 @@
-import { accentForeground, overlayMotion, type Overlay } from '@lumora/core'
-import type { Ctx } from './draw'
+import { accentForeground, chromaKey, overlayMotion, type Overlay } from '@lumora/core'
+import type { Ctx, FrameSource } from './draw'
+
+/** Hình của lớp ảnh / video tại `local` ms kể từ lúc hiện (null nếu chưa tải xong). */
+export type OverlayMediaFn = (overlay: Overlay, local: number) => FrameSource | null
+
+/** Bọc ảnh (ImageBitmap…) thành nguồn hình chung. */
+export function imageSource(image: ImageBitmap | null): FrameSource | null {
+  if (!image) return null
+  return {
+    width: image.width,
+    height: image.height,
+    draw: (ctx, ...args) => ctx.drawImage(image, ...args),
+  }
+}
 
 export interface OverlayItem {
   overlay: Overlay
   /** ms kể từ lúc lớp xuất hiện (cho GIF và hiệu ứng). */
   local: number
+  /**
+   * Vẽ đứng yên, bỏ hiệu ứng chuyển động: lớp đang chọn khi tạm dừng xem trước (để thấy và chỉnh
+   * được ngay cả ở khung đầu, lúc hiệu ứng "bật ra" còn cỡ 0). Không dùng khi xuất video.
+   */
+  still?: boolean
 }
+
+const STILL = { scale: 1, opacity: 1, dx: 0, dy: 0, rotate: 0 }
 
 const EMOJI_FONT = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif'
 
@@ -32,7 +52,7 @@ export function overlayBox(ctx: Ctx, o: Overlay, width: number, height: number) 
   const px = o.size * height
   const cx = o.x * width
   const cy = o.y * height
-  if (o.kind === 'image') return { cx, cy, w: px * o.aspect, h: px }
+  if (o.kind === 'image' || o.kind === 'video') return { cx, cy, w: px * o.aspect, h: px }
   if (o.kind === 'emoji') return { cx, cy, w: px * 1.2, h: px * 1.2 }
   ctx.save()
   ctx.font = textFont(o, px)
@@ -48,10 +68,10 @@ export function drawOverlays(
   items: readonly OverlayItem[],
   width: number,
   height: number,
-  imageAt: (file: string, local: number) => CanvasImageSource | null,
+  mediaAt: OverlayMediaFn,
 ) {
-  for (const { overlay: o, local } of items) {
-    const m = overlayMotion(o, o.start + local)
+  for (const { overlay: o, local, still } of items) {
+    const m = still ? STILL : overlayMotion(o, o.start + local)
     if (m.opacity <= 0 || m.scale <= 0) continue
     const box = overlayBox(ctx, o, width, height)
     const px = o.size * height
@@ -60,9 +80,9 @@ export function drawOverlays(
     ctx.translate(box.cx + m.dx * height, box.cy + m.dy * height)
     ctx.rotate(((o.rotation + m.rotate) * Math.PI) / 180)
     ctx.scale(m.scale, m.scale)
-    if (o.kind === 'image') {
-      const img = imageAt(o.file, local)
-      if (img) ctx.drawImage(img, -box.w / 2, -box.h / 2, box.w, box.h)
+    if (o.kind === 'image' || o.kind === 'video') {
+      const media = mediaAt(o, local)
+      if (media) drawMedia(ctx, media, o, box.w, box.h)
     } else if (o.kind === 'emoji') {
       ctx.font = `${px}px ${EMOJI_FONT}`
       ctx.textAlign = 'center'
@@ -125,4 +145,44 @@ function drawText(ctx: Ctx, o: Overlay, px: number, box: { w: number; h: number 
         break
     }
   })
+}
+
+/** Bản nháp xóa phông, riêng cho từng canvas đích (giống `snapshot`). */
+const keyScratch = new WeakMap<object, OffscreenCanvas | HTMLCanvasElement>()
+/** Cạnh dài tối đa khi xóa phông: đủ nét mà vẫn nhẹ (xử lý từng điểm ảnh mỗi khung). */
+const KEY_MAX = 720
+
+function drawMedia(ctx: Ctx, media: FrameSource, o: Overlay, w: number, h: number) {
+  const full = [0, 0, media.width, media.height] as const
+  if (!o.keyColor) {
+    media.draw(ctx, ...full, -w / 2, -h / 2, w, h)
+    return
+  }
+  const scale = Math.min(1, KEY_MAX / Math.max(w, h, 1))
+  const sw = Math.max(1, Math.round(w * scale))
+  const sh = Math.max(1, Math.round(h * scale))
+  let scratch = keyScratch.get(ctx.canvas)
+  if (!scratch) {
+    scratch =
+      typeof OffscreenCanvas !== 'undefined'
+        ? new OffscreenCanvas(sw, sh)
+        : Object.assign(document.createElement('canvas'), { width: sw, height: sh })
+    keyScratch.set(ctx.canvas, scratch)
+  }
+  if (scratch.width !== sw || scratch.height !== sh) {
+    scratch.width = sw
+    scratch.height = sh
+  }
+  const sctx = scratch.getContext('2d', { willReadFrequently: true }) as Ctx | null
+  if (!sctx) return
+  sctx.clearRect(0, 0, sw, sh)
+  media.draw(sctx, ...full, 0, 0, sw, sh)
+  try {
+    const pixels = sctx.getImageData(0, 0, sw, sh)
+    chromaKey(pixels.data, o.keyColor, o.keyStrength)
+    sctx.putImageData(pixels, 0, 0)
+  } catch {
+    // Nguồn khác gốc (không đọc được điểm ảnh): vẽ nguyên bản thay vì bỏ trống.
+  }
+  ctx.drawImage(scratch, -w / 2, -h / 2, w, h)
 }

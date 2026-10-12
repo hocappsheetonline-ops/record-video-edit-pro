@@ -30,6 +30,31 @@ async function makeImage(name: string, size = '320x180', frames = 1) {
   return path
 }
 
+async function makeVideo(name: string, opts: { audio: boolean; size?: string; seconds?: number }) {
+  const path = join(dir, name)
+  const seconds = opts.seconds ?? 1.5
+  const r = await runFfmpeg([
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+    '-f',
+    'lavfi',
+    '-i',
+    `testsrc=size=${opts.size ?? '640x360'}:rate=25:duration=${seconds}`,
+    ...(opts.audio
+      ? ['-f', 'lavfi', '-i', `sine=frequency=440:duration=${seconds}`, '-c:a', 'libopus']
+      : []),
+    '-c:v',
+    name.endsWith('.webm') ? 'libvpx' : 'libx264',
+    '-pix_fmt',
+    'yuv420p',
+    path,
+  ])
+  expect(r.code).toBe(0)
+  return path
+}
+
 describe('ảnh / GIF meme', () => {
   it('thêm ảnh vào dự án: tên an toàn, đọc đúng kích thước', async () => {
     const project = join(dir, 'p')
@@ -76,4 +101,60 @@ describe('ảnh / GIF meme', () => {
     expect(left.map((m) => m.name)).toEqual(['wow'])
     expect(existsSync(join(dir, 'memes', items[0]!.file))).toBe(false)
   }, 60_000)
+
+  it('video meme: chuẩn hóa về MP4, đọc độ dài / tiếng, ảnh thu nhỏ, dùng trong dự án', async () => {
+    const lib = new MemeLibrary(join(dir, 'memes'), runFfmpeg)
+    const withSound = await makeVideo('Bruh.webm', { audio: true })
+    const silent = await makeVideo('big.mp4', { audio: false, size: '1920x1080', seconds: 1 })
+    const items = await lib.add([withSound, silent])
+    expect(items).toHaveLength(2)
+    expect(items[0]).toMatchObject({
+      name: 'Bruh',
+      kind: 'video',
+      width: 640,
+      height: 360,
+      hasAudio: true,
+    })
+    expect(items[0]!.file).toMatch(/^meme-[0-9a-f]{12}\.mp4$/)
+    expect(items[0]!.durationMs).toBeGreaterThan(1300)
+    expect(items[0]!.durationMs).toBeLessThan(1700)
+    expect(items[0]!.thumb).toMatch(/^data:image\/jpeg;base64,.{100,}/)
+    // Video lớn được thu nhỏ còn tối đa 1280px, không tiếng.
+    expect(items[1]).toMatchObject({ kind: 'video', width: 1280, height: 720, hasAudio: false })
+    const probe = await runFfmpeg(['-hide_banner', '-i', join(dir, 'memes', items[0]!.file)])
+    expect(probe.stderr).toMatch(/Video: h264/)
+    expect(probe.stderr).toMatch(/Audio: aac/)
+
+    const project = join(dir, 'p')
+    await mkdir(project)
+    const used = await lib.useInProject(items[0]!.file, project)
+    expect(used).toMatchObject({ kind: 'video', hasAudio: true, file: `asset-${items[0]!.file}` })
+    expect(existsSync(join(project, used.file))).toBe(true)
+
+    // Thêm thẳng video vào dự án cũng được chuẩn hóa.
+    const direct = await importImageFile(silent, project, runFfmpeg)
+    expect(direct.file).toMatch(/^asset-[0-9a-f]{12}\.mp4$/)
+    expect(direct.kind).toBe('video')
+  }, 120_000)
+
+  it('video hỏng / đường dẫn lạ: báo lỗi, thư viện không đổi', async () => {
+    const lib = new MemeLibrary(join(dir, 'memes'), runFfmpeg)
+    await writeFile(join(dir, 'broken.mp4'), 'not a video')
+    await expect(lib.add([join(dir, 'broken.mp4')])).rejects.toThrow('video_unreadable')
+    await expect(lib.add(['relative/a.mp4'])).rejects.toThrow('image_unsupported')
+    await expect(lib.add([join(dir, 'missing.mp4')])).rejects.toThrow('image_unreadable')
+    expect(await lib.list()).toEqual([])
+  }, 60_000)
+
+  it('thư viện cũ (chỉ có ảnh, chưa có kind) vẫn đọc được', async () => {
+    const lib = new MemeLibrary(join(dir, 'memes'), runFfmpeg)
+    const png = await makeImage('old.png')
+    const [item] = await lib.add([png])
+    const index = join(dir, 'memes', 'memes.json')
+    await writeFile(
+      index,
+      JSON.stringify([{ file: item!.file, name: 'old', width: 320, height: 180 }]),
+    )
+    expect((await lib.list())[0]).toMatchObject({ kind: 'image', durationMs: 0, hasAudio: false })
+  }, 30_000)
 })

@@ -23,6 +23,16 @@ async function openEditor(page: Page) {
   await expect(page.getByTestId('editor')).toBeVisible()
 }
 
+/** Mở / đóng hộp thoại Xuất video (nút Xuất ở góc trên bên phải). */
+async function openExport(page: Page) {
+  await page.getByTestId('export-open').click()
+  await expect(page.getByTestId('export-dialog')).toBeVisible()
+}
+async function closeExport(page: Page) {
+  await page.getByTestId('export-close').click()
+  await expect(page.getByTestId('export-dialog')).toBeHidden()
+}
+
 function exported(ext: string): string[] {
   if (!existsSync(join(projectDir, 'exports'))) return []
   return readdirSync(join(projectDir, 'exports')).filter(
@@ -63,7 +73,7 @@ test('chỉnh sửa: tự động zoom, cắt bớt, đổi nền rồi xuất M
   await page.getByTestId('bg-preset-6').click()
 
   // Xuất MP4 720p.
-  await page.getByTestId('tab-export').click()
+  await openExport(page)
   await page.getByTestId('resolution-720').click()
   await expect(page.getByTestId('export-size')).toHaveText('1280 × 720')
   await page.getByTestId('export-start').click()
@@ -177,7 +187,7 @@ test('xem trước đổi ngay khi chỉnh (không cần bấm Play); chế đ�
   await page.getByTestId('cam-layout-stack').click()
   await page.getByTestId('cam-stack-bottom').click()
 
-  await page.getByTestId('tab-export').click()
+  await openExport(page)
   await page.getByTestId('resolution-720').click()
   await expect(page.getByTestId('export-size')).toHaveText('720 × 1280')
   await page.getByTestId('export-start').click()
@@ -250,7 +260,7 @@ test('làm đẹp mặt webcam: video xuất ra sáng và mịn hơn bản khôn
   await page.getByTestId('tab-camera').click()
   await page.getByTestId('cam-layout-stack').click()
   await page.getByTestId('cam-stack-top').click()
-  await page.getByTestId('tab-export').click()
+  await openExport(page)
   await page.getByTestId('resolution-720').click()
 
   async function exportOnce(): Promise<string> {
@@ -265,9 +275,10 @@ test('làm đẹp mặt webcam: video xuất ra sáng và mịn hơn bản khôn
     )
   }
   const plain = await exportOnce()
+  await closeExport(page)
   await page.getByTestId('tab-camera').click()
   await page.getByTestId('beauty-auto').click()
-  await page.getByTestId('tab-export').click()
+  await openExport(page)
   // Tên file có giây nên chờ qua giây mới để không trùng tên.
   await page.waitForTimeout(1100)
   const pretty = await exportOnce()
@@ -312,6 +323,7 @@ test('nhạc nền + hiệu ứng âm thanh: thêm từ máy, xuất video có n
   // Nhạc bắt đầu ở giây 1 (bài dài 1 giây nhưng tự lặp tới hết video).
   await page.getByTestId('editor-canvas').click()
   await page.keyboard.press('ArrowRight')
+  await page.getByTestId('lib-audio').click()
   await page.getByTestId('add-music').click()
   await expect(page.getByTestId('timeline-audio')).toHaveCount(1)
   await expect(page.getByTestId('timeline-audio')).toContainText('Nhạc thử')
@@ -320,7 +332,7 @@ test('nhạc nền + hiệu ứng âm thanh: thêm từ máy, xuất video có n
   // Dạng sóng của nhạc hiện trên timeline.
   await expect(page.getByTestId('timeline-audio').first().locator('svg')).toBeVisible()
 
-  await page.getByTestId('tab-export').click()
+  await openExport(page)
   await page.getByTestId('resolution-720').click()
   await page.getByTestId('export-start').click()
   await expect(page.getByTestId('export-result')).toBeVisible({ timeout: 150_000 })
@@ -374,7 +386,7 @@ test('chuyển tiếp: mờ qua đen làm khung ở chỗ nối tối đen; glit
   await page.getByTestId('transition-fadeBlack').click()
   await expect(page.getByTestId('transition-marker')).toHaveAttribute('data-active', 'true')
 
-  await page.getByTestId('tab-export').click()
+  await openExport(page)
   await page.getByTestId('resolution-720').click()
   await page.getByTestId('export-start').click()
   await expect(page.getByTestId('export-result')).toBeVisible({ timeout: 150_000 })
@@ -409,9 +421,10 @@ test('chuyển tiếp: mờ qua đen làm khung ở chỗ nối tối đen; glit
   // Các kiểu còn lại (zoom, nhòe, lướt, glitch vẽ lại khung bằng ảnh chụp tạm): xuất được, đủ dài,
   // và khung ở chỗ nối khác hẳn kiểu mờ qua đen.
   for (const kind of ['fadeWhite', 'flash', 'zoom', 'blur', 'slide', 'glitch']) {
+    await closeExport(page)
     await page.getByTestId('transition-marker').dispatchEvent('pointerdown')
     await page.getByTestId(`transition-${kind}`).click()
-    await page.getByTestId('tab-export').click()
+    await openExport(page)
     await page.waitForTimeout(1100)
     const before = new Set(exported('.mp4'))
     await page.getByTestId('export-start').click()
@@ -437,14 +450,15 @@ test('chuyển tiếp: mờ qua đen làm khung ở chỗ nối tối đen; glit
 test('hiệu ứng hình: đủ 10 kiểu xuất được; đen trắng làm mất màu, viền tối làm góc tối đi', async () => {
   const { app, page, errors } = await launchApp(dirs.userData)
   await openEditor(page)
-  await page.getByTestId('tab-export').click()
+  await openExport(page)
   await page.getByTestId('resolution-720').click()
   await page.getByTestId('export-start').click()
   await expect(page.getByTestId('export-result')).toBeVisible({ timeout: 150_000 })
   const plain = join(projectDir, 'exports', exported('.mp4')[0]!)
 
   // Giây 0–1: đen trắng; 1–2: viền tối; 2–3: rung + VHS + glitch + pháo giấy; 3–4: mờ + lóe + nhún + cổ điển.
-  await page.getByTestId('tab-effects').click()
+  await closeExport(page)
+  await page.getByTestId('lib-effects').click()
   const groups = [
     ['bw'],
     ['vignette'],
@@ -463,7 +477,7 @@ test('hiệu ứng hình: đủ 10 kiểu xuất được; đen trắng làm m�
   const saved = () => JSON.parse(readFileSync(join(projectDir, 'edit.json'), 'utf8'))
   await expect.poll(() => saved().effects?.length).toBe(10)
 
-  await page.getByTestId('tab-export').click()
+  await openExport(page)
   await page.waitForTimeout(1100)
   const before = new Set(exported('.mp4'))
   await page.getByTestId('export-start').click()
@@ -536,13 +550,14 @@ test('chữ meme + GIF meme từ thư viện: kéo đặt vị trí trên khung 
     dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [path] })) as never
   }, gif)
   await openEditor(page)
-  await page.getByTestId('tab-export').click()
+  await openExport(page)
   await page.getByTestId('resolution-720').click()
   await page.getByTestId('export-start').click()
   await expect(page.getByTestId('export-result')).toBeVisible({ timeout: 150_000 })
   const plain = join(projectDir, 'exports', exported('.mp4')[0]!)
 
-  await page.getByTestId('tab-stickers').click()
+  await closeExport(page)
+  await page.getByTestId('lib-media').click()
   await page.getByTestId('meme-import').click()
   await expect(page.getByTestId('meme-item')).toHaveCount(1)
   await page.getByTestId('meme-item').click()
@@ -561,14 +576,14 @@ test('chữ meme + GIF meme từ thư viện: kéo đặt vị trí trên khung 
   expect(saved().overlays[0].y).toBeGreaterThan(0.65)
 
   // Chữ meme ở trên cùng, không hiệu ứng để dễ đo.
-  await page.getByTestId('overlay-text-input').fill('HẾT CỨU')
-  await page.getByTestId('text-style-meme').click()
-  await page.getByTestId('overlay-add-text').click()
+  await page.getByTestId('lib-text').click()
+  await page.getByTestId('text-add-meme').click()
+  await page.getByTestId('overlay-edit-text').fill('HẾT CỨU')
   await page.getByTestId('anim-none').click()
   await expect(page.getByTestId('timeline-overlay')).toHaveCount(2)
   await expect.poll(() => saved().overlays?.length).toBe(2)
 
-  await page.getByTestId('tab-export').click()
+  await openExport(page)
   await page.waitForTimeout(1100)
   const before = new Set(exported('.mp4'))
   await page.getByTestId('export-start').click()
@@ -618,6 +633,225 @@ test('chữ meme + GIF meme từ thư viện: kéo đặt vị trí trên khung 
   const center = '100:100:590:310'
   expect(diff(area(styled, 1, center), area(plain, 1, center))).toBeLessThan(4)
 
+  expect(errors).toEqual([])
+  await app.close()
+})
+
+/** Độ sáng + màu trung bình (Y, U, V) của vùng crop=w:h:x:y tại giây t. */
+function areaStats(file: string, t: number, crop: string): number[] {
+  const { stderr } = spawnSync(
+    ffmpegPath as unknown as string,
+    [
+      '-hide_banner',
+      '-ss',
+      String(t),
+      '-i',
+      file,
+      '-frames:v',
+      '1',
+      '-vf',
+      `crop=${crop},signalstats,metadata=print`,
+      '-f',
+      'null',
+      '-',
+    ],
+    { encoding: 'utf8' },
+  )
+  return ['YAVG', 'UAVG', 'VAVG'].map((k) =>
+    Number(new RegExp(`signalstats\\.${k}=([\\d.]+)`).exec(stderr)?.[1] ?? -1),
+  )
+}
+const statsDiff = (a: number[], b: number[]) =>
+  a.reduce((sum, v, i) => sum + Math.abs(v - b[i]!), 0)
+
+test('webcam: kéo tự do trên khung xem trước, kéo góc đổi cỡ, xuất ra đúng vị trí mới', async () => {
+  const { app, page, errors } = await launchApp(dirs.userData)
+  await openEditor(page)
+  await openExport(page)
+  await page.getByTestId('resolution-720').click()
+  await page.getByTestId('export-start').click()
+  await expect(page.getByTestId('export-result')).toBeVisible({ timeout: 150_000 })
+  const before = join(projectDir, 'exports', exported('.mp4')[0]!)
+  await closeExport(page)
+
+  // Bong bóng mặc định ở góc dưới phải (khung xem trước 1280×720, cỡ 22%).
+  const box = (await page.getByTestId('editor-canvas').boundingBox())!
+  const sx = box.width / 1280
+  const from = { x: box.x + 1175.6 * sx, y: box.y + 615.6 * sx }
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.3, { steps: 6 })
+  await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.4, { steps: 6 })
+  await page.mouse.up()
+  // Bấm vào webcam là chọn webcam: hiện khung chọn và mở phần Webcam bên phải.
+  await expect(page.getByTestId('selection-box')).toHaveAttribute('data-target', 'camera')
+  await expect(page.getByTestId('tab-camera')).toHaveAttribute('aria-selected', 'true')
+  const saved = () => JSON.parse(readFileSync(join(projectDir, 'edit.json'), 'utf8'))
+  await expect.poll(() => saved().camera.x).toBeLessThan(0.33)
+  expect(saved().camera.x).toBeGreaterThan(0.19)
+  expect(saved().camera.y).toBeGreaterThan(0.29)
+  expect(saved().camera.y).toBeLessThan(0.43)
+
+  // Kéo góc dưới phải của khung chọn ra ngoài: webcam to hơn, tâm giữ nguyên.
+  const handle = (await page.getByTestId('handle-se').boundingBox())!
+  await page.mouse.move(handle.x + 4, handle.y + 4)
+  await page.mouse.down()
+  await page.mouse.move(handle.x + 40, handle.y + 40, { steps: 6 })
+  await page.mouse.up()
+  await expect.poll(() => saved().camera.size).toBeGreaterThan(0.28)
+
+  await openExport(page)
+  await page.waitForTimeout(1100)
+  const old = new Set(exported('.mp4'))
+  await page.getByTestId('export-start').click()
+  await expect(page.getByTestId('export-result')).toBeVisible({ timeout: 150_000 })
+  await expect.poll(() => exported('.mp4').filter((f) => !old.has(f)).length).toBe(1)
+  const after = join(
+    projectDir,
+    'exports',
+    exported('.mp4').find((f) => !old.has(f))!,
+  )
+
+  // Chỗ cũ (dưới phải) giờ là video màn hình; chỗ mới (khoảng 30%, 40%) giờ là webcam.
+  const oldSpot = '80:80:1135:575'
+  const newSpot = '80:80:344:248'
+  expect(statsDiff(areaStats(after, 1, oldSpot), areaStats(before, 1, oldSpot))).toBeGreaterThan(8)
+  expect(statsDiff(areaStats(after, 1, newSpot), areaStats(before, 1, newSpot))).toBeGreaterThan(8)
+  expect(errors).toEqual([])
+  await app.close()
+})
+
+test('video meme phông xanh: nhập vào thư viện, thêm vào timeline, xóa phông, có tiếng khi xuất', async () => {
+  // Video meme 2 giây: phông xanh lá, ô đỏ ở giữa, có tiếng 880 Hz.
+  const meme = join(dirs.userData, 'Bruh meme.mp4')
+  execFileSync(ffmpegPath as unknown as string, [
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+    '-f',
+    'lavfi',
+    '-i',
+    'color=c=0x00ff00:s=320x180:r=30:d=2,drawbox=x=110:y=40:w=100:h=100:color=red:t=fill',
+    '-f',
+    'lavfi',
+    '-i',
+    'sine=frequency=880:duration=2',
+    '-pix_fmt',
+    'yuv420p',
+    '-c:v',
+    'libx264',
+    '-c:a',
+    'aac',
+    '-shortest',
+    meme,
+  ])
+  const { app, page, errors } = await launchApp(dirs.userData)
+  await app.evaluate(({ dialog }, path) => {
+    dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [path] })) as never
+  }, meme)
+  await openEditor(page)
+  await openExport(page)
+  await page.getByTestId('resolution-720').click()
+  await page.getByTestId('export-start').click()
+  await expect(page.getByTestId('export-result')).toBeVisible({ timeout: 150_000 })
+  const plain = join(projectDir, 'exports', exported('.mp4')[0]!)
+  await closeExport(page)
+
+  // Tắt micro để đo riêng tiếng của meme.
+  await page.getByTestId('tab-audio').click()
+  await page.getByTestId('audio-mic').fill('0')
+
+  // Mục Meme mở sẵn: nhập video (được chuẩn hóa sang MP4) vào thư viện.
+  await page.getByTestId('meme-import').click()
+  await expect(page.getByTestId('meme-item')).toHaveCount(1, { timeout: 60_000 })
+  await expect(page.getByTestId('meme-item')).toHaveAttribute('data-kind', 'video')
+  await expect(page.getByTestId('meme-item')).toContainText('Bruh meme')
+
+  // Thêm tại giây 1, xóa phông xanh, phủ kín khung.
+  await page.getByTestId('editor-canvas').click({ position: { x: 20, y: 20 } })
+  await page.keyboard.press('ArrowRight')
+  await page.getByTestId('meme-item').click()
+  await expect(page.getByTestId('timeline-overlay')).toHaveAttribute('data-kind', 'video')
+  await page.getByTestId('key-00ff00').click()
+  await page.getByTestId('overlay-fill').click()
+  const saved = () => JSON.parse(readFileSync(join(projectDir, 'edit.json'), 'utf8'))
+  await expect.poll(() => saved().overlays?.[0]?.keyColor).toBe('#00ff00')
+  expect(saved().overlays[0]).toMatchObject({
+    kind: 'video',
+    start: 1000,
+    hasAudio: true,
+    size: 1,
+  })
+  expect(saved().overlays[0].end).toBeGreaterThan(2900)
+  expect(saved().overlays[0].end).toBeLessThan(3100)
+  // File meme được chép vào dự án (chia sẻ dự án vẫn có).
+  expect(existsSync(join(projectDir, saved().overlays[0].file))).toBe(true)
+
+  // Xem trước: khung đang dừng ở giây 1 hiện ô đỏ giữa khung.
+  const shown = (await page.getByTestId('editor-canvas').boundingBox())!
+  await expect
+    .poll(() =>
+      previewPixel(page, Math.round(shown.width / 2), Math.round(shown.height / 2)).then(
+        ([r, g, b]) => r! > 150 && g! < 100 && b! < 100,
+      ),
+    )
+    .toBe(true)
+
+  await openExport(page)
+  await page.waitForTimeout(1100)
+  const old = new Set(exported('.mp4'))
+  await page.getByTestId('export-start').click()
+  await expect(page.getByTestId('export-result')).toBeVisible({ timeout: 150_000 })
+  await expect.poll(() => exported('.mp4').filter((f) => !old.has(f)).length).toBe(1)
+  const file = join(
+    projectDir,
+    'exports',
+    exported('.mp4').find((f) => !old.has(f))!,
+  )
+
+  // Giữa khung (ô đỏ của meme) đỏ rực trong lúc meme hiện.
+  const [r, g, b] = pixelAt(file, 640, 360, 1.5)
+  expect(r).toBeGreaterThan(150)
+  expect(g).toBeLessThan(100)
+  expect(b).toBeLessThan(100)
+  // Phông xanh đã bị xóa: góc trên trái là video màn hình gốc, không phải màu xanh lá.
+  const cornerArea = '200:120:40:40'
+  expect(
+    statsDiff(areaStats(file, 1.5, cornerArea), areaStats(plain, 1.5, cornerArea)),
+  ).toBeLessThan(12)
+  const [cr, cg, cb] = pixelAt(file, 100, 100, 1.5)
+  expect(cg! - Math.max(cr!, cb!)).toBeLessThan(120)
+  // Trước và sau khi meme hiện, khung như bản gốc.
+  const center = '100:100:590:310'
+  expect(statsDiff(areaStats(file, 0.5, center), areaStats(plain, 0.5, center))).toBeLessThan(4)
+  expect(statsDiff(areaStats(file, 3.5, center), areaStats(plain, 3.5, center))).toBeLessThan(4)
+
+  // Tiếng meme: có trong lúc meme hiện, im lặng trước đó (micro đã tắt).
+  const loudness = (from: number, len: number) => {
+    const { stderr } = spawnSync(
+      ffmpegPath as unknown as string,
+      [
+        '-hide_banner',
+        '-ss',
+        String(from),
+        '-t',
+        String(len),
+        '-i',
+        file,
+        '-af',
+        'volumedetect',
+        '-f',
+        'null',
+        '-',
+      ],
+      { encoding: 'utf8' },
+    )
+    return Number(/mean_volume: (-?[\d.]+) dB/.exec(stderr)?.[1] ?? -100)
+  }
+  expect(loudness(0.1, 0.7)).toBeLessThan(-50)
+  expect(loudness(1.3, 1)).toBeGreaterThan(-35)
+  expect(loudness(3.3, 0.6)).toBeLessThan(-50)
   expect(errors).toEqual([])
   await app.close()
 })

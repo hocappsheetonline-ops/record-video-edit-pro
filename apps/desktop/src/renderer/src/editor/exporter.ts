@@ -18,6 +18,8 @@ import {
   outputDuration,
   outputSize,
   outputToSource,
+  overlayMediaTime,
+  overlaysAt,
   segmentAt,
   sourceSegments,
   type EditState,
@@ -28,6 +30,7 @@ import {
 import type { ExportResult } from '@shared/ipc'
 import { lumora } from '../api'
 import { mediaUrl } from '../lib/media'
+import { imageSource } from './overlay-draw'
 import { OverlayImages } from './overlay-images'
 import { drawScene, type FrameSource } from './draw'
 import { computeScene } from './scene'
@@ -59,6 +62,8 @@ export interface FramePlan {
   frames: { segment: number | null; source: number; output: number }[]
   /** Với mỗi `${đoạn}:${track}`: các thời điểm trong file theo đúng thứ tự cần lấy. */
   timestamps: Map<string, number[]>
+  /** Với mỗi video meme (theo id lớp): các thời điểm trong file (giây) theo thứ tự khung xuất. */
+  overlayTimestamps: Map<string, number[]>
 }
 
 export function planFrames(project: Project, edit: EditState, fps: number): FramePlan {
@@ -66,7 +71,15 @@ export function planFrames(project: Project, edit: EditState, fps: number): Fram
   const total = Math.max(1, Math.round((outputDuration(edit.clips) / 1000) * fps))
   const frames: FramePlan['frames'] = []
   const timestamps = new Map<string, number[]>()
+  const overlayTimestamps = new Map<string, number[]>()
   for (let i = 0; i < total; i++) {
+    const output = (i * 1000) / fps
+    for (const o of overlaysAt(edit.overlays, output)) {
+      if (o.kind !== 'video') continue
+      const list = overlayTimestamps.get(o.id) ?? []
+      list.push(overlayMediaTime(o, output) / 1000)
+      overlayTimestamps.set(o.id, list)
+    }
     const hit = outputToSource(edit.clips, (i * 1000) / fps)
     const source = hit?.source ?? 0
     const item = segmentAt(segments, source)
@@ -81,7 +94,7 @@ export function planFrames(project: Project, edit: EditState, fps: number): Fram
       timestamps.set(key, list)
     }
   }
-  return { frames, timestamps }
+  return { frames, timestamps, overlayTimestamps }
 }
 
 /**
@@ -161,6 +174,19 @@ export async function exportVideo(options: {
       if (!videoTrack) continue
       iterators.set(key, new VideoSampleSink(videoTrack).samplesAtTimestamps(times))
     }
+    // Video meme: mỗi lớp một bộ giải mã, lấy đúng khung theo thời điểm đã tính.
+    for (const [id, times] of plan.overlayTimestamps) {
+      const overlay = edit.overlays.find((o) => o.id === id)
+      if (!overlay) continue
+      const input = new Input({
+        source: new UrlSource(mediaUrl(folder, overlay.file)),
+        formats: ALL_FORMATS,
+      })
+      inputs.push(input)
+      const videoTrack = await input.getPrimaryVideoTrack().catch(() => null)
+      if (!videoTrack) continue
+      iterators.set(`ov:${id}`, new VideoSampleSink(videoTrack).samplesAtTimestamps(times))
+    }
 
     const last = new Map<string, VideoSample | null>()
     const next = async (key: string) => {
@@ -184,6 +210,9 @@ export async function exportVideo(options: {
       const frame = plan.frames[i]!
       const screen = frame.segment === null ? null : await next(`${frame.segment}:screen`)
       const camera = hasCamera(frame.segment) ? await next(`${frame.segment}:camera`) : null
+      const overlayFrames = new Map<string, VideoSample | null>()
+      for (const o of overlaysAt(edit.overlays, frame.output))
+        if (o.kind === 'video') overlayFrames.set(o.id, await next(`ov:${o.id}`))
       const scene = computeScene({
         edit,
         time: frame.output,
@@ -199,7 +228,11 @@ export async function exportVideo(options: {
       drawScene(ctx, scene, {
         screen: screen ? sampleSource(screen) : null,
         camera: camera ? sampleSource(camera) : null,
-        overlayImage: (file, local) => images.frameAt(file, local),
+        overlayMedia: (o, local) => {
+          if (o.kind !== 'video') return imageSource(images.frameAt(o.file, local))
+          const sample = overlayFrames.get(o.id)
+          return sample ? sampleSource(sample) : null
+        },
       })
       await source.add(i / fps, 1 / fps)
       options.onProgress?.({ phase: 'render', progress: (i + 1) / plan.frames.length })

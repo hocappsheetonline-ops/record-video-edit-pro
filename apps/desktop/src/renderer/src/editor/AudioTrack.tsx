@@ -2,6 +2,7 @@ import { useEffect, useState, type PointerEvent as ReactPointerEvent } from 'rea
 import { audioClipBars, dragAudioClip, type AudioClip } from '@lumora/core'
 import { WaveBars } from './ClipWaveform'
 import { useEditorStore } from './store'
+import { assignLanes } from './timeline-math'
 
 type Drag = { id: string; mode: 'move' | 'start' | 'end'; originX: number; origin: AudioClip }
 
@@ -42,15 +43,17 @@ export function AudioTrack({
     store().updateAudioClip(drag.id, next, `audio-drag-${drag.id}`)
   }
 
+  const lanes = assignLanes(clips.map((c) => ({ start: c.start, end: c.start + c.duration })))
   return (
     <div
-      className="relative h-9 flex-1"
+      className="relative h-full flex-1"
       onPointerDown={onSeek}
       onPointerMove={move}
       onPointerUp={() => setDrag(null)}
       data-testid="audio-track"
     >
-      {clips.map((clip) => {
+      {clips.map((clip, index) => {
+        const lane = lanes[index] ?? 0
         const selected = selection?.kind === 'audio' && selection.id === clip.id
         const wave = peaks[clip.file]
         const bars = wave
@@ -63,12 +66,14 @@ export function AudioTrack({
             data-testid="timeline-audio"
             data-kind={clip.kind}
             onPointerDown={(e) => down(e, clip, 'move')}
-            className={`absolute top-0 flex h-full cursor-grab items-center overflow-hidden rounded-md border-2 text-[11px] ${
+            className={`absolute flex cursor-grab items-center overflow-hidden rounded-md border-2 text-[11px] ${
               color === 'emerald'
                 ? 'bg-emerald-500/25 text-emerald-300'
                 : 'bg-sky-500/25 text-sky-300'
             } ${selected ? 'border-white' : 'border-transparent hover:border-white/40'}`}
             style={{
+              top: lane * 40 + 2,
+              height: 36,
               left: `${(clip.start / duration) * 100}%`,
               width: `${(Math.min(clip.duration, duration - clip.start) / duration) * 100}%`,
             }}

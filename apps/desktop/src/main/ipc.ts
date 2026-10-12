@@ -17,7 +17,7 @@ import {
   IPC,
   type ActiveSession,
   type AudioAsset,
-  type ImageAsset,
+  type MediaAsset,
   type MemeItem,
   type AppInfo,
   type CaptureSources,
@@ -73,7 +73,7 @@ export interface ProjectsIpc {
   soundEffect(dir: string, id: string): Promise<AudioAsset>
   assetPeaks(dir: string, file: string): Promise<Waveform | null>
   /** Hộp thoại chọn ảnh/GIF rồi chép vào dự án (null nếu hủy). */
-  importImage(dir: string): Promise<ImageAsset | null>
+  importImage(dir: string): Promise<MediaAsset | null>
   trash(path: string): Promise<void>
   reveal(path: string): void
 }
@@ -82,8 +82,9 @@ export interface ProjectsIpc {
 export interface MemesIpc {
   list(): Promise<MemeItem[]>
   pickAndAdd(): Promise<MemeItem[]>
+  add(paths: string[]): Promise<MemeItem[]>
   remove(file: string): Promise<MemeItem[]>
-  useInProject(file: string, projectDir: string): Promise<ImageAsset>
+  useInProject(file: string, projectDir: string): Promise<MediaAsset>
 }
 
 export interface IpcDeps {
@@ -255,6 +256,11 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
   )
   ipcMain.handle(IPC.memesList, () => deps.memes.list())
   ipcMain.handle(IPC.memesImport, () => deps.memes.pickAndAdd())
+  ipcMain.handle(IPC.memesAddPaths, (_event, paths: unknown) => {
+    if (!Array.isArray(paths) || paths.length > 50 || !paths.every((p) => typeof p === 'string'))
+      throw new Error('image_unsupported')
+    return deps.memes.add(paths as string[])
+  })
   ipcMain.handle(IPC.memesRemove, (_event, file: unknown) => {
     if (typeof file !== 'string') throw new Error('Tên file không hợp lệ')
     return deps.memes.remove(file)

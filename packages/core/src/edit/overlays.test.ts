@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { overlayMotion, overlaysAt, parseOverlays, type Overlay } from './overlays'
+import {
+  dragOverlay,
+  overlayAudioClips,
+  overlayMaxDuration,
+  overlayMediaTime,
+  overlayMotion,
+  overlaysAt,
+  parseOverlays,
+  type Overlay,
+} from './overlays'
 
 const base: Overlay = {
   id: 'o',
@@ -16,6 +25,28 @@ const base: Overlay = {
   color: '#ffffff',
   file: '',
   aspect: 1,
+  mediaOffset: 0,
+  sourceDuration: 0,
+  hasAudio: false,
+  volume: 1,
+  keyColor: '',
+  keyStrength: 0.4,
+}
+
+const meme: Overlay = {
+  ...base,
+  id: 'v',
+  kind: 'video',
+  text: 'Bruh',
+  file: 'asset-meme-1.mp4',
+  aspect: 16 / 9,
+  start: 2000,
+  end: 5000,
+  mediaOffset: 500,
+  sourceDuration: 4000,
+  hasAudio: true,
+  volume: 0.8,
+  animation: 'none',
 }
 
 describe('overlays', () => {
@@ -64,6 +95,61 @@ describe('overlays', () => {
     const fixed = parseOverlays([
       { ...base, size: 9, animation: 'spin', color: 'red', style: 'x' },
     ])[0]!
-    expect(fixed).toMatchObject({ size: 1, animation: 'pop', color: '#ffffff', style: 'meme' })
+    expect(fixed).toMatchObject({ size: 4, animation: 'pop', color: '#ffffff', style: 'meme' })
+  })
+
+  it('video meme: đọc file kiểm tra độ dài, màu phông hợp lệ', () => {
+    expect(parseOverlays([meme])).toEqual([meme])
+    expect(parseOverlays([{ ...meme, sourceDuration: 0 }])).toEqual([])
+    expect(parseOverlays([{ ...meme, file: '' }])).toEqual([])
+    const keyed = parseOverlays([
+      { ...meme, keyColor: '#00FF00', keyStrength: 5, volume: -1, mediaOffset: 99_999 },
+    ])[0]!
+    expect(keyed).toMatchObject({
+      keyColor: '#00ff00',
+      keyStrength: 1,
+      volume: 0,
+      mediaOffset: 3900,
+    })
+    expect(parseOverlays([{ ...meme, keyColor: 'green' }])[0]!.keyColor).toBe('')
+  })
+
+  it('video meme: thời điểm trong file, giữ khung cuối khi hết file', () => {
+    expect(overlayMediaTime(meme, 2000)).toBe(500)
+    expect(overlayMediaTime(meme, 3000)).toBe(1500)
+    expect(overlayMediaTime(meme, 9000)).toBe(3999)
+    expect(overlayMaxDuration(meme)).toBe(3500)
+    expect(overlayMaxDuration(base)).toBe(Infinity)
+  })
+
+  it('kéo video meme: cắt đầu bỏ bớt đầu file, kéo dài không quá file', () => {
+    const trimmed = dragOverlay(meme, 'start', 300, 60_000)
+    expect(trimmed).toMatchObject({ start: 2300, end: 5000, mediaOffset: 800 })
+    // Lùi đầu tối đa tới điểm 0 của file.
+    expect(dragOverlay(meme, 'start', -2000, 60_000)).toMatchObject({ start: 1500, mediaOffset: 0 })
+    expect(dragOverlay(meme, 'end', 5000, 60_000).end).toBe(5500)
+    expect(dragOverlay(meme, 'move', 1000, 60_000)).toMatchObject({
+      start: 3000,
+      end: 6000,
+      mediaOffset: 500,
+    })
+    // Lớp chữ vẫn kéo tự do như cũ.
+    expect(dragOverlay(base, 'end', 10_000, 60_000).end).toBe(14_000)
+  })
+
+  it('tiếng video meme được trộn như một đoạn âm thanh', () => {
+    expect(overlayAudioClips([base, meme])).toEqual([
+      expect.objectContaining({
+        file: 'asset-meme-1.mp4',
+        start: 2000,
+        offset: 500,
+        duration: 3000,
+        sourceDuration: 4000,
+        volume: 0.8,
+        loop: false,
+      }),
+    ])
+    expect(overlayAudioClips([{ ...meme, hasAudio: false }])).toEqual([])
+    expect(overlayAudioClips([{ ...meme, volume: 0 }])).toEqual([])
   })
 })
