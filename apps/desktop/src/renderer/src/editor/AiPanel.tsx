@@ -4,12 +4,120 @@ import { removeSourceRanges, sourceToOutput, wordsToRanges, type CutSuggestion }
 import type { AiSummary } from '@shared/ipc'
 import { lumora } from '../api'
 import { aiErrorText } from './ai-errors'
-import { useEditorStore } from './store'
+import { runJob, useJobs } from './jobs'
+import { AUTO_EDIT_STEPS, useEditorStore, type AutoEditOptions, type AutoEditReport } from './store'
 import { formatTimecode } from './timeline-math'
 
 const button =
-  'rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-2 disabled:opacity-50'
-const heading = 'text-sm font-medium'
+  'rounded-lg border border-border bg-surface-2/70 px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-surface-2 disabled:opacity-50 disabled:shadow-none'
+const heading = 'text-sm font-semibold'
+
+const DEFAULT_AUTO: AutoEditOptions = {
+  silences: true,
+  fillers: true,
+  zooms: true,
+  captions: true,
+  audio: true,
+  title: false,
+}
+
+/** Một bấm: AI tự cắt, zoom, phụ đề, âm thanh, tiêu đề theo các ô đã chọn; hoàn tác một lần. */
+function AutoEdit() {
+  const { t } = useTranslation()
+  const [options, setOptions] = useState<AutoEditOptions>(DEFAULT_AUTO)
+  const [busy, setBusy] = useState(false)
+  const [report, setReport] = useState<AutoEditReport[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const count = AUTO_EDIT_STEPS.filter((s) => options[s]).length
+
+  const run = async () => {
+    setBusy(true)
+    setError(null)
+    setReport(null)
+    try {
+      const result = await runJob(t('ai.auto.job'), (progress) =>
+        useEditorStore
+          .getState()
+          .autoEdit(options, (done, total, step) =>
+            progress(done / total, t(`ai.auto.steps.${step}`)),
+          ),
+      )
+      setReport(result)
+      if (result.some((r) => r.status === 'done'))
+        useJobs.getState().toast({ kind: 'success', text: t('ai.auto.done') })
+    } catch (e) {
+      setError(aiErrorText(t, e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const detailText = (r: AutoEditReport) =>
+    r.status === 'done'
+      ? t('ai.auto.status.done', { n: r.detail })
+      : r.status === 'skipped'
+        ? t('ai.auto.status.skipped', {
+            reason: t(`ai.auto.reasons.${r.detail}`, { defaultValue: String(r.detail) }),
+          })
+        : t('ai.auto.status.error', { message: String(r.detail) })
+
+  return (
+    <section className="flex flex-col gap-3" data-testid="ai-auto">
+      <h3 className={heading}>{t('ai.auto.title')}</h3>
+      <p className="text-xs text-muted">{t('ai.auto.intro')}</p>
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+        {AUTO_EDIT_STEPS.map((step) => (
+          <label key={step} className="flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              className="size-4 accent-accent"
+              data-testid={`ai-auto-${step}`}
+              checked={options[step]}
+              onChange={(e) => setOptions({ ...options, [step]: e.target.checked })}
+            />
+            {t(`ai.auto.steps.${step}`)}
+          </label>
+        ))}
+      </div>
+      <button
+        type="button"
+        data-testid="ai-auto-run"
+        disabled={busy || count === 0}
+        onClick={() => void run()}
+        className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-accent-fg shadow-sm hover:brightness-110 disabled:opacity-50"
+      >
+        {busy ? t('ai.working') : t('ai.auto.run', { count })}
+      </button>
+      {report && (
+        <ul className="flex flex-col gap-1 text-xs" data-testid="ai-auto-report">
+          {report.map((r) => (
+            <li key={r.step} className="flex items-start gap-2" data-status={r.status}>
+              <span
+                className={`mt-0.5 size-2 shrink-0 rounded-full ${
+                  r.status === 'done'
+                    ? 'bg-success'
+                    : r.status === 'skipped'
+                      ? 'bg-muted'
+                      : 'bg-danger'
+                }`}
+                aria-hidden
+              />
+              <span>
+                <span className="font-medium">{t(`ai.auto.steps.${r.step}`)}</span>
+                <span className="text-muted"> · {detailText(r)}</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && (
+        <p role="alert" className="rounded-lg bg-danger/10 p-3 text-sm text-danger">
+          {error}
+        </p>
+      )}
+    </section>
+  )
+}
 
 export function AiPanel() {
   const { t } = useTranslation()
@@ -88,6 +196,8 @@ export function AiPanel() {
 
   return (
     <div className="flex flex-col gap-6" data-testid="ai-panel">
+      <AutoEdit />
+
       <section className="flex flex-col gap-3">
         <h3 className={heading}>{t('ai.cuts.title')}</h3>
         <p className="text-xs text-muted">{t('ai.cuts.intro')}</p>

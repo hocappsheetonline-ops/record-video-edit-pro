@@ -1,4 +1,10 @@
 export const vi = {
+  window: {
+    close: 'Đóng',
+    minimize: 'Thu nhỏ',
+    maximize: 'Phóng to',
+    restore: 'Thu về',
+  },
   nav: {
     record: 'Quay',
     projects: 'Dự án',
@@ -178,6 +184,7 @@ export const vi = {
         sfx: 'Hiệu ứng',
         meme: 'Meme',
         music: 'Nhạc',
+        youtube: 'YouTube',
         voice: 'Lồng tiếng',
         script: 'Kịch bản',
       },
@@ -446,6 +453,29 @@ export const vi = {
       layouts: { bubble: 'Bong bóng nổi', stack: 'Chia đôi khung' },
       split: 'Chiều cao dải webcam',
       stackPosition: { top: 'Ở trên', bottom: 'Ở dưới' },
+    },
+    youtube: {
+      open: 'Mở Thư viện âm thanh YouTube',
+      step1:
+        '1. Trang Thư viện âm thanh (YouTube Studio) mở trong trình duyệt: tìm bài theo thể loại, tâm trạng.',
+      step2: '2. Bấm Tải về ở bài muốn dùng. File vào thư mục Tải về của máy.',
+      step3:
+        '3. Bài vừa tải hiện ở mục bên dưới: bấm Thêm để đưa vào kho nhạc và đặt lên timeline tại đầu phát.',
+      recent: 'Vừa tải về',
+      recentEmpty: 'Chưa thấy file nhạc mới trong thư mục Tải về. Tải một bài rồi quay lại đây.',
+      add: 'Thêm',
+      added: 'Đã thêm',
+      library: 'Kho nhạc của tôi',
+      import: 'Thêm file',
+      importHint: 'Chọn file nhạc trên máy (MP3, WAV, M4A…) để đưa vào kho nhạc',
+      search: 'Tìm trong kho nhạc',
+      libraryEmptyTitle: 'Kho nhạc trống',
+      libraryEmpty:
+        'Nhạc tải từ Thư viện âm thanh YouTube hoặc file trên máy sẽ nằm ở đây, dùng lại ở mọi dự án. Bấm một bài để đặt làm nhạc nền.',
+      remove: 'Xóa khỏi kho nhạc',
+      drop: 'Thả file nhạc để thêm vào kho',
+      attribution:
+        'Nhạc trong Thư viện âm thanh YouTube miễn phí bản quyền cho video của bạn; một số bài yêu cầu ghi công tác giả trong mô tả (xem ở trang bài hát).',
     },
     music: {
       add: 'Thêm nhạc từ máy',
@@ -991,6 +1021,34 @@ export const vi = {
   },
   ai: {
     working: 'Đang xử lý…',
+    auto: {
+      title: 'AI tự biên tập',
+      intro:
+        'Một bấm: AI cắt khoảng lặng và từ thừa, tự zoom theo chuột, thêm phụ đề, làm sạch âm thanh và tiêu đề mở đầu. Hoàn tác một lần để quay lại.',
+      run: 'Tự biên tập ({{count}} bước)',
+      job: 'AI tự biên tập',
+      done: 'AI đã biên tập xong. Hoàn tác (Ctrl+Z) để quay lại bản trước.',
+      steps: {
+        silences: 'Cắt khoảng lặng',
+        fillers: 'Bỏ từ thừa, câu lặp',
+        zooms: 'Tự zoom theo chuột',
+        captions: 'Thêm phụ đề',
+        audio: 'Làm sạch âm thanh',
+        title: 'Tiêu đề mở đầu',
+      },
+      status: {
+        done: 'xong ({{n}})',
+        skipped: 'bỏ qua: {{reason}}',
+        error: 'lỗi: {{message}}',
+      },
+      reasons: {
+        no_transcript: 'chưa có lời thoại',
+        missing_key: 'thiếu API key (Cài đặt)',
+        no_audio: 'bản quay không có âm thanh',
+        no_cursor: 'không có dữ liệu chuột',
+        no_title: 'AI không đề xuất tiêu đề',
+      },
+    },
     kinds: { filler: 'Từ đệm', repeat: 'Nói lặp', silence: 'Khoảng lặng', other: 'Khác' },
     cuts: {
       title: 'Cắt từ thừa và khoảng lặng',

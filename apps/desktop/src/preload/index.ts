@@ -14,6 +14,11 @@ const api: LumoraApi = {
   installUpdate: () => ipcRenderer.invoke(IPC.updateInstall),
   onUpdateState: (listener) => subscribe(EVENTS.updateState, listener),
   openLogs: () => ipcRenderer.invoke(IPC.openLogs),
+  minimizeWindow: () => ipcRenderer.invoke(IPC.windowMinimize),
+  toggleMaximizeWindow: () => ipcRenderer.invoke(IPC.windowToggleMaximize),
+  closeWindow: () => ipcRenderer.invoke(IPC.windowClose),
+  isWindowMaximized: () => ipcRenderer.invoke(IPC.windowIsMaximized),
+  onWindowMaximized: (listener) => subscribe(EVENTS.windowMaximized, listener),
   getSettings: () => ipcRenderer.invoke(IPC.settingsGet),
   updateSettings: (patch) => ipcRenderer.invoke(IPC.settingsUpdate, patch),
   getSecretsStatus: () => ipcRenderer.invoke(IPC.secretsStatus),
@@ -67,6 +72,13 @@ const api: LumoraApi = {
   listMemes: () => ipcRenderer.invoke(IPC.memesList),
   importMemes: () => ipcRenderer.invoke(IPC.memesImport),
   addMemePaths: (paths) => ipcRenderer.invoke(IPC.memesAddPaths, paths),
+  listMusic: () => ipcRenderer.invoke(IPC.musicList),
+  importMusic: () => ipcRenderer.invoke(IPC.musicImport),
+  addMusicPaths: (paths, source) => ipcRenderer.invoke(IPC.musicAddPaths, paths, source),
+  removeMusic: (file) => ipcRenderer.invoke(IPC.musicRemove, file),
+  useMusic: (folder, file) => ipcRenderer.invoke(IPC.musicUse, folder, file),
+  recentAudioDownloads: () => ipcRenderer.invoke(IPC.musicRecentDownloads),
+  openYouTubeAudioLibrary: () => ipcRenderer.invoke(IPC.musicOpenYouTube),
   pathForFile: (file) => {
     try {
       return webUtils.getPathForFile(file)

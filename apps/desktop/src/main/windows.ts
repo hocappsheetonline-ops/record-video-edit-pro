@@ -36,6 +36,13 @@ function loadView(win: BrowserWindow, view: View) {
   }
 }
 
+/** macOS: giữ nút đèn giao thông hệ thống (ẩn thanh tiêu đề); nơi khác: không viền, app tự vẽ nút. */
+export function mainWindowFrame(platform: NodeJS.Platform = process.platform) {
+  return platform === 'darwin'
+    ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 14, y: 12 } }
+    : { frame: false }
+}
+
 export function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
@@ -45,8 +52,9 @@ export function createMainWindow(): BrowserWindow {
     show: false,
     title: 'Lumora',
     icon: join(__dirname, '../../resources/icon.png'),
-    backgroundColor: '#0b0b10',
+    backgroundColor: '#1c1c1e',
     autoHideMenuBar: true,
+    ...mainWindowFrame(),
     // Studio livestream cần chạy đều 30 khung/giây kể cả khi cửa sổ bị che.
     webPreferences: secureWebPreferences({ backgroundThrottling: false }),
   })

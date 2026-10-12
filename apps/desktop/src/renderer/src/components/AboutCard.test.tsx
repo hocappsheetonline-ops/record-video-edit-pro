@@ -5,7 +5,13 @@ import i18n from '../i18n'
 import { createFakeApi } from '../test/fake-api'
 import { AboutCard } from './AboutCard'
 
-const appInfo = { name: 'Lumora', version: '0.1.0', platform: 'win32', encryptionAvailable: true }
+const appInfo = {
+  name: 'Lumora',
+  version: '0.1.0',
+  platform: 'win32',
+  encryptionAvailable: true,
+  frameless: true,
+}
 
 beforeEach(async () => {
   await act(() => i18n.changeLanguage('vi'))

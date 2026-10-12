@@ -1,6 +1,12 @@
 import type { Messages } from './vi'
 
 export const en: Messages = {
+  window: {
+    close: 'Close',
+    minimize: 'Minimise',
+    maximize: 'Zoom',
+    restore: 'Restore',
+  },
   nav: {
     record: 'Record',
     projects: 'Projects',
@@ -186,6 +192,7 @@ export const en: Messages = {
         sfx: 'Effects',
         meme: 'Meme',
         music: 'Music',
+        youtube: 'YouTube',
         voice: 'Voice-over',
         script: 'Script',
       },
@@ -455,6 +462,29 @@ export const en: Messages = {
       layouts: { bubble: 'Floating bubble', stack: 'Split frame' },
       split: 'Webcam strip height',
       stackPosition: { top: 'Top', bottom: 'Bottom' },
+    },
+    youtube: {
+      open: 'Open the YouTube Audio Library',
+      step1:
+        '1. The Audio Library (YouTube Studio) opens in your browser: browse by genre and mood.',
+      step2: '2. Click Download on the track you want. It lands in your Downloads folder.',
+      step3:
+        '3. The download shows up below: click Add to put it in your music library and on the timeline at the playhead.',
+      recent: 'Just downloaded',
+      recentEmpty: 'No new music files in Downloads yet. Download a track and come back.',
+      add: 'Add',
+      added: 'Added',
+      library: 'My music library',
+      import: 'Add file',
+      importHint: 'Pick music files on this computer (MP3, WAV, M4A…) for the library',
+      search: 'Search the library',
+      libraryEmptyTitle: 'Library is empty',
+      libraryEmpty:
+        'Music from the YouTube Audio Library or your files lives here and is reusable in every project. Click a track to use it as background music.',
+      remove: 'Remove from library',
+      drop: 'Drop music files to add them',
+      attribution:
+        'YouTube Audio Library music is royalty-free for your videos; some tracks require crediting the artist in the description (see the track page).',
     },
     music: {
       add: 'Add music from computer',
@@ -1001,6 +1031,34 @@ export const en: Messages = {
   },
   ai: {
     working: 'Working…',
+    auto: {
+      title: 'AI auto edit',
+      intro:
+        'One click: AI trims silences and filler words, auto-zooms on the cursor, adds captions, cleans up audio and adds an opening title. Undo once to go back.',
+      run: 'Auto edit ({{count}} steps)',
+      job: 'AI auto edit',
+      done: 'AI finished editing. Undo (Ctrl+Z) to go back.',
+      steps: {
+        silences: 'Trim silences',
+        fillers: 'Remove fillers, repeats',
+        zooms: 'Auto zoom on cursor',
+        captions: 'Add captions',
+        audio: 'Clean up audio',
+        title: 'Opening title',
+      },
+      status: {
+        done: 'done ({{n}})',
+        skipped: 'skipped: {{reason}}',
+        error: 'error: {{message}}',
+      },
+      reasons: {
+        no_transcript: 'no transcript yet',
+        missing_key: 'API key missing (Settings)',
+        no_audio: 'the recording has no audio',
+        no_cursor: 'no cursor data',
+        no_title: 'AI suggested no title',
+      },
+    },
     kinds: { filler: 'Filler', repeat: 'Repeat', silence: 'Silence', other: 'Other' },
     cuts: {
       title: 'Remove fillers and silences',

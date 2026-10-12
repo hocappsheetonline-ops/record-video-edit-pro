@@ -147,6 +147,25 @@ describe('Thông báo cập nhật', () => {
   })
 })
 
+describe('Thanh tiêu đề cửa sổ không viền', () => {
+  it('nút đèn giao thông gọi đúng lệnh cửa sổ; bấm đúp để phóng to', async () => {
+    const api = createFakeApi()
+    await renderApp(api)
+    const bar = await screen.findByTestId('title-bar')
+    await userEvent.click(screen.getByTestId('window-minimize'))
+    expect(api.minimizeWindow).toHaveBeenCalled()
+    await userEvent.click(screen.getByTestId('window-maximize'))
+    expect(api.toggleMaximizeWindow).toHaveBeenCalledTimes(1)
+    await waitFor(() =>
+      expect(screen.getByTestId('window-maximize')).toHaveAttribute('aria-label', 'Thu về'),
+    )
+    await userEvent.dblClick(bar)
+    expect(api.toggleMaximizeWindow).toHaveBeenCalledTimes(2)
+    await userEvent.click(screen.getByTestId('window-close'))
+    expect(api.closeWindow).toHaveBeenCalled()
+  })
+})
+
 describe('Màu chủ đạo', () => {
   it('mặc định xanh dương; chọn màu khác thì cả app đổi theo', async () => {
     await renderApp(createFakeApi())

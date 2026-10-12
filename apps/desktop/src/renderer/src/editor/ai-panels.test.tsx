@@ -118,6 +118,64 @@ describe('CaptionsPanel', () => {
 })
 
 describe('AiPanel', () => {
+  it('AI tự biên tập: cắt, phụ đề, âm thanh, tiêu đề trong một bước hoàn tác; báo bước bị bỏ qua', async () => {
+    const api = await setup()
+    render(<AiPanel />)
+    await userEvent.click(screen.getByTestId('ai-auto-title'))
+    await userEvent.click(screen.getByTestId('ai-auto-run'))
+    const report = await screen.findByTestId('ai-auto-report')
+    const rows = within(report).getAllByRole('listitem')
+    expect(rows.map((r) => r.getAttribute('data-status'))).toEqual([
+      'done',
+      'done',
+      'skipped',
+      'done',
+      'done',
+      'done',
+    ])
+    expect(rows[2]).toHaveTextContent('không có dữ liệu chuột')
+    expect(api.transcribe).toHaveBeenCalledWith(sampleSummary.folder, '')
+    expect(api.suggestCuts).toHaveBeenCalledWith(sampleSummary.folder)
+    const s = useEditorStore.getState()
+    // Khoảng lặng 1700→4100 (chừa 350ms) + từ đệm 800→1100 của Claude.
+    expect(outputDuration(s.edit!.clips)).toBe(7000 - 2050 - 300)
+    expect(s.edit!.captions.enabled).toBe(true)
+    expect(s.edit!.captions.lines.length).toBeGreaterThan(0)
+    expect(s.edit!.audio.micFx).toMatchObject({ noise: 'medium', enhance: true, normalize: true })
+    expect(s.edit!.overlays).toHaveLength(1)
+    expect(s.edit!.overlays[0]).toMatchObject({ kind: 'text', text: 'Hướng dẫn Lumora', start: 0 })
+    // Một lần hoàn tác bỏ cả.
+    expect(s.past).toHaveLength(1)
+    s.undo()
+    expect(outputDuration(useEditorStore.getState().edit!.clips)).toBe(7000)
+    expect(useEditorStore.getState().edit!.overlays).toHaveLength(0)
+  })
+
+  it('AI tự biên tập không có key nhận dạng: vẫn cắt khoảng lặng theo dạng sóng, bỏ qua phần cần lời thoại', async () => {
+    const api = await setup()
+    api.transcribe.mockRejectedValue(
+      new Error('Error invoking remote method: missing_key:elevenlabs'),
+    )
+    api.getWaveform.mockResolvedValue({
+      bucketMs: 20,
+      peaks: Array.from({ length: 350 }, (_, i) => (i >= 100 && i < 200 ? 0 : 200)),
+    })
+    await useEditorStore.getState().load(sampleSummary.folder)
+    render(<AiPanel />)
+    await userEvent.click(screen.getByTestId('ai-auto-run'))
+    const rows = within(await screen.findByTestId('ai-auto-report')).getAllByRole('listitem')
+    expect(rows.map((r) => r.getAttribute('data-status'))).toEqual([
+      'done',
+      'skipped',
+      'skipped',
+      'skipped',
+      'done',
+    ])
+    expect(rows[1]).toHaveTextContent('thiếu API key')
+    // Im lặng 2000→4000ms, chừa 350ms.
+    expect(outputDuration(useEditorStore.getState().edit!.clips)).toBe(7000 - 1650)
+  })
+
   it('gợi ý cắt rồi áp dụng các đoạn đã chọn', async () => {
     const api = await setup(true)
     render(<AiPanel />)

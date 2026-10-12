@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   findFillerWords,
+  findQuietRanges,
   findSilences,
   indexedTranscript,
   timestampedTranscript,
@@ -16,6 +17,26 @@ const words = [
   w('các', 3000, 3200),
   w('bạn', 3300, 3600),
 ]
+
+describe('findQuietRanges', () => {
+  it('tìm khoảng lặng dài từ dạng sóng, chừa hai đầu, bỏ khoảng ngắn', () => {
+    // 20ms một ô: 0–1s to, 1–3s im, 3–3.5s to, 3.5–4s im (ngắn), 4–6s to.
+    const peaks = Array.from({ length: 300 }, (_, i) => {
+      const ms = i * 20
+      return (ms >= 1000 && ms < 3000) || (ms >= 3500 && ms < 4000) ? 2 : 200
+    })
+    expect(findQuietRanges({ bucketMs: 20, peaks })).toEqual([{ start: 1175, end: 2825 }])
+    expect(findQuietRanges({ bucketMs: 20, peaks }, { minMs: 400, keepMs: 0 })).toEqual([
+      { start: 1000, end: 3000 },
+      { start: 3500, end: 4000 },
+    ])
+    // Im lặng tới cuối file cũng tính.
+    expect(
+      findQuietRanges({ bucketMs: 20, peaks: [200, 200, 0, 0, 0, 0, 0] }, { minMs: 80, keepMs: 0 }),
+    ).toEqual([{ start: 40, end: 140 }])
+    expect(findQuietRanges({ bucketMs: 20, peaks: [] })).toEqual([])
+  })
+})
 
 describe('ai-edit', () => {
   it('tìm từ đệm tiếng Việt và tiếng Anh', () => {

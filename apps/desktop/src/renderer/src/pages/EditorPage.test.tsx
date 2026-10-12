@@ -438,6 +438,39 @@ describe('EditorPage', () => {
     expect(input).toHaveValue('41%')
   })
 
+  it('nhạc nền từ Thư viện âm thanh YouTube: mở trang, thêm file vừa tải vào kho và lên timeline, xóa khỏi kho', async () => {
+    const api = setup()
+    await screen.findByTestId('editor')
+    await userEvent.click(screen.getByTestId('lib-audio'))
+    await userEvent.click(screen.getByTestId('audio-section-youtube'))
+    await userEvent.click(screen.getByTestId('youtube-open'))
+    expect(api.openYouTubeAudioLibrary).toHaveBeenCalled()
+    // File vừa tải (giả) hiện ngay; Thêm → vào kho (nguồn youtube) và thành nhạc nền tại đầu phát.
+    const add = await screen.findByTestId('youtube-recent-add')
+    expect(add).toHaveTextContent('Thêm')
+    act(() => useEditorStore.getState().setTime(1000))
+    await userEvent.click(add)
+    await waitFor(() => expect(useEditorStore.getState().edit!.audioClips).toHaveLength(1))
+    expect(api.addMusicPaths).toHaveBeenCalledWith(
+      ['C:\\Users\\me\\Downloads\\Sunny Day.mp3'],
+      'youtube',
+    )
+    expect(useEditorStore.getState().edit!.audioClips[0]).toMatchObject({
+      kind: 'music',
+      name: 'Sunny Day',
+      start: 1000,
+      loop: true,
+    })
+    expect(screen.getByTestId('youtube-recent-add')).toHaveTextContent('Đã thêm')
+    const item = screen.getByTestId('music-item')
+    expect(item).toHaveAttribute('data-source', 'youtube')
+    // Bấm bài trong kho: thêm lần nữa (không chép lại file).
+    await userEvent.click(item)
+    await waitFor(() => expect(useEditorStore.getState().edit!.audioClips).toHaveLength(2))
+    await userEvent.click(screen.getByTestId('music-remove'))
+    await waitFor(() => expect(screen.queryByTestId('music-item')).not.toBeInTheDocument())
+  })
+
   it('kho video online: chưa có key thì hướng dẫn; có key thì tìm, xem thêm, tải và thêm vào video', async () => {
     const api = setup()
     await screen.findByTestId('editor')

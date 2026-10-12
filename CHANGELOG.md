@@ -2,6 +2,12 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.2.0
+
+- **Cửa sổ không viền kiểu macOS**: thanh tiêu đề tự vẽ với nút đèn giao thông (đóng / thu nhỏ / phóng to), kéo để dời, bấm đúp để phóng to; trên macOS dùng nút hệ thống.
+- **AI tự biên tập** (Thư viện → AI): một bấm cắt khoảng lặng (theo lời thoại, hoặc theo dạng sóng khi không có key nhận dạng), bỏ từ thừa / câu lặp (Claude, hoặc danh sách từ đệm có sẵn), tự zoom theo chuột, thêm phụ đề, làm sạch âm thanh (lọc tạp âm, tăng cường giọng, chuẩn hóa) và tiêu đề mở đầu; chọn từng bước, xem kết quả từng bước; hoàn tác một lần để quay lại.
+- **Nhạc nền từ Thư viện âm thanh YouTube** (Thư viện → Âm thanh → YouTube): mở Thư viện âm thanh (YouTube Studio, nhạc miễn phí bản quyền), bài vừa tải về tự hiện trong app, một bấm để đưa vào **kho nhạc của tôi** và đặt lên timeline; kho nhạc dùng lại ở mọi dự án, nhận cả file nhạc trên máy (chọn hoặc kéo thả), có tìm kiếm.
+
 ## 1.1.0
 
 - **Giao diện phong cách Apple** (macOS / Liquid Glass): chữ hệ thống, xám trung tính và màu hệ thống của Apple cho cả giao diện tối lẫn sáng; bo góc đồng tâm lớn; nút viên thuốc, segmented control, công tắc và thanh trượt kiểu macOS; sidebar, thanh công cụ, thanh phát, menu chuột phải, chú thích, thông báo và hộp thoại là **kính mờ** (blur + bán trong suốt); thanh cuộn mảnh; tiêu đề trang cỡ lớn.

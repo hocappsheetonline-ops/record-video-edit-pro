@@ -21,6 +21,7 @@ import { dragProps } from '../library-drag'
 import { useEditorStore } from '../store'
 import { primaryButton, Segmented, SliderRow, Toggle } from '../ui'
 import { ErrorNote, Heading, useErrorText } from './common'
+import { YouTubeMusic } from './YouTubeMusic'
 
 /** Hiệu ứng âm thanh meme (phần cuối danh sách); phần đầu là hiệu ứng cơ bản. */
 const MEME_SFX: readonly SoundEffectId[] = SOUND_EFFECT_IDS.slice(
@@ -520,7 +521,9 @@ function VoiceOver({ onError }: { onError: (e: unknown) => void }) {
 /** Mục Âm thanh: nhạc từ máy, hiệu ứng âm thanh, âm thanh meme, lồng tiếng và kịch bản giọng AI. */
 export function AudioTab() {
   const { t } = useTranslation()
-  const [section, setSection] = useState<'sfx' | 'meme' | 'music' | 'voice' | 'script'>('sfx')
+  const [section, setSection] = useState<'sfx' | 'meme' | 'music' | 'youtube' | 'voice' | 'script'>(
+    'sfx',
+  )
   const [busy, setBusy] = useState<Busy>(null)
   const [error, setError] = useState<string | null>(null)
   const errorText = useErrorText()
@@ -539,6 +542,7 @@ export function AudioTab() {
           { value: 'sfx', label: t('editor.library.audioSections.sfx') },
           { value: 'meme', label: t('editor.library.audioSections.meme') },
           { value: 'music', label: t('editor.library.audioSections.music') },
+          { value: 'youtube', label: t('editor.library.audioSections.youtube') },
           { value: 'voice', label: t('editor.library.audioSections.voice') },
           { value: 'script', label: t('editor.library.audioSections.script') },
         ]}
@@ -570,6 +574,7 @@ export function AudioTab() {
           </div>
         </>
       )}
+      {section === 'youtube' && <YouTubeMusic />}
       {section === 'voice' && <VoiceOver onError={(e) => setError(errorText(e))} />}
       {section === 'script' && <NarrationScript onError={(e) => setError(errorText(e))} />}
       {section === 'sfx' && (

@@ -104,6 +104,14 @@ html.transparent-window body {
   overflow: hidden;
 }
 
+/* Cửa sổ không viền: vùng kéo để dời cửa sổ; nút bên trong không kéo. */
+.app-drag {
+  -webkit-app-region: drag;
+}
+.app-no-drag {
+  -webkit-app-region: no-drag;
+}
+
 /* Bề mặt kính mờ (thanh công cụ, menu, tooltip, hộp thoại). Tắt khi "Giảm trong suốt". */
 .glass {
   background: var(--lm-glass);

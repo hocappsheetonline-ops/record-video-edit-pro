@@ -71,6 +71,33 @@ beforeEach(async () => {
       secrets: new SecretStore(join(dir, 'secrets.json'), cipher),
       validators,
       recording,
+      music: {
+        list: vi.fn(async () => []),
+        pickAndAdd: vi.fn(async () => []),
+        add: vi.fn(async (paths: string[], source: 'youtube' | 'file') =>
+          paths.map((p, i) => ({
+            file: `music-${i}.mp3`,
+            name: p,
+            durationMs: 1000,
+            addedAt: 1,
+            source,
+          })),
+        ),
+        remove: vi.fn(async () => []),
+        useInProject: vi.fn(async (file: string) => ({
+          file: `asset-${file}`,
+          name: 'x',
+          durationMs: 1000,
+        })),
+        recentDownloads: vi.fn(async () => []),
+        openYouTube: vi.fn(async () => {}),
+      },
+      window: {
+        minimize: vi.fn(),
+        toggleMaximize: vi.fn(() => true),
+        close: vi.fn(),
+        isMaximized: vi.fn(() => false),
+      },
       live: {
         getConfig: vi.fn(),
         updateConfig: vi.fn(),
@@ -169,6 +196,7 @@ beforeEach(async () => {
         version: '0.0.0',
         platform: 'win32',
         encryptionAvailable: true,
+        frameless: true,
       }),
     },
   )
@@ -357,6 +385,27 @@ describe('registerIpc', () => {
     await expect(call(IPC.saveExportText, 'a.lumora', 'virus.exe', 'x')).rejects.toThrow(
       /không được phép/,
     )
+  })
+
+  it('kho nhạc: thêm đường dẫn với nguồn, từ chối dữ liệu lạ, dùng trong dự án', async () => {
+    expect(await call(IPC.musicAddPaths, ['C:/a.mp3'], 'youtube')).toMatchObject([
+      { name: 'C:/a.mp3', source: 'youtube' },
+    ])
+    expect(await call(IPC.musicAddPaths, ['C:/b.mp3'], 'bogus')).toMatchObject([{ source: 'file' }])
+    await expect(call(IPC.musicAddPaths, 'C:/a.mp3', 'file')).rejects.toThrow('audio_unsupported')
+    expect(await call(IPC.musicUse, 'a.lumora', 'music-1.mp3')).toMatchObject({
+      file: 'asset-music-1.mp3',
+    })
+    expect(await call(IPC.musicRecentDownloads)).toEqual([])
+    await call(IPC.musicOpenYouTube)
+    expect(await call(IPC.musicList)).toEqual([])
+  })
+
+  it('cửa sổ không viền: thu nhỏ, phóng to / thu về, đóng, hỏi trạng thái', async () => {
+    await call(IPC.windowMinimize)
+    expect(await call(IPC.windowToggleMaximize)).toBe(true)
+    expect(await call(IPC.windowIsMaximized)).toBe(false)
+    await call(IPC.windowClose)
   })
 
   it('kho online: chỉ nhận nguồn đã biết, từ khóa ngắn; tải theo mã; bộ nhớ đệm', async () => {
