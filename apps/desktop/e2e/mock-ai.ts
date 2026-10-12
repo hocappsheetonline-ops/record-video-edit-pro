@@ -1,4 +1,38 @@
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { createServer, type IncomingMessage, type Server } from 'node:http'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import ffmpegPath from 'ffmpeg-static'
+
+/** Giọng đọc giả: MP3 0.8 giây, âm 330 Hz (tạo một lần khi khởi động máy chủ). */
+function speechMp3(): Buffer {
+  const dir = mkdtempSync(join(tmpdir(), 'lumora-tts-'))
+  try {
+    const file = join(dir, 'speech.mp3')
+    execFileSync(ffmpegPath as unknown as string, [
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-y',
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=330:duration=0.8',
+      '-c:a',
+      'libmp3lame',
+      file,
+    ])
+    return readFileSync(file)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
+export const MOCK_VOICES = [
+  { voice_id: 'voice-anna', name: 'Anna', labels: { gender: 'female' } },
+  { voice_id: 'voice-bao', name: 'Bao', labels: { gender: 'male' } },
+]
 
 export interface RecordedRequest {
   method: string
@@ -43,6 +77,7 @@ export async function startMockAi(): Promise<{
   close(): Promise<void>
 }> {
   const requests: RecordedRequest[] = []
+  const mp3 = speechMp3()
   const server: Server = createServer((req, res) => {
     const chunks: Buffer[] = []
     req.on('data', (c: Buffer) => chunks.push(c))
@@ -57,6 +92,12 @@ export async function startMockAi(): Promise<{
       if (path === '/v1/user') return json(200, { subscription: {} })
       if (path === '/v1/models')
         return json(200, { data: [], has_more: false, first_id: null, last_id: null })
+      if (path === '/v1/voices') return json(200, { voices: MOCK_VOICES })
+      if (path.startsWith('/v1/text-to-speech/')) {
+        if (!req.headers['xi-api-key']) return json(401, { detail: { message: 'missing key' } })
+        res.writeHead(200, { 'content-type': 'audio/mpeg', 'content-length': mp3.length })
+        return res.end(mp3)
+      }
       if (path === '/v1/speech-to-text') {
         if (!req.headers['xi-api-key']) return json(401, { detail: { message: 'missing key' } })
         return json(200, {

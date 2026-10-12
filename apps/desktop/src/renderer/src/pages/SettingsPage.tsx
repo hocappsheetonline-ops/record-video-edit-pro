@@ -9,6 +9,7 @@ import {
 } from '@lumora/core'
 import { AboutCard } from '../components/AboutCard'
 import { ApiKeyCard } from '../components/ApiKeyCard'
+import { CacheCard } from '../components/CacheCard'
 import { PageHeader } from '../components/PageHeader'
 import { useAppStore } from '../store/app'
 
@@ -102,6 +103,13 @@ export function SettingsPage() {
         {SECRET_KEYS.map((key) => (
           <ApiKeyCard key={key} secretKey={key} disabled={!encryptionAvailable} />
         ))}
+      </div>
+
+      <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-muted">
+        {t('settings.storage')}
+      </h2>
+      <div className="mb-8">
+        <CacheCard />
       </div>
 
       {appInfo && (

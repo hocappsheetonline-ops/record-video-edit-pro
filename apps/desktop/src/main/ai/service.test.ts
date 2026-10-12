@@ -227,3 +227,52 @@ describe('AiService', () => {
     )
   }, 30_000)
 })
+
+describe('giọng đọc AI (meme sound)', () => {
+  let mock: Awaited<ReturnType<typeof import('../../../e2e/mock-ai').startMockAi>>
+  beforeEach(async () => {
+    const { startMockAi } = await import('../../../e2e/mock-ai')
+    mock = await startMockAi()
+    process.env.LUMORA_ELEVENLABS_BASE_URL = mock.url
+  })
+  afterEach(async () => {
+    delete process.env.LUMORA_ELEVENLABS_BASE_URL
+    await mock.close()
+  })
+
+  it('đọc câu thành file trong dự án, lưu đệm dùng chung; đọc lại không gọi API', async () => {
+    const sounds = join(dir, 'sounds')
+    const ai = new AiService({ getKey: async () => 'el-key', run: runFfmpeg, soundsDir: sounds })
+    expect(await ai.voices()).toEqual([
+      { id: 'voice-anna', name: 'Anna' },
+      { id: 'voice-bao', name: 'Bao' },
+    ])
+    const asset = await ai.speak(dir, '  Ối dồi ôi  ', 'voice-anna')
+    expect(asset.file).toMatch(/^asset-tts-[0-9a-f]{16}\.mp3$/)
+    expect(asset.name).toBe('Ối dồi ôi')
+    expect(asset.durationMs).toBeGreaterThan(600)
+    const tts = mock.requests.filter((r) => r.path.startsWith('/v1/text-to-speech/'))
+    expect(tts).toHaveLength(1)
+    expect(tts[0]!.path).toBe('/v1/text-to-speech/voice-anna')
+    expect(JSON.parse(tts[0]!.body.toString('utf8'))).toEqual({
+      text: 'Ối dồi ôi',
+      model_id: 'eleven_multilingual_v2',
+    })
+    expect(await readdir(sounds)).toHaveLength(1)
+
+    // Dự án khác, cùng câu: lấy từ bộ nhớ đệm.
+    const other = await mkdtemp(join(tmpdir(), 'lumora-ai-other-'))
+    const again = await ai.speak(other, 'Ối dồi ôi', 'voice-anna')
+    expect(again.file).toBe(asset.file)
+    expect(mock.requests.filter((r) => r.path.startsWith('/v1/text-to-speech/'))).toHaveLength(1)
+    await rm(other, { recursive: true, force: true })
+  })
+
+  it('câu rỗng, giọng lạ, thiếu key: báo lỗi', async () => {
+    const ai = new AiService({ getKey: async () => 'el-key', run: runFfmpeg })
+    await expect(ai.speak(dir, '   ', 'voice-anna')).rejects.toThrow('speech_empty')
+    await expect(ai.speak(dir, 'hi', '../x')).rejects.toThrow('voice_invalid')
+    const noKey = new AiService({ getKey: async () => undefined, run: runFfmpeg })
+    await expect(noKey.speak(dir, 'hi', 'voice-anna')).rejects.toBeInstanceOf(MissingKeyError)
+  })
+})

@@ -29,6 +29,8 @@ describe('SecretStore', () => {
     expect(await new SecretStore(file, fakeCipher()).status()).toEqual({
       elevenlabs: { state: 'missing' },
       anthropic: { state: 'missing' },
+      tenor: { state: 'missing' },
+      pixabay: { state: 'missing' },
     })
   })
 

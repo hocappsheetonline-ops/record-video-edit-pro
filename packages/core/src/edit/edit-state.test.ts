@@ -84,6 +84,21 @@ describe('edit-state', () => {
     })
   })
 
+  it('âm lượng riêng của clip được đọc và kẹp; clip cũ không có thì giữ không có', () => {
+    const parsed = parseEditState(
+      {
+        version: 1,
+        clips: [
+          { id: 'a', sourceStart: 0, sourceEnd: 4000, speed: 1, audio: { mic: 9, muted: true } },
+          { id: 'b', sourceStart: 4000, sourceEnd: 8000, speed: 1 },
+        ],
+      },
+      project,
+    )
+    expect(parsed.clips[0]!.audio).toEqual({ mic: 2, system: 1, muted: true })
+    expect(parsed.clips[1]).not.toHaveProperty('audio')
+  })
+
   it('file sai phiên bản thì dùng mặc định', () => {
     expect(parseEditState({ version: 9 }, project).clips).toHaveLength(1)
   })

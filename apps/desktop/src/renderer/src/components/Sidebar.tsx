@@ -27,7 +27,7 @@ function NavButton({
       onClick={() => setPage(page)}
       aria-current={active ? 'page' : undefined}
       aria-label={compact ? t(`nav.${page}`) : undefined}
-      title={compact ? t(`nav.${page}`) : undefined}
+      data-tooltip={compact ? t(`nav.${page}`) : undefined}
       data-testid={`nav-${page}`}
       className={`flex w-full items-center rounded-lg text-sm transition-colors ${
         compact ? 'justify-center p-2.5' : 'gap-3 px-3 py-2'

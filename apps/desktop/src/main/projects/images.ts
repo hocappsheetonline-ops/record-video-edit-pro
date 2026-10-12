@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { access, copyFile, mkdir, readFile, rename, rm, stat } from 'node:fs/promises'
 import { basename, extname, isAbsolute, join } from 'node:path'
-import type { MediaAsset, MemeItem } from '@shared/ipc'
+import type { MediaAsset, MemeItem, MemeOrigin } from '@shared/ipc'
 import { parseDurationMs, parseInputResolution } from '../ffmpeg/parse'
 import type { FfmpegRunner } from '../ffmpeg/runner'
 import { readJsonFile, writeJsonFile } from '../json-file'
@@ -121,7 +121,21 @@ export async function importImageFile(
 
 const INDEX = 'memes.json'
 
-type MemeRecord = Omit<MediaAsset, never>
+type MemeRecord = MediaAsset & { origin?: MemeOrigin }
+
+/** Tên / nguồn gốc ghi kèm khi thêm (meme tải từ kho online). */
+export interface MemeMeta {
+  name?: string
+  origin?: MemeOrigin
+}
+
+function parseOrigin(v: unknown): MemeOrigin | undefined {
+  if (typeof v !== 'object' || v === null) return undefined
+  const o = v as Record<string, unknown>
+  return (o.source === 'tenor' || o.source === 'pixabay') && typeof o.id === 'string'
+    ? { source: o.source, id: o.id }
+    : undefined
+}
 
 /**
  * Thư viện meme của riêng người dùng (lưu trong thư mục dữ liệu của app): nhập ảnh/GIF meme yêu
@@ -154,6 +168,7 @@ export class MemeLibrary {
               kind: r.kind === 'video' ? 'video' : 'image',
               durationMs: typeof r.durationMs === 'number' ? r.durationMs : 0,
               hasAudio: r.hasAudio === true,
+              ...(parseOrigin(r.origin) ? { origin: parseOrigin(r.origin) } : {}),
             },
           ]
         : [],
@@ -198,7 +213,7 @@ export class MemeLibrary {
    * Thêm ảnh / GIF / video vào thư viện (từ hộp thoại hoặc kéo thả). Đường dẫn phải là file thật,
    * đúng đuôi; file lỗi làm dừng cả lượt và báo lỗi (các file trước đó vẫn được giữ).
    */
-  async add(paths: readonly string[]): Promise<MemeItem[]> {
+  async add(paths: readonly string[], meta: readonly MemeMeta[] = []): Promise<MemeItem[]> {
     await mkdir(this.dir, { recursive: true })
     const records = await this.records()
     try {
@@ -208,7 +223,13 @@ export class MemeLibrary {
         if (!(await stat(source).catch(() => null))?.isFile()) throw new Error('image_unreadable')
         const file = `meme-${randomBytes(6).toString('hex')}.${targetExt(ext)}`
         const info = await importTo(source, join(this.dir, file), this.run)
-        records.push({ file, name: basename(source, extname(source)), ...info })
+        const m = meta[paths.indexOf(source)]
+        records.push({
+          file,
+          name: m?.name?.trim().slice(0, 80) || basename(source, extname(source)),
+          ...info,
+          ...(m?.origin ? { origin: m.origin } : {}),
+        })
       }
     } finally {
       await writeJsonFile(join(this.dir, INDEX), records)

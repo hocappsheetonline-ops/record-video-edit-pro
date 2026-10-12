@@ -62,6 +62,32 @@ export interface Clip {
   sourceEnd: number
   /** Tốc độ phát, ví dụ 2 = nhanh gấp đôi. */
   speed: number
+  /** Âm lượng riêng của clip (nhân với mức chung của dự án); không có = giữ nguyên. */
+  audio?: ClipAudio
+}
+
+export interface ClipAudio {
+  /** Hệ số âm lượng micro / âm thanh máy của riêng clip này (0..2). */
+  mic: number
+  system: number
+  /** Tắt tiếng cả clip. */
+  muted: boolean
+}
+
+export const DEFAULT_CLIP_AUDIO: ClipAudio = { mic: 1, system: 1, muted: false }
+
+/** Hệ số âm lượng của một track trong clip (0 khi tắt tiếng). */
+export function clipGain(clip: Pick<Clip, 'audio'>, kind: 'mic' | 'system'): number {
+  if (!clip.audio) return 1
+  return clip.audio.muted ? 0 : clip.audio[kind]
+}
+
+export function parseClipAudio(value: unknown): ClipAudio | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const v = value as Record<string, unknown>
+  const gain = (x: unknown) =>
+    typeof x === 'number' && Number.isFinite(x) ? Math.min(2, Math.max(0, x)) : 1
+  return { mic: gain(v.mic), system: gain(v.system), muted: v.muted === true }
 }
 
 export const MIN_CLIP_MS = 100

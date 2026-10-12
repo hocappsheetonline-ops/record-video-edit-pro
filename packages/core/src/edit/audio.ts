@@ -1,6 +1,6 @@
 import type { Project } from '../project'
 import type { AudioMix } from './edit-state'
-import { clipPositions, mediaTime, sourceSegments, type Clip } from './timeline'
+import { clipGain, clipPositions, mediaTime, sourceSegments, type Clip } from './timeline'
 
 export interface AudioPiece {
   /** Tên file trong thư mục dự án. */
@@ -36,7 +36,7 @@ export function planAudio(
       if (to <= from) continue
       for (const kind of ['mic', 'system'] as const) {
         const track = item.segment.tracks[kind]
-        const volume = mix[kind]
+        const volume = mix[kind] * clipGain(clip, kind)
         if (!track || volume <= 0) continue
         let start = from
         const media = mediaTime(item, kind, start)!

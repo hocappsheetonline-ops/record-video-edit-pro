@@ -324,9 +324,11 @@ test('nhạc nền + hiệu ứng âm thanh: thêm từ máy, xuất video có n
   await page.getByTestId('editor-canvas').click()
   await page.keyboard.press('ArrowRight')
   await page.getByTestId('lib-audio').click()
+  await page.getByTestId('audio-section-music').click()
   await page.getByTestId('add-music').click()
   await expect(page.getByTestId('timeline-audio')).toHaveCount(1)
   await expect(page.getByTestId('timeline-audio')).toContainText('Nhạc thử')
+  await page.getByTestId('audio-section-sfx').click()
   await page.getByTestId('sfx-ding').click()
   await expect(page.getByTestId('timeline-audio')).toHaveCount(2)
   // Dạng sóng của nhạc hiện trên timeline.

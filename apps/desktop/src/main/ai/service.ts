@@ -1,4 +1,5 @@
-import { readFile, rm } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { access, copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
   findFillerWords,
@@ -15,8 +16,9 @@ import {
   type Transcript,
   type TranscriptWord,
 } from '@lumora/core'
-import type { AiSummary } from '@shared/ipc'
+import type { AiSummary, AudioAsset } from '@shared/ipc'
 import { buildSpeechAudioArgs } from '../ffmpeg/args'
+import { parseDurationMs } from '../ffmpeg/parse'
 import type { FfmpegRunner } from '../ffmpeg/runner'
 import { writeJsonFile } from '../json-file'
 import type { FetchLike } from '../key-validation'
@@ -33,7 +35,7 @@ import {
   type SummaryResponse,
   type TranslateResponse,
 } from './claude'
-import { transcribeFile } from './elevenlabs'
+import { listVoices, textToSpeech, transcribeFile, type Voice } from './elevenlabs'
 
 export const AI_FILE = 'ai.json'
 
@@ -48,7 +50,12 @@ export interface AiDeps {
   getKey(key: 'elevenlabs' | 'anthropic'): Promise<string | undefined>
   run: FfmpegRunner
   fetchImpl?: FetchLike
+  /** Thư mục lưu đệm giọng đọc AI (dùng chung mọi dự án, đọc lại câu cũ không tốn credit). */
+  soundsDir?: string
 }
+
+/** Câu đọc tối đa (ký tự): meme sound / lời bình ngắn. */
+export const MAX_SPEECH_CHARS = 500
 
 function parseTranscript(value: unknown): Transcript | null {
   if (typeof value !== 'object' || value === null) return null
@@ -65,9 +72,62 @@ function parseTranscript(value: unknown): Transcript | null {
   return { language: typeof t.language === 'string' ? t.language : '', words }
 }
 
-/** Các tính năng AI: phụ đề (ElevenLabs) và biên tập, tóm tắt, dịch (Claude). */
+/** Các tính năng AI: phụ đề, giọng đọc (ElevenLabs) và biên tập, tóm tắt, dịch (Claude). */
 export class AiService {
+  private voiceCache: { at: number; voices: Voice[] } | null = null
+
   constructor(private readonly deps: AiDeps) {}
+
+  /** Giọng đọc có trong tài khoản (nhớ 1 ngày). */
+  async voices(): Promise<Voice[]> {
+    if (this.voiceCache && Date.now() - this.voiceCache.at < 24 * 3600_000)
+      return this.voiceCache.voices
+    const voices = await listVoices(await this.key('elevenlabs'), this.deps.fetchImpl)
+    this.voiceCache = { at: Date.now(), voices }
+    return voices
+  }
+
+  /**
+   * Đọc `text` bằng giọng AI rồi chép vào dự án (`asset-tts-….mp3`) để thêm vào timeline như một
+   * hiệu ứng âm thanh. Cùng câu + cùng giọng thì dùng lại file đã có, không gọi API lần nữa.
+   */
+  async speak(dir: string, text: string, voiceId: string): Promise<AudioAsset> {
+    const clean = text.trim().slice(0, MAX_SPEECH_CHARS)
+    if (!clean) throw new Error('speech_empty')
+    if (!/^[\w-]{1,64}$/.test(voiceId)) throw new Error('voice_invalid')
+    const hash = createHash('sha1').update(`${voiceId}\n${clean}`).digest('hex').slice(0, 16)
+    const file = `asset-tts-${hash}.mp3`
+    const target = join(dir, file)
+    const exists = (p: string) =>
+      access(p).then(
+        () => true,
+        () => false,
+      )
+    if (!(await exists(target))) {
+      const cached = this.deps.soundsDir ? join(this.deps.soundsDir, `tts-${hash}.mp3`) : null
+      if (cached && (await exists(cached))) await copyFile(cached, target)
+      else {
+        const audio = await textToSpeech(
+          clean,
+          voiceId,
+          await this.key('elevenlabs'),
+          this.deps.fetchImpl,
+        )
+        await writeFile(target, audio)
+        if (cached) {
+          await mkdir(this.deps.soundsDir!, { recursive: true })
+          await writeFile(cached, audio)
+        }
+      }
+    }
+    const probe = await this.deps.run(['-hide_banner', '-i', target], 30_000)
+    const durationMs = parseDurationMs(probe.stderr)
+    if (!durationMs) {
+      await rm(target, { force: true })
+      throw new Error('audio_unreadable')
+    }
+    return { file, name: clean.length > 40 ? `${clean.slice(0, 40)}…` : clean, durationMs }
+  }
 
   private async key(name: 'elevenlabs' | 'anthropic'): Promise<string> {
     const key = await this.deps.getKey(name)

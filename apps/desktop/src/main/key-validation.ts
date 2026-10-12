@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { anthropicBaseUrl, elevenLabsBaseUrl } from './ai/endpoints'
+import { pixabayBaseUrl, tenorBaseUrl } from './content/endpoints'
 import { checkKeyFormat, type KeyValidationResult, type SecretKey } from '@lumora/core'
 
 const TIMEOUT_MS = 15_000
@@ -53,14 +54,38 @@ export async function validateAnthropicKey(
   }
 }
 
-export interface Validators {
-  elevenlabs: (apiKey: string) => Promise<KeyValidationResult>
-  anthropic: (apiKey: string) => Promise<KeyValidationResult>
+/** Gọi thử một URL kho nội dung: 2xx là key dùng được; 400/401/403 là key sai. */
+async function probe(url: string, fetchImpl: FetchLike): Promise<KeyValidationResult> {
+  let response: Response
+  try {
+    response = await fetchImpl(url, { signal: AbortSignal.timeout(TIMEOUT_MS) })
+  } catch (error) {
+    return { ok: false, reason: 'network', message: errorMessage(error) }
+  }
+  if (response.ok) return { ok: true }
+  if ([400, 401, 403].includes(response.status)) return { ok: false, reason: 'invalid' }
+  return { ok: false, reason: 'unknown', message: `HTTP ${response.status}` }
 }
+
+/** Kiểm tra key Tenor (Google Cloud) bằng một lần lấy danh sách nổi bật, 1 kết quả. */
+export function validateTenorKey(apiKey: string, fetchImpl: FetchLike = fetch) {
+  const params = new URLSearchParams({ key: apiKey, client_key: 'lumora', limit: '1' })
+  return probe(`${tenorBaseUrl()}/v2/featured?${params}`, fetchImpl)
+}
+
+/** Kiểm tra key Pixabay bằng một lần tìm ảnh, 3 kết quả (mức tối thiểu của API). */
+export function validatePixabayKey(apiKey: string, fetchImpl: FetchLike = fetch) {
+  const params = new URLSearchParams({ key: apiKey, q: 'meme', per_page: '3' })
+  return probe(`${pixabayBaseUrl()}/api/?${params}`, fetchImpl)
+}
+
+export type Validators = Record<SecretKey, (apiKey: string) => Promise<KeyValidationResult>>
 
 export const defaultValidators: Validators = {
   elevenlabs: (apiKey) => validateElevenLabsKey(apiKey),
   anthropic: (apiKey) => validateAnthropicKey(apiKey),
+  tenor: (apiKey) => validateTenorKey(apiKey),
+  pixabay: (apiKey) => validatePixabayKey(apiKey),
 }
 
 export async function validateKey(

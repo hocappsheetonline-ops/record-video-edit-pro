@@ -55,3 +55,59 @@ export async function transcribeFile(
   }
   return wordsFromElevenLabs(await response.json())
 }
+
+/** Model đọc nhiều thứ tiếng (có tiếng Việt). */
+export const TTS_MODEL = 'eleven_multilingual_v2'
+
+export interface Voice {
+  id: string
+  name: string
+}
+
+async function elevenLabsError(response: Response): Promise<AiServiceError> {
+  const body = await response.text().catch(() => '')
+  const detail = /"message"\s*:\s*"([^"]+)"/.exec(body)?.[1] ?? body.slice(0, 200)
+  return new AiServiceError(
+    'elevenlabs',
+    response.status,
+    `ElevenLabs ${response.status}: ${detail}`,
+  )
+}
+
+/** Danh sách giọng đọc trong tài khoản ElevenLabs (gồm cả giọng có sẵn). */
+export async function listVoices(apiKey: string, fetchImpl: FetchLike = fetch): Promise<Voice[]> {
+  const response = await fetchImpl(`${elevenLabsBaseUrl()}/v1/voices`, {
+    headers: { 'xi-api-key': apiKey },
+    signal: AbortSignal.timeout(20_000),
+  })
+  if (!response.ok) throw await elevenLabsError(response)
+  const data = (await response.json()) as { voices?: unknown }
+  const voices = Array.isArray(data.voices) ? data.voices : []
+  return voices.flatMap((v): Voice[] => {
+    if (typeof v !== 'object' || v === null) return []
+    const { voice_id: id, name } = v as Record<string, unknown>
+    return typeof id === 'string' && /^[\w-]+$/.test(id) && typeof name === 'string'
+      ? [{ id, name }]
+      : []
+  })
+}
+
+/** Đọc một câu thành MP3 bằng giọng `voiceId`. */
+export async function textToSpeech(
+  text: string,
+  voiceId: string,
+  apiKey: string,
+  fetchImpl: FetchLike = fetch,
+): Promise<Buffer> {
+  const response = await fetchImpl(
+    `${elevenLabsBaseUrl()}/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`,
+    {
+      method: 'POST',
+      headers: { 'xi-api-key': apiKey, 'content-type': 'application/json', accept: 'audio/mpeg' },
+      body: JSON.stringify({ text, model_id: TTS_MODEL }),
+      signal: AbortSignal.timeout(60_000),
+    },
+  )
+  if (!response.ok) throw await elevenLabsError(response)
+  return Buffer.from(await response.arrayBuffer())
+}

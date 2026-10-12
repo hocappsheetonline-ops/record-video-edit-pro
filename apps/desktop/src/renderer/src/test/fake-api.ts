@@ -6,6 +6,7 @@ import {
   type LiveComment,
   type Project,
   type SecretKey,
+  SECRET_KEYS,
 } from '@lumora/core'
 import type {
   CaptureSources,
@@ -132,14 +133,13 @@ export function createFakeApi(
     facebookToken: secretNames.has('facebook-token'),
   })
   const finishedListeners = new Set<(folder: string) => void>()
-  const status = (): SecretsStatus => ({
-    elevenlabs: secrets.elevenlabs
-      ? { state: 'saved', masked: maskSecret(secrets.elevenlabs) }
-      : { state: 'missing' },
-    anthropic: secrets.anthropic
-      ? { state: 'saved', masked: maskSecret(secrets.anthropic) }
-      : { state: 'missing' },
-  })
+  const status = (): SecretsStatus =>
+    Object.fromEntries(
+      SECRET_KEYS.map((key) => [
+        key,
+        secrets[key] ? { state: 'saved', masked: maskSecret(secrets[key]) } : { state: 'missing' },
+      ]),
+    ) as SecretsStatus
   const api = {
     getAppInfo: async () => ({
       name: 'Lumora',
@@ -315,6 +315,49 @@ export function createFakeApi(
         { start: 5500, title: 'Phần 2' },
       ],
     })),
+    listVoices: vi.fn<LumoraApi['listVoices']>(async () => [
+      { id: 'voice-anna', name: 'Anna' },
+      { id: 'voice-bao', name: 'Bao' },
+    ]),
+    speak: vi.fn<LumoraApi['speak']>(async (_folder, text) => ({
+      file: 'asset-tts-1.mp3',
+      name: text,
+      durationMs: 900,
+    })),
+    onlineSearch: vi.fn<LumoraApi['onlineSearch']>(async (source, q, next) => ({
+      items: Array.from({ length: next ? 1 : 2 }, (_, i) => ({
+        id: `${next ? 'p2-' : ''}${i}`,
+        source: source.startsWith('tenor') ? ('tenor' as const) : ('pixabay' as const),
+        kind:
+          source === 'tenorSticker'
+            ? ('sticker' as const)
+            : source === 'pixabayImage'
+              ? ('image' as const)
+              : ('video' as const),
+        title: `${q || 'hot'} ${i + 1}`,
+        thumbUrl: `https://media.example/${i}.gif`,
+        previewUrl: `https://media.example/${i}.mp4`,
+        downloadUrl: `https://media.example/${i}-full.mp4`,
+        width: 320,
+        height: 180,
+        durationMs: 2000,
+      })),
+      next: next ? null : '2',
+      attribution: source.startsWith('tenor') ? 'Powered by Tenor' : 'Video từ Pixabay',
+    })),
+    onlineDownload: vi.fn<LumoraApi['onlineDownload']>(async (source, id) => ({
+      file: `meme-dl-${id}.mp4`,
+      name: `dl ${id}`,
+      width: 320,
+      height: 180,
+      kind: 'video',
+      durationMs: 2000,
+      hasAudio: true,
+      thumb: 'data:image/jpeg;base64,',
+      origin: { source, id },
+    })),
+    cacheInfo: vi.fn<LumoraApi['cacheInfo']>(async () => 5 * 1024 * 1024),
+    cacheClear: vi.fn<LumoraApi['cacheClear']>(async () => 0),
     translateLines: vi.fn<LumoraApi['translateLines']>(async (lines) =>
       lines.map((l) => ({ id: l.id, text: `EN: ${l.text}` })),
     ),

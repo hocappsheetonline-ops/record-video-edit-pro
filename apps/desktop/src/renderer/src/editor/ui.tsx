@@ -1,4 +1,6 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
+import { RotateCcw } from 'lucide-react'
 
 /** Bộ điều khiển dùng chung cho các bảng của trình chỉnh sửa (kiểu phần mềm dựng phim). */
 
@@ -30,6 +32,94 @@ export function Section({
   )
 }
 
+/**
+ * Ô số cạnh thanh trượt: hiện giá trị đã định dạng; bấm vào để gõ số (Enter / rời ô để áp dụng,
+ * Esc để bỏ, mũi tên lên / xuống để tăng giảm, giữ Shift để bước lớn).
+ */
+function NumberField({
+  value,
+  min,
+  max,
+  step,
+  display,
+  scale,
+  onChange,
+  label,
+  testId,
+}: {
+  value: number
+  min: number
+  max: number
+  step: number
+  display: string
+  /** Giá trị hiện = giá trị thật × scale (vd. 100 cho phần trăm); null = chỉ xem. */
+  scale: number | null
+  onChange: (v: number) => void
+  label: string
+  testId?: string
+}) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const clamp = (v: number) => {
+    const snapped = Math.round((v - min) / step) * step + min
+    return Math.min(max, Math.max(min, Number(snapped.toFixed(6))))
+  }
+  if (scale === null)
+    return (
+      <span className="rounded bg-surface-2 px-1.5 py-0.5 font-mono tabular-nums text-text">
+        {display}
+      </span>
+    )
+  const shown = Number((value * scale).toFixed(3))
+  const commit = () => {
+    if (draft === null) return
+    const n = Number(draft.replace(',', '.').replace(/[^\d.+-]/g, ''))
+    if (draft.trim() !== '' && Number.isFinite(n)) onChange(clamp(n / scale))
+    setDraft(null)
+  }
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      aria-label={label}
+      data-testid={testId ? `${testId}-input` : undefined}
+      value={draft ?? display}
+      onFocus={(e) => {
+        setDraft(String(shown))
+        requestAnimationFrame(() => e.target.select())
+      }}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault()
+          commit()
+          ;(e.target as HTMLInputElement).blur()
+        } else if (e.key === 'Escape') {
+          e.preventDefault()
+          setDraft(null)
+          ;(e.target as HTMLInputElement).blur()
+        } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+          e.preventDefault()
+          const next = clamp(value + (e.key === 'ArrowUp' ? 1 : -1) * step * (e.shiftKey ? 10 : 1))
+          onChange(next)
+          setDraft(String(Number((next * scale).toFixed(3))))
+        }
+      }}
+      className="w-16 rounded bg-surface-2 px-1.5 py-0.5 text-right font-mono tabular-nums text-text outline-none focus:ring-1 focus:ring-accent"
+    />
+  )
+}
+
+/** Đoán cách đổi giữa giá trị thật và số hiện ra (phần trăm, giây, hoặc giữ nguyên). */
+function displayScale(value: number, display: string): number | null {
+  const n = Number(/-?\d+(?:[.,]\d+)?/.exec(display)?.[0]?.replace(',', '.'))
+  if (!Number.isFinite(n)) return null
+  if (Math.abs(n - value) < 1e-6) return 1
+  if (Math.abs(n - value * 100) < 0.6) return 100
+  if (Math.abs(n - value / 1000) < 0.06) return 0.001
+  return null
+}
+
 export function SliderRow(props: {
   label: string
   value: number
@@ -41,13 +131,41 @@ export function SliderRow(props: {
   testId?: string
   /** Chữ ở hai đầu thanh trượt, ví dụ "Chậm" — "Nhanh". */
   ends?: [string, string]
+  /** Giá trị mặc định: khác mặc định thì hiện nút đặt lại. */
+  defaultValue?: number
 }) {
+  const { t } = useTranslation()
+  const display = props.format ? props.format(props.value) : String(props.value)
+  const changed =
+    props.defaultValue !== undefined && Math.abs(props.value - props.defaultValue) > 1e-9
   return (
-    <label className="flex flex-col gap-1.5 text-xs">
+    <div className="flex flex-col gap-1.5 text-xs">
       <span className="flex items-center justify-between gap-2">
         <span className="text-muted">{props.label}</span>
-        <span className="rounded bg-surface-2 px-1.5 py-0.5 font-mono tabular-nums text-text">
-          {props.format ? props.format(props.value) : props.value}
+        <span className="flex items-center gap-1">
+          {changed && (
+            <button
+              type="button"
+              aria-label={t('editor.props.reset')}
+              data-tooltip={t('editor.props.reset')}
+              data-testid={props.testId ? `${props.testId}-reset` : undefined}
+              onClick={() => props.onChange(props.defaultValue!)}
+              className="rounded p-0.5 text-muted hover:bg-surface-2 hover:text-text"
+            >
+              <RotateCcw size={12} aria-hidden />
+            </button>
+          )}
+          <NumberField
+            value={props.value}
+            min={props.min}
+            max={props.max}
+            step={props.step}
+            display={display}
+            scale={displayScale(props.value, display)}
+            onChange={props.onChange}
+            label={props.label}
+            testId={props.testId}
+          />
         </span>
       </span>
       <input
@@ -67,7 +185,7 @@ export function SliderRow(props: {
           <span>{props.ends[1]}</span>
         </span>
       )}
-    </label>
+    </div>
   )
 }
 
@@ -149,7 +267,8 @@ export function Segmented<T extends string | number>({
             type="button"
             role="radio"
             aria-checked={value === o.value}
-            title={o.title}
+            data-tooltip={o.title}
+            aria-label={o.title}
             data-testid={testIdPrefix ? `${testIdPrefix}${o.value}` : undefined}
             onClick={() => onChange(o.value)}
             className={`flex min-w-0 items-center justify-center gap-1 truncate rounded-md px-2 py-1.5 transition-colors ${

@@ -128,7 +128,8 @@ function PlayerBar({ onFullscreen }: { onFullscreen: () => void }) {
           type="button"
           className={iconButton}
           aria-label={t('editor.player.start')}
-          title={`${t('editor.player.start')} (Home)`}
+          data-tooltip={t('editor.player.start')}
+          data-shortcut="Home"
           onClick={() => s.setTime(0)}
         >
           <SkipBack size={16} aria-hidden />
@@ -137,7 +138,8 @@ function PlayerBar({ onFullscreen }: { onFullscreen: () => void }) {
           type="button"
           className={iconButton}
           aria-label={t('editor.player.prevFrame')}
-          title={t('editor.player.prevFrame')}
+          data-tooltip={t('editor.player.prevFrame')}
+          data-shortcut="←"
           onClick={() => {
             s.setPlaying(false)
             s.setTime(time - frame)
@@ -150,7 +152,8 @@ function PlayerBar({ onFullscreen }: { onFullscreen: () => void }) {
           onClick={() => s.setPlaying(!playing)}
           data-testid="play"
           aria-label={playing ? t('editor.pause') : t('editor.play')}
-          title={`${playing ? t('editor.pause') : t('editor.play')} (Space)`}
+          data-tooltip={playing ? t('editor.pause') : t('editor.play')}
+          data-shortcut="Space"
           className="mx-1 flex size-9 items-center justify-center rounded-full bg-text text-bg hover:scale-105"
         >
           {playing ? (
@@ -163,7 +166,8 @@ function PlayerBar({ onFullscreen }: { onFullscreen: () => void }) {
           type="button"
           className={iconButton}
           aria-label={t('editor.player.nextFrame')}
-          title={t('editor.player.nextFrame')}
+          data-tooltip={t('editor.player.nextFrame')}
+          data-shortcut="→"
           onClick={() => {
             s.setPlaying(false)
             s.setTime(time + frame)
@@ -175,7 +179,8 @@ function PlayerBar({ onFullscreen }: { onFullscreen: () => void }) {
           type="button"
           className={iconButton}
           aria-label={t('editor.player.end')}
-          title={`${t('editor.player.end')} (End)`}
+          data-tooltip={t('editor.player.end')}
+          data-shortcut="End"
           onClick={() => s.setTime(duration)}
         >
           <SkipForward size={16} aria-hidden />
@@ -208,7 +213,7 @@ function PlayerBar({ onFullscreen }: { onFullscreen: () => void }) {
           type="button"
           className={iconButton}
           aria-label={t('editor.player.fullscreen')}
-          title={t('editor.player.fullscreen')}
+          data-tooltip={t('editor.player.fullscreen')}
           onClick={onFullscreen}
         >
           <Maximize2 size={15} aria-hidden />

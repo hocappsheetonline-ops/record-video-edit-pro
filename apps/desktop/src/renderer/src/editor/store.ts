@@ -96,6 +96,8 @@ interface EditorStore {
   addMusic(): Promise<boolean>
   /** Thêm hiệu ứng âm thanh có sẵn tại đầu phát. */
   addSoundEffect(id: SoundEffectId): Promise<void>
+  /** Đọc câu bằng giọng AI rồi thêm tại đầu phát như một hiệu ứng âm thanh. */
+  addSpeech(text: string, voiceId: string): Promise<void>
   updateAudioClip(id: string, patch: Partial<AudioClip>, coalesce?: string): void
   loadAssetPeaks(file: string): void
   requestTab(tab: string): void
@@ -360,6 +362,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const { folder } = get()
     if (!folder) return
     insertAudio(await lumora().addSoundEffect(folder, id), 'sfx')
+  },
+
+  async addSpeech(text, voiceId) {
+    const { folder } = get()
+    if (!folder) return
+    insertAudio(await lumora().speak(folder, text, voiceId), 'sfx')
   },
 
   updateAudioClip(id, patch, coalesce) {

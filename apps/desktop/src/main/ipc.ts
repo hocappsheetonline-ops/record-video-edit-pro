@@ -23,6 +23,8 @@ import {
   type CaptureSources,
   type RecorderCapabilities,
   type SegmentStart,
+  ONLINE_SOURCES,
+  type OnlineSource,
 } from '@shared/ipc'
 import { validateKey, type Validators } from './key-validation'
 import { mkdir, writeFile } from 'node:fs/promises'
@@ -41,6 +43,7 @@ import {
 } from './projects/library'
 import { exportPack, importPack, packFileName } from './projects/share'
 import type { SecretStore } from './secret-store'
+import type { OnlineService } from './content/online'
 import type { UpdateService } from './updater'
 import type { SettingsStore } from './settings-store'
 
@@ -95,7 +98,12 @@ export interface IpcDeps {
   recording: RecordingIpc
   projects: ProjectsIpc
   exports: Pick<ExportManager, 'start' | 'write' | 'finish' | 'cancel'>
-  ai: Pick<AiService, 'transcribe' | 'getTranscript' | 'suggestCuts' | 'summarize' | 'translate'>
+  ai: Pick<
+    AiService,
+    'transcribe' | 'getTranscript' | 'suggestCuts' | 'summarize' | 'translate' | 'voices' | 'speak'
+  >
+  online: Pick<OnlineService, 'search' | 'download'>
+  cache: { size(): Promise<number>; clear(): Promise<void> }
   live: Pick<
     LiveController,
     | 'getConfig'
@@ -360,6 +368,28 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
   ipcMain.handle(IPC.aiSummarize, async (_event, folder: unknown) =>
     deps.ai.summarize((await projectPath(folder)).path),
   )
+  ipcMain.handle(IPC.aiVoices, () => deps.ai.voices())
+  ipcMain.handle(IPC.aiSpeak, async (_event, folder: unknown, text: unknown, voice: unknown) => {
+    if (typeof text !== 'string' || typeof voice !== 'string') throw new Error('speech_empty')
+    return deps.ai.speak((await projectPath(folder)).path, text, voice)
+  })
+  ipcMain.handle(IPC.onlineSearch, (_event, source: unknown, q: unknown, next: unknown) => {
+    if (!ONLINE_SOURCES.includes(source as OnlineSource)) throw new Error('online_unknown')
+    if (typeof q !== 'string' || q.length > 100) throw new Error('online_query')
+    if (next !== null && (typeof next !== 'string' || next.length > 200))
+      throw new Error('online_query')
+    return deps.online.search(source as OnlineSource, q, next)
+  })
+  ipcMain.handle(IPC.onlineDownload, (_event, source: unknown, id: unknown) => {
+    if ((source !== 'tenor' && source !== 'pixabay') || typeof id !== 'string' || id.length > 100)
+      throw new Error('online_unknown')
+    return deps.online.download(source, id)
+  })
+  ipcMain.handle(IPC.cacheInfo, () => deps.cache.size())
+  ipcMain.handle(IPC.cacheClear, async () => {
+    await deps.cache.clear()
+    return deps.cache.size()
+  })
   ipcMain.handle(IPC.aiTranslate, (_event, lines: unknown, target: unknown) => {
     if (!Array.isArray(lines) || typeof target !== 'string')
       throw new Error('Dữ liệu dịch không hợp lệ')

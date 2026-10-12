@@ -1,6 +1,7 @@
 import {
   audioClipGain,
   audioClipMediaTime,
+  clipGain,
   mediaTime,
   outputDuration,
   outputToSource,
@@ -130,8 +131,9 @@ export class PreviewEngine {
         if (!el.paused) el.pause()
         continue
       }
-      if (kind === 'mic') el.volume = Math.min(1, edit.audio.mic)
-      if (kind === 'system') el.volume = Math.min(1, edit.audio.system)
+      // Âm lượng chung × âm lượng riêng của clip (tắt tiếng clip = 0).
+      if (kind === 'mic' || kind === 'system')
+        el.volume = Math.min(1, edit.audio[kind] * clipGain(hit!.position.clip, kind))
       const speed = hit!.position.clip.speed
       if (el.playbackRate !== speed) el.playbackRate = speed
       const drift = Math.abs(el.currentTime - target)

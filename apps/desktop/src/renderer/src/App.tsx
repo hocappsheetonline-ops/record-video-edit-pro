@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { accentForeground, type Theme } from '@lumora/core'
 import { Sidebar } from './components/Sidebar'
+import { TooltipLayer } from './components/TooltipLayer'
 import { UpdateBanner } from './components/UpdateBanner'
 import { EditorPage } from './pages/EditorPage'
 import { LivePage } from './pages/LivePage'
@@ -57,6 +58,7 @@ export function App() {
           {page === 'settings' && <SettingsPage />}
         </main>
       </div>
+      <TooltipLayer />
     </div>
   )
 }

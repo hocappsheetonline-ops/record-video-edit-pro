@@ -82,6 +82,55 @@ export const SOUND_EFFECTS: Record<SoundEffectId, { source: string; filter?: str
     filter:
       'bandpass=f=2500:width_type=o:w=2,tremolo=f=11:d=0.7,volume=4,afade=t=in:d=0.3,afade=t=out:st=2.2:d=0.8',
   },
+  // "Bùm" trầm kiểu Vine: sóng sin hạ tần nhanh, vang nhẹ.
+  vineBoom: {
+    source:
+      'aevalsrc=0.9*sin(2*PI*(48+90*exp(-14*t))*t)*exp(-3.2*t)+0.35*sin(2*PI*96*t)*exp(-6*t):s=44100:d=1.4',
+    filter: 'aecho=0.6:0.5:40:0.3,alimiter=limit=0.95',
+  },
+  failBuzzer: {
+    source: 'aevalsrc=0.35*(sgn(sin(2*PI*150*t))+0.5*sgn(sin(2*PI*153*t))):s=44100:d=0.8',
+    filter: 'lowpass=f=2500,afade=t=out:st=0.65:d=0.15',
+  },
+  recordScratch: {
+    source:
+      'aevalsrc=0.5*sin(2*PI*(300+900*abs(sin(2*PI*2.5*t)))*t)*(0.6+0.4*random(0))*exp(-1.5*t):s=44100:d=0.7',
+    filter: 'highpass=f=200,afade=t=out:st=0.5:d=0.2',
+  },
+  // Còi hơi: ba sóng răng cưa (hợp âm) cắt bớt tần số cao.
+  airhorn: {
+    source:
+      'aevalsrc=0.25*(2*(mod(392*t\\,1))-1)+0.2*(2*(mod(440*t\\,1))-1)+0.15*(2*(mod(587*t\\,1))-1):s=44100:d=1.3',
+    filter: 'lowpass=f=3500,afade=t=in:d=0.03,afade=t=out:st=1.05:d=0.25',
+  },
+  drumroll: {
+    source:
+      'aevalsrc=(0.2+0.5*t/2)*exp(-60*mod(t\\,0.06))*sin(2*PI*180*t)+0.15*(random(0)-0.5)*exp(-60*mod(t\\,0.06)):s=44100:d=2',
+    filter: 'aecho=0.5:0.4:20:0.3,volume=2.5',
+  },
+  cashRegister: {
+    source:
+      'aevalsrc=0.5*sin(2*PI*2093*t)*exp(-4*t)*gt(t\\,0.12)+0.4*sin(2*PI*2637*t)*exp(-4*(t-0.12))*gt(t\\,0.12)+0.6*(random(0)-0.5)*exp(-80*t):s=44100:d=1.2',
+  },
+  // Tiếng dế "im lặng đến khó xử".
+  crickets: {
+    source:
+      'aevalsrc=0.3*sin(2*PI*4200*t)*gt(sin(2*PI*30*t)\\,0.2)*gt(sin(2*PI*1.6*t)\\,0):s=44100:d=2.4',
+    filter: 'afade=t=in:d=0.2,afade=t=out:st=2:d=0.4',
+  },
+  boing: {
+    source:
+      'aevalsrc=0.6*sin(2*PI*(300+500*sin(PI*t/0.8))*t)*exp(-2.5*t)*(1+0.5*sin(2*PI*14*t)):s=44100:d=0.9',
+  },
+  swooshUp: {
+    source: 'anoisesrc=d=0.7:c=white:a=0.6:r=44100',
+    filter: 'highpass=f=600,lowpass=f=6000,afade=t=in:d=0.5:curve=exp,afade=t=out:st=0.5:d=0.2',
+  },
+  heartbeat: {
+    source:
+      'aevalsrc=0.9*sin(2*PI*55*t)*(exp(-25*mod(t\\,0.8))+0.7*exp(-25*mod(t-0.22\\,0.8))*gt(mod(t\\,0.8)\\,0.22)):s=44100:d=1.6',
+    filter: 'lowpass=f=200',
+  },
 }
 
 export { SOUND_EFFECT_IDS }

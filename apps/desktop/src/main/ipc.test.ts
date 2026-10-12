@@ -54,6 +54,8 @@ beforeEach(async () => {
   validators = {
     elevenlabs: vi.fn<Validators['elevenlabs']>(async () => ({ ok: true })),
     anthropic: vi.fn<Validators['anthropic']>(async () => ({ ok: true })),
+    tenor: vi.fn<Validators['tenor']>(async () => ({ ok: true })),
+    pixabay: vi.fn<Validators['pixabay']>(async () => ({ ok: true })),
   }
   registerIpc(
     {
@@ -84,7 +86,27 @@ beforeEach(async () => {
         suggestCuts: vi.fn(async () => []),
         summarize: vi.fn(async () => ({ titles: [], description: '', hashtags: [], chapters: [] })),
         translate: vi.fn(async (lines: { id: string; text: string }[]) => lines),
+        voices: vi.fn(async () => [{ id: 'v1', name: 'Anna' }]),
+        speak: vi.fn(async (_dir: string, text: string) => ({
+          file: 'asset-tts-x.mp3',
+          name: text,
+          durationMs: 800,
+        })),
       },
+      online: {
+        search: vi.fn(async () => ({ items: [], next: null, attribution: 'Powered by Tenor' })),
+        download: vi.fn(async (_source: string, id: string) => ({
+          file: `meme-${id}.mp4`,
+          name: id,
+          width: 1,
+          height: 1,
+          kind: 'video' as const,
+          durationMs: 1000,
+          hasAudio: false,
+          thumb: '',
+        })),
+      },
+      cache: { size: vi.fn(async () => 1234), clear: vi.fn(async () => {}) },
       exports: {
         start: vi.fn(async () => 'e1'),
         write: vi.fn(async () => {}),
@@ -292,5 +314,39 @@ describe('registerIpc', () => {
     await expect(call(IPC.saveExportText, 'a.lumora', 'virus.exe', 'x')).rejects.toThrow(
       /không được phép/,
     )
+  })
+
+  it('kho online: chỉ nhận nguồn đã biết, từ khóa ngắn; tải theo mã; bộ nhớ đệm', async () => {
+    expect(await call(IPC.onlineSearch, 'tenor', 'bruh', null)).toMatchObject({ items: [] })
+    await expect(call(IPC.onlineSearch, 'giphy', 'x', null)).rejects.toThrow('online_unknown')
+    await expect(call(IPC.onlineSearch, 'tenor', 'x'.repeat(101), null)).rejects.toThrow(
+      'online_query',
+    )
+    await expect(call(IPC.onlineSearch, 'tenor', 'x', 5)).rejects.toThrow('online_query')
+    expect(await call(IPC.onlineDownload, 'pixabay', '42')).toMatchObject({ file: 'meme-42.mp4' })
+    await expect(call(IPC.onlineDownload, 'http://evil', '42')).rejects.toThrow('online_unknown')
+    expect(await call(IPC.cacheInfo)).toBe(1234)
+    expect(await call(IPC.cacheClear)).toBe(1234)
+  })
+
+  it('giọng đọc AI: danh sách giọng, đọc câu vào dự án hợp lệ', async () => {
+    const { mkdir: mk, writeFile: wf } = await import('node:fs/promises')
+    await mk(join(dir, 'a.lumora'))
+    await wf(
+      join(dir, 'a.lumora', 'project.json'),
+      JSON.stringify({
+        version: 1,
+        id: 'a',
+        name: 'A',
+        createdAt: 'x',
+        source: { kind: 'display' },
+        engine: 'ffmpeg',
+        segments: [],
+      }),
+    )
+    expect(await call(IPC.aiVoices)).toEqual([{ id: 'v1', name: 'Anna' }])
+    expect(await call(IPC.aiSpeak, 'a.lumora', 'Bruh', 'v1')).toMatchObject({ name: 'Bruh' })
+    await expect(call(IPC.aiSpeak, 'a.lumora', 5, 'v1')).rejects.toThrow('speech_empty')
+    await expect(call(IPC.aiSpeak, '../a', 'x', 'v1')).rejects.toThrow()
   })
 })

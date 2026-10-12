@@ -108,4 +108,20 @@ describe('planAudio', () => {
       },
     ])
   })
+
+  it('âm lượng riêng của clip: nhân với mức chung; tắt tiếng thì bỏ cả clip', () => {
+    const clip = { id: 'a', sourceStart: 1000, sourceEnd: 3000, speed: 1 }
+    const louder = planAudio(
+      { segments },
+      [{ ...clip, audio: { mic: 1.5, system: 0, muted: false } }],
+      { mic: 0.8, system: 1 },
+    )
+    expect(louder.map((p) => [p.kind, p.volume])).toEqual([['mic', 1.2000000000000002]])
+    expect(
+      planAudio({ segments }, [{ ...clip, audio: { mic: 1, system: 1, muted: true } }], {
+        mic: 1,
+        system: 1,
+      }),
+    ).toEqual([])
+  })
 })

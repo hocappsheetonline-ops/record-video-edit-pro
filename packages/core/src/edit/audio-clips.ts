@@ -37,6 +37,17 @@ export const SOUND_EFFECT_IDS = [
   'bleep',
   'shutter',
   'applause',
+  // Âm thanh meme (tự tổng hợp).
+  'vineBoom',
+  'failBuzzer',
+  'recordScratch',
+  'airhorn',
+  'drumroll',
+  'cashRegister',
+  'crickets',
+  'boing',
+  'swooshUp',
+  'heartbeat',
 ] as const
 export type SoundEffectId = (typeof SOUND_EFFECT_IDS)[number]
 

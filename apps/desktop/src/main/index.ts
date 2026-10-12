@@ -24,6 +24,8 @@ import { handleMediaRequest, MEDIA_SCHEME } from './projects/media-protocol'
 import { assetPeaks, AUDIO_EXTENSIONS, createSoundEffect, importAudioFile } from './projects/assets'
 import { loadFilmstrip } from './projects/filmstrip'
 import { importImageFile, MEDIA_EXTENSIONS, MemeLibrary } from './projects/images'
+import { clearDirs, dirSize } from './content/cache'
+import { OnlineService } from './content/online'
 import { PACK_EXTENSION } from './projects/share'
 import { loadWaveform } from './projects/waveform'
 import { RecordingController } from './recording/controller'
@@ -159,6 +161,12 @@ if (!app.requestSingleInstanceLock()) {
       return r.canceled ? [] : r.filePaths
     }
     const memes = new MemeLibrary(join(userData, 'memes'), runFfmpeg)
+    const cacheDirs = [join(userData, 'cache'), join(userData, 'sounds')]
+    const online = new OnlineService({
+      getKey: (name) => secrets.get(name),
+      library: memes,
+      tmpDir: join(userData, 'cache'),
+    })
 
     registerIpc(loggingIpc(ipcMain, logger), {
       memes: {
@@ -178,7 +186,13 @@ if (!app.requestSingleInstanceLock()) {
       settings,
       secrets,
       live,
-      ai: new AiService({ getKey: (key) => secrets.get(key), run: runFfmpeg }),
+      ai: new AiService({
+        getKey: (key) => secrets.get(key),
+        run: runFfmpeg,
+        soundsDir: join(userData, 'sounds'),
+      }),
+      online,
+      cache: { size: () => dirSize(cacheDirs), clear: () => clearDirs(cacheDirs) },
       recording,
       exports: new ExportManager(runFfmpeg),
       projects: {

@@ -68,6 +68,12 @@ export const IPC = {
   aiSuggestCuts: 'ai:suggest-cuts',
   aiSummarize: 'ai:summarize',
   aiTranslate: 'ai:translate',
+  aiVoices: 'ai:voices',
+  aiSpeak: 'ai:speak',
+  onlineSearch: 'online:search',
+  onlineDownload: 'online:download',
+  cacheInfo: 'cache:info',
+  cacheClear: 'cache:clear',
   saveExportText: 'export:save-text',
   liveGetConfig: 'live:get-config',
   liveUpdateConfig: 'live:update-config',
@@ -249,6 +255,33 @@ export interface AudioAsset {
   durationMs: number
 }
 
+/** Nguồn tìm trên kho online: meme Tenor, sticker Tenor, video / ảnh Pixabay. */
+export const ONLINE_SOURCES = ['tenor', 'tenorSticker', 'pixabayVideo', 'pixabayImage'] as const
+export type OnlineSource = (typeof ONLINE_SOURCES)[number]
+
+/** Một kết quả tìm kiếm trên kho online (URL đều là của máy chủ kho, không chứa key). */
+export interface OnlineItem {
+  id: string
+  source: 'tenor' | 'pixabay'
+  kind: 'gif' | 'video' | 'image' | 'sticker'
+  title: string
+  thumbUrl: string
+  /** Bản nhỏ để phát thử khi rê chuột. */
+  previewUrl: string
+  downloadUrl: string
+  width: number
+  height: number
+  durationMs: number
+}
+
+export interface OnlineSearch {
+  items: OnlineItem[]
+  /** Mã trang tiếp theo (null khi hết). */
+  next: string | null
+  /** Dòng ghi nguồn bắt buộc hiện dưới kết quả. */
+  attribution: string
+}
+
 /** Ảnh / GIF / video meme đã chép vào dự án hoặc thư viện. */
 export interface MediaAsset {
   file: string
@@ -261,9 +294,16 @@ export interface MediaAsset {
   hasAudio: boolean
 }
 
+/** Nguồn gốc của meme tải từ kho online (để không tải lại và ghi nguồn). */
+export interface MemeOrigin {
+  source: 'tenor' | 'pixabay'
+  id: string
+}
+
 export interface MemeItem extends MediaAsset {
   /** Ảnh thu nhỏ (data URL). */
   thumb: string
+  origin?: MemeOrigin
 }
 
 export type Unsubscribe = () => void
@@ -349,6 +389,17 @@ export interface LumoraApi {
   getTranscript(folder: string): Promise<Transcript | null>
   suggestCuts(folder: string): Promise<CutSuggestion[]>
   summarize(folder: string): Promise<AiSummary>
+  /** Giọng đọc AI có trong tài khoản ElevenLabs. */
+  listVoices(): Promise<{ id: string; name: string }[]>
+  /** Đọc câu bằng giọng AI và chép vào dự án (meme sound, lời bình). */
+  speak(folder: string, text: string, voiceId: string): Promise<AudioAsset>
+  /** Tìm trên kho online (Tenor, Pixabay). */
+  onlineSearch(source: OnlineSource, q: string, next: string | null): Promise<OnlineSearch>
+  /** Tải một kết quả vừa tìm được vào thư viện meme. */
+  onlineDownload(source: 'tenor' | 'pixabay', id: string): Promise<MemeItem>
+  /** Dung lượng bộ nhớ đệm (byte). */
+  cacheInfo(): Promise<number>
+  cacheClear(): Promise<number>
   translateLines(
     lines: { id: string; text: string }[],
     target: string,

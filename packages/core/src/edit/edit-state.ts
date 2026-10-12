@@ -19,7 +19,7 @@ import {
   type Corner,
   type Resolution,
 } from './layout'
-import { initialClips, MIN_CLIP_MS, sourceDuration, type Clip } from './timeline'
+import { initialClips, MIN_CLIP_MS, sourceDuration, type Clip, parseClipAudio } from './timeline'
 import { normalizeZooms, type ZoomRegion } from './zoom'
 
 export const EDIT_FILE = 'edit.json'
@@ -264,6 +264,7 @@ export function parseEditState(
             sourceStart: start,
             sourceEnd: end,
             speed: num(c.speed, 1, 0.25, 16),
+            ...(c.audio === undefined ? {} : { audio: parseClipAudio(c.audio) }),
           },
         ]
       })

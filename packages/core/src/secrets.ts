@@ -1,4 +1,5 @@
-export const SECRET_KEYS = ['elevenlabs', 'anthropic'] as const
+/** API key người dùng tự nhập: AI (ElevenLabs, Claude) và kho nội dung (Tenor, Pixabay). */
+export const SECRET_KEYS = ['elevenlabs', 'anthropic', 'tenor', 'pixabay'] as const
 export type SecretKey = (typeof SECRET_KEYS)[number]
 
 export function isSecretKey(value: unknown): value is SecretKey {
@@ -20,6 +21,8 @@ export function checkKeyFormat(key: SecretKey, secret: string): KeyFormatError |
   if (/\s/.test(secret)) return 'whitespace'
   if (secret.length < 20) return 'too_short'
   if (key === 'anthropic' && !secret.startsWith('sk-ant-')) return 'wrong_prefix'
+  // Tenor dùng API key của Google Cloud (luôn bắt đầu bằng AIza).
+  if (key === 'tenor' && !secret.startsWith('AIza')) return 'wrong_prefix'
   return null
 }
 

@@ -74,7 +74,8 @@ function ToolButton({
       onClick={onClick}
       disabled={disabled}
       aria-label={label}
-      title={shortcut ? `${label} (${shortcut})` : label}
+      data-tooltip={label}
+      data-shortcut={shortcut}
       data-testid={testId}
     >
       <Icon size={16} aria-hidden />
@@ -118,7 +119,6 @@ function TimelineToolbar({ zoom, setZoom }: { zoom: number; setZoom: (z: number)
         shortcut="S"
         onClick={() => s.splitAtPlayhead()}
         testId="split"
-        showLabel
       />
       <ToolButton
         icon={ArrowLeftToLine}
@@ -500,7 +500,7 @@ export function Timeline() {
                       data-testid="transition-marker"
                       data-active={active}
                       aria-label={t('editor.transition.marker')}
-                      title={t('editor.transition.marker')}
+                      data-tooltip={t('editor.transition.marker')}
                       onPointerDown={(e) => {
                         e.stopPropagation()
                         store().select({ kind: 'transition', id: cut.afterClip })

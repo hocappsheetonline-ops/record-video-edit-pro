@@ -1,9 +1,19 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Maximize, Minimize, Scissors } from 'lucide-react'
+import {
+  AudioLines,
+  Film,
+  Gauge,
+  Maximize,
+  Minimize,
+  Scissors,
+  type LucideIcon,
+} from 'lucide-react'
 import {
   aspectRatio,
   clipDuration,
   cutPoints,
+  DEFAULT_CLIP_AUDIO,
   DEFAULT_TRANSITION_MS,
   EFFECT_KINDS,
   KEY_COLORS,
@@ -13,6 +23,7 @@ import {
   TRANSITION_KINDS,
   type AudioClip,
   type Clip,
+  type ClipAudio,
   type EditState,
   type EffectRegion,
   type Overlay,
@@ -21,28 +32,166 @@ import {
 import { useEditorStore } from './store'
 import { ghostButton, pct, secs, Section, Segmented, SliderRow, Toggle } from './ui'
 
+const CLIP_TABS = ['video', 'audio', 'speed'] as const
+type ClipTab = (typeof CLIP_TABS)[number]
+const CLIP_TAB_ICONS: Record<ClipTab, LucideIcon> = { video: Film, audio: AudioLines, speed: Gauge }
+
+/** Hàng tab chỉ biểu tượng (chú thích khi rê chuột) cho bảng thuộc tính của một mục. */
+export function IconTabs<T extends string>({
+  tabs,
+  icons,
+  value,
+  onChange,
+  label,
+  testIdPrefix,
+}: {
+  tabs: readonly T[]
+  icons: Record<T, LucideIcon>
+  value: T
+  onChange: (tab: T) => void
+  label: (tab: T) => string
+  testIdPrefix: string
+}) {
+  return (
+    <div
+      role="tablist"
+      className="grid shrink-0 border-b border-border"
+      style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}
+    >
+      {tabs.map((tab) => {
+        const Icon: LucideIcon = icons[tab]
+        const active = tab === value
+        return (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            aria-label={label(tab)}
+            data-tooltip={label(tab)}
+            data-testid={`${testIdPrefix}${tab}`}
+            onClick={() => onChange(tab)}
+            className={`flex h-10 items-center justify-center border-b-2 transition-colors ${
+              active
+                ? 'border-accent text-accent'
+                : 'border-transparent text-muted hover:bg-surface-2 hover:text-text'
+            }`}
+          >
+            <Icon size={17} strokeWidth={1.75} aria-hidden />
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+/** Thuộc tính clip video chính, chia tab như CapCut: Video · Âm thanh · Tốc độ. */
 export function ClipProps({ clip, index }: { clip: Clip; index: number }) {
   const { t } = useTranslation()
-  const { setClipSpeed, splitAtPlayhead } = useEditorStore.getState()
+  const [tab, setTab] = useState<ClipTab>('video')
+  const { setClipSpeed, splitAtPlayhead, change } = useEditorStore.getState()
+  const audio = clip.audio ?? DEFAULT_CLIP_AUDIO
+  const setAudio = (patch: Partial<ClipAudio>, coalesce?: string) =>
+    change(
+      (e) => ({
+        ...e,
+        clips: e.clips.map((c) =>
+          c.id === clip.id ? { ...c, audio: { ...(c.audio ?? DEFAULT_CLIP_AUDIO), ...patch } } : c,
+        ),
+      }),
+      coalesce && `${coalesce}-${clip.id}`,
+    )
   return (
     <>
-      <Section title={t('editor.props.clipInfo', { n: index + 1 })}>
-        <p className="text-xs text-muted">
-          {t('editor.props.length')}: {secs(clipDuration(clip))}
-        </p>
-        <Segmented
-          label={t('editor.speed')}
-          options={SPEEDS.map((v) => ({ value: v, label: `${v}×` }))}
-          value={clip.speed}
-          onChange={(v) => setClipSpeed(clip.id, v)}
-          testIdPrefix="speed-"
-          columns={4}
-        />
-        <button type="button" className={ghostButton} onClick={() => splitAtPlayhead()}>
-          <Scissors size={14} aria-hidden />
-          {t('editor.split')} (S)
-        </button>
-      </Section>
+      <IconTabs
+        tabs={CLIP_TABS}
+        icons={CLIP_TAB_ICONS}
+        value={tab}
+        onChange={setTab}
+        label={(x) => t(`editor.props.clipTabs.${x}`)}
+        testIdPrefix="clip-tab-"
+      />
+      {tab === 'video' && (
+        <Section title={t('editor.props.clipInfo', { n: index + 1 })}>
+          <dl className="grid grid-cols-2 gap-y-1 text-xs">
+            <dt className="text-muted">{t('editor.props.length')}</dt>
+            <dd className="text-right font-mono tabular-nums">{secs(clipDuration(clip))}</dd>
+            <dt className="text-muted">{t('editor.props.sourceRange')}</dt>
+            <dd className="text-right font-mono tabular-nums">
+              {secs(clip.sourceStart)} – {secs(clip.sourceEnd)}
+            </dd>
+            <dt className="text-muted">{t('editor.speed')}</dt>
+            <dd className="text-right font-mono tabular-nums">{clip.speed}×</dd>
+          </dl>
+          <button type="button" className={ghostButton} onClick={() => splitAtPlayhead()}>
+            <Scissors size={14} aria-hidden />
+            {t('editor.split')}
+          </button>
+        </Section>
+      )}
+      {tab === 'audio' && (
+        <Section testId="clip-audio">
+          <Toggle
+            label={t('editor.props.muteClip')}
+            checked={audio.muted}
+            onChange={(muted) => setAudio({ muted })}
+            testId="clip-muted"
+          />
+          {!audio.muted && (
+            <>
+              <SliderRow
+                label={t('editor.audio.mic')}
+                value={audio.mic}
+                min={0}
+                max={2}
+                step={0.05}
+                format={pct}
+                defaultValue={1}
+                testId="clip-mic"
+                onChange={(mic) => setAudio({ mic }, 'clip-mic')}
+              />
+              <SliderRow
+                label={t('editor.audio.system')}
+                value={audio.system}
+                min={0}
+                max={2}
+                step={0.05}
+                format={pct}
+                defaultValue={1}
+                testId="clip-system"
+                onChange={(system) => setAudio({ system }, 'clip-system')}
+              />
+            </>
+          )}
+          <p className="text-xs text-muted">{t('editor.props.clipAudioHint')}</p>
+        </Section>
+      )}
+      {tab === 'speed' && (
+        <Section testId="clip-speed">
+          <SliderRow
+            label={t('editor.speed')}
+            value={clip.speed}
+            min={0.25}
+            max={8}
+            step={0.05}
+            format={(v) => `${v}×`}
+            defaultValue={1}
+            testId="clip-speed-slider"
+            onChange={(v) => setClipSpeed(clip.id, v)}
+          />
+          <Segmented
+            label={t('editor.props.speedPresets')}
+            options={SPEEDS.map((v) => ({ value: v, label: `${v}×` }))}
+            value={(SPEEDS as readonly number[]).includes(clip.speed) ? clip.speed : null}
+            onChange={(v) => setClipSpeed(clip.id, v)}
+            testIdPrefix="speed-"
+            columns={3}
+          />
+          <p className="text-xs text-muted">
+            {t('editor.props.length')}: {secs(clipDuration(clip))}
+          </p>
+        </Section>
+      )}
     </>
   )
 }
@@ -109,6 +258,7 @@ export function AudioClipProps({ clip }: { clip: AudioClip }) {
   return (
     <Section testId="audio-clip-panel">
       <SliderRow
+        defaultValue={1}
         label={t('editor.music.volume')}
         value={clip.volume}
         min={0}
@@ -119,6 +269,7 @@ export function AudioClipProps({ clip }: { clip: AudioClip }) {
         onChange={(v) => updateAudioClip(clip.id, { volume: v }, `vol-${clip.id}`)}
       />
       <SliderRow
+        defaultValue={0}
         label={t('editor.music.fadeIn')}
         value={clip.fadeIn}
         min={0}
@@ -129,6 +280,7 @@ export function AudioClipProps({ clip }: { clip: AudioClip }) {
         onChange={(v) => updateAudioClip(clip.id, { fadeIn: v }, `fin-${clip.id}`)}
       />
       <SliderRow
+        defaultValue={0}
         label={t('editor.music.fadeOut')}
         value={clip.fadeOut}
         min={0}
@@ -197,6 +349,7 @@ export function TransitionProps({ afterClip, edit }: { afterClip: string; edit: 
       {current && (
         <>
           <SliderRow
+            defaultValue={600}
             label={t('editor.transition.duration')}
             value={duration}
             min={200}
@@ -243,6 +396,7 @@ export function EffectProps({ effect }: { effect: EffectRegion }) {
         </select>
       </label>
       <SliderRow
+        defaultValue={0.7}
         label={t('editor.effects.intensity')}
         value={effect.intensity}
         min={0.05}
@@ -351,6 +505,7 @@ export function OverlayProps({ overlay }: { overlay: Overlay }) {
           onChange={(v) => update({ size: v }, 'ov-size')}
         />
         <SliderRow
+          defaultValue={0}
           label={t('editor.stickers.rotation')}
           value={overlay.rotation}
           min={-180}
@@ -376,6 +531,7 @@ export function OverlayProps({ overlay }: { overlay: Overlay }) {
       {overlay.kind === 'video' && overlay.hasAudio && (
         <Section title={t('editor.props.audio')}>
           <SliderRow
+            defaultValue={1}
             label={t('editor.music.volume')}
             value={overlay.volume}
             min={0}
@@ -397,7 +553,8 @@ export function OverlayProps({ overlay }: { overlay: Overlay }) {
                 type="button"
                 data-testid={`key-${color.replace('#', '') || 'none'}`}
                 aria-pressed={overlay.keyColor === color}
-                title={t(`editor.stickers.keys.${color.replace('#', '') || 'none'}`)}
+                data-tooltip={t(`editor.stickers.keys.${color.replace('#', '') || 'none'}`)}
+                aria-label={t(`editor.stickers.keys.${color.replace('#', '') || 'none'}`)}
                 onClick={() => update({ keyColor: color })}
                 className={`flex h-9 items-center justify-center rounded-md border-2 text-[10px] ${
                   overlay.keyColor === color ? 'border-accent' : 'border-border hover:border-muted'
@@ -410,6 +567,7 @@ export function OverlayProps({ overlay }: { overlay: Overlay }) {
           </div>
           {overlay.keyColor && (
             <SliderRow
+              defaultValue={0.4}
               label={t('editor.stickers.keyStrength')}
               value={overlay.keyStrength}
               min={0}

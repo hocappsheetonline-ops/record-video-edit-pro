@@ -161,6 +161,7 @@ export function FrameProps({ edit }: { edit: EditState }) {
           </Section>
           <Section title={t('editor.frame.style')}>
             <SliderRow
+              defaultValue={0.06}
               label={t('editor.frame.padding')}
               value={edit.frame.padding}
               min={0}
@@ -171,6 +172,7 @@ export function FrameProps({ edit }: { edit: EditState }) {
               testId="padding"
             />
             <SliderRow
+              defaultValue={0.025}
               label={t('editor.frame.radius')}
               value={edit.frame.radius}
               min={0}
@@ -180,6 +182,7 @@ export function FrameProps({ edit }: { edit: EditState }) {
               onChange={(v) => set('frame', { radius: v }, 'radius')}
             />
             <SliderRow
+              defaultValue={0.5}
               label={t('editor.frame.shadow')}
               value={edit.frame.shadow}
               min={0}
@@ -317,6 +320,7 @@ export function CameraProps({ edit }: { edit: EditState }) {
                   testIdPrefix="cam-stack-"
                 />
                 <SliderRow
+                  defaultValue={0.4}
                   label={t('editor.camera.split')}
                   value={cam.split}
                   min={0.2}
@@ -330,6 +334,7 @@ export function CameraProps({ edit }: { edit: EditState }) {
               <>
                 <PositionPad edit={edit} />
                 <SliderRow
+                  defaultValue={0.22}
                   label={t('editor.camera.size')}
                   value={cam.size}
                   min={0.08}
@@ -352,6 +357,7 @@ export function CameraProps({ edit }: { edit: EditState }) {
                 <div className="flex items-end gap-2">
                   <div className="flex-1">
                     <SliderRow
+                      defaultValue={0}
                       label={t('editor.camera.border')}
                       value={cam.border}
                       min={0}
@@ -380,7 +386,7 @@ export function CameraProps({ edit }: { edit: EditState }) {
                 type="button"
                 className="text-muted hover:text-text"
                 aria-label={t('editor.camera.resetFraming')}
-                title={t('editor.camera.resetFraming')}
+                data-tooltip={t('editor.camera.resetFraming')}
                 onClick={() => set('camera', { zoom: 1, focusX: 0.5, focusY: 0.5 })}
               >
                 <RotateCcw size={14} aria-hidden />
@@ -388,6 +394,7 @@ export function CameraProps({ edit }: { edit: EditState }) {
             }
           >
             <SliderRow
+              defaultValue={1}
               label={t('editor.camera.zoom')}
               value={cam.zoom}
               min={1}
@@ -398,6 +405,7 @@ export function CameraProps({ edit }: { edit: EditState }) {
               testId="cam-zoom"
             />
             <SliderRow
+              defaultValue={0.5}
               label={t('editor.camera.focusX')}
               value={cam.focusX}
               min={0}
@@ -408,6 +416,7 @@ export function CameraProps({ edit }: { edit: EditState }) {
               testId="cam-focus-x"
             />
             <SliderRow
+              defaultValue={0.5}
               label={t('editor.camera.focusY')}
               value={cam.focusY}
               min={0}
@@ -434,6 +443,7 @@ export function CameraProps({ edit }: { edit: EditState }) {
           >
             {(['smooth', 'brighten', 'warmth'] as const).map((key) => (
               <SliderRow
+                defaultValue={0}
                 key={key}
                 label={t(`editor.beauty.${key}`)}
                 value={cam.beauty[key]}
@@ -466,6 +476,7 @@ export function CursorProps({ edit }: { edit: EditState }) {
         testId="cursor-visible"
       />
       <SliderRow
+        defaultValue={1.4}
         label={t('editor.cursor.size')}
         value={edit.cursor.size}
         min={0.5}
@@ -511,6 +522,7 @@ export function MotionProps({ edit }: { edit: EditState }) {
     >
       <p className="text-xs text-muted">{t('editor.motion.hint')}</p>
       <SliderRow
+        defaultValue={0.4}
         label={t('editor.motion.cursor')}
         // Lưu dưới dạng độ mượt (cao = chậm); hiển thị dạng tốc độ cho dễ hiểu.
         value={Math.round((1 - edit.cursor.smoothing) * 100) / 100}
@@ -523,6 +535,7 @@ export function MotionProps({ edit }: { edit: EditState }) {
         testId="motion-cursor"
       />
       <SliderRow
+        defaultValue={0.85}
         label={t('editor.motion.camera')}
         value={edit.motion.cameraSpeed}
         min={0}
@@ -534,6 +547,7 @@ export function MotionProps({ edit }: { edit: EditState }) {
         testId="motion-camera"
       />
       <SliderRow
+        defaultValue={800}
         label={t('editor.motion.zoom')}
         value={1500 - edit.motion.zoomTransitionMs}
         min={0}
@@ -584,6 +598,7 @@ export function AudioMixProps({ edit }: { edit: EditState }) {
   return (
     <Section>
       <SliderRow
+        defaultValue={1}
         label={t('editor.audio.mic')}
         value={edit.audio.mic}
         min={0}
@@ -594,6 +609,7 @@ export function AudioMixProps({ edit }: { edit: EditState }) {
         testId="audio-mic"
       />
       <SliderRow
+        defaultValue={1}
         label={t('editor.audio.system')}
         value={edit.audio.system}
         min={0}

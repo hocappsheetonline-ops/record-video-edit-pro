@@ -7,6 +7,8 @@ import { useAppStore } from '../store/app'
 const KEY_URLS: Record<SecretKey, string> = {
   elevenlabs: 'https://elevenlabs.io/app/settings/api-keys',
   anthropic: 'https://console.anthropic.com/settings/keys',
+  tenor: 'https://developers.google.com/tenor/guides/quickstart',
+  pixabay: 'https://pixabay.com/api/docs/',
 }
 
 type Feedback = { tone: 'ok' | 'error' | 'info'; text: string } | null

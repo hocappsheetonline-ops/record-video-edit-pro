@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { TooltipLayer } from '../components/TooltipLayer'
 import { useEditorStore } from '../editor/store'
 import i18n from '../i18n'
 import { useAppStore } from '../store/app'
@@ -23,7 +24,12 @@ function setup(folder: string | null = sampleSummary.folder) {
   ])
   window.lumora = fake.api
   useAppStore.setState({ page: 'editor', editorFolder: folder })
-  render(<EditorPage />)
+  render(
+    <>
+      <EditorPage />
+      <TooltipLayer />
+    </>,
+  )
   return fake.api
 }
 
@@ -107,6 +113,7 @@ describe('EditorPage', () => {
     const api = setup()
     await screen.findByTestId('editor-title')
     await userEvent.click(screen.getByTestId('lib-audio'))
+    await userEvent.click(screen.getByTestId('audio-section-music'))
 
     // Nhạc nền từ máy: phủ hết video (7 giây), tự lặp, nhỏ dần cuối bài.
     await userEvent.click(screen.getByTestId('add-music'))
@@ -123,6 +130,7 @@ describe('EditorPage', () => {
 
     // Hiệu ứng "Bụp" tại giây 3.
     act(() => useEditorStore.getState().setTime(3000))
+    await userEvent.click(screen.getByTestId('audio-section-sfx'))
     await userEvent.click(screen.getByTestId('sfx-pop'))
     expect(api.addSoundEffect).toHaveBeenCalledWith(sampleSummary.folder, 'pop')
     await waitFor(() => expect(screen.getAllByTestId('timeline-audio')).toHaveLength(2))
@@ -142,6 +150,7 @@ describe('EditorPage', () => {
     const api = setup()
     await screen.findByTestId('editor-title')
     await userEvent.click(screen.getByTestId('lib-audio'))
+    await userEvent.click(screen.getByTestId('audio-section-music'))
     api.addAudioFile.mockRejectedValueOnce(
       new Error("Error invoking remote method 'assets:add-audio': Error: audio_unreadable"),
     )
@@ -363,7 +372,157 @@ describe('EditorPage', () => {
       target: screen.getAllByTestId('timeline-clip')[0]!,
     })
     expect(screen.getByTestId('props-title')).toHaveTextContent('Video')
+    await userEvent.click(screen.getByTestId('clip-tab-speed'))
     await userEvent.click(screen.getByTestId('speed-2'))
     expect(screen.getByTestId('timecode')).toHaveTextContent('/ 0:04.5')
+  })
+
+  it('clip: tab Âm thanh tắt tiếng / chỉnh âm lượng riêng; tab Tốc độ gõ số trực tiếp', async () => {
+    setup()
+    await screen.findByTestId('editor')
+    fireEvent.pointerDown(screen.getAllByTestId('timeline-clip')[0]!)
+    await userEvent.click(screen.getByTestId('clip-tab-audio'))
+    await userEvent.click(screen.getByTestId('clip-muted'))
+    expect(useEditorStore.getState().edit!.clips[0]!.audio).toEqual({
+      mic: 1,
+      system: 1,
+      muted: true,
+    })
+    await userEvent.click(screen.getByTestId('clip-muted'))
+    fireEvent.change(screen.getByTestId('clip-mic'), { target: { value: '1.5' } })
+    expect(useEditorStore.getState().edit!.clips[0]!.audio).toMatchObject({
+      mic: 1.5,
+      muted: false,
+    })
+    // Nút đặt lại về mặc định.
+    await userEvent.click(screen.getByTestId('clip-mic-reset'))
+    expect(useEditorStore.getState().edit!.clips[0]!.audio!.mic).toBe(1)
+
+    await userEvent.click(screen.getByTestId('clip-tab-speed'))
+    const input = screen.getByTestId('clip-speed-slider-input')
+    await userEvent.clear(input)
+    await userEvent.type(input, '2.5{Enter}')
+    expect(useEditorStore.getState().edit!.clips[0]!.speed).toBe(2.5)
+    // Ngoài giới hạn thì kẹp lại.
+    await userEvent.clear(input)
+    await userEvent.type(input, '99{Enter}')
+    expect(useEditorStore.getState().edit!.clips[0]!.speed).toBe(8)
+  })
+
+  it('ô số phần trăm: gõ 40 nghĩa là 40%; mũi tên lên tăng một bước', async () => {
+    setup()
+    await screen.findByTestId('editor')
+    await userEvent.click(screen.getByTestId('tab-camera'))
+    const input = screen.getByTestId('cam-size-input')
+    expect(input).toHaveValue('22%')
+    await userEvent.clear(input)
+    await userEvent.type(input, '40{Enter}')
+    expect(useEditorStore.getState().edit!.camera.size).toBe(0.4)
+    await userEvent.click(input)
+    await userEvent.keyboard('{ArrowUp}')
+    expect(useEditorStore.getState().edit!.camera.size).toBe(0.41)
+    await userEvent.keyboard('{Escape}')
+    expect(input).toHaveValue('41%')
+  })
+
+  it('kho meme online: chưa có key thì hướng dẫn; có key thì tìm, xem thêm, tải và thêm vào video', async () => {
+    const api = setup()
+    await screen.findByTestId('editor')
+    await userEvent.click(screen.getByTestId('media-source-tenor'))
+    expect(screen.getByText('Cần key Tenor để tìm meme')).toBeInTheDocument()
+    await userEvent.click(screen.getByTestId('online-open-settings'))
+    expect(useAppStore.getState().page).toBe('settings')
+    act(() => {
+      useAppStore.setState({
+        page: 'editor',
+        secrets: {
+          elevenlabs: { state: 'missing' },
+          anthropic: { state: 'missing' },
+          tenor: { state: 'saved', masked: 'AIza••••' },
+          pixabay: { state: 'missing' },
+        },
+      })
+    })
+    expect(await screen.findAllByTestId('online-item')).toHaveLength(2)
+    expect(api.onlineSearch).toHaveBeenCalledWith('tenor', '', null)
+    expect(screen.getByTestId('online-attribution')).toHaveTextContent('Powered by Tenor')
+    await userEvent.type(screen.getByTestId('online-search'), 'bruh{Enter}')
+    await waitFor(() => expect(api.onlineSearch).toHaveBeenLastCalledWith('tenor', 'bruh', null))
+    await userEvent.click(screen.getByTestId('online-more'))
+    await waitFor(() => expect(screen.getAllByTestId('online-item')).toHaveLength(3))
+    expect(api.onlineSearch).toHaveBeenLastCalledWith('tenor', 'bruh', '2')
+    expect(screen.queryByTestId('online-more')).not.toBeInTheDocument()
+
+    act(() => useEditorStore.getState().setTime(500))
+    await userEvent.click(screen.getAllByTestId('online-item')[0]!)
+    await waitFor(() => expect(useEditorStore.getState().edit!.overlays).toHaveLength(1))
+    expect(api.onlineDownload).toHaveBeenCalledWith('tenor', '0')
+    expect(api.useMeme).toHaveBeenCalledWith(sampleSummary.folder, 'meme-dl-0.mp4')
+    expect(screen.getAllByTestId('online-item')[0]).toHaveAttribute('data-state', 'done')
+    // Bấm lần nữa: không tải lại.
+    await userEvent.click(screen.getAllByTestId('online-item')[0]!)
+    await waitFor(() => expect(useEditorStore.getState().edit!.overlays).toHaveLength(2))
+    expect(api.onlineDownload).toHaveBeenCalledTimes(1)
+
+    // Lỗi key sai hiện lời giải thích.
+    api.onlineSearch.mockRejectedValueOnce(
+      new Error("Error invoking remote method 'online:search': Error: key_invalid"),
+    )
+    await userEvent.type(screen.getByTestId('online-search'), ' x{Enter}')
+    expect(await screen.findByRole('alert')).toHaveTextContent('API key không đúng')
+  })
+
+  it('sticker động Tenor và âm thanh meme + giọng đọc AI', async () => {
+    const api = setup()
+    await screen.findByTestId('editor')
+    act(() => {
+      useAppStore.setState({
+        secrets: {
+          elevenlabs: { state: 'saved', masked: 'el••' },
+          anthropic: { state: 'missing' },
+          tenor: { state: 'saved', masked: 'AIza••' },
+          pixabay: { state: 'missing' },
+        },
+      })
+    })
+    await userEvent.click(screen.getByTestId('lib-stickers'))
+    await userEvent.click(screen.getByTestId('sticker-source-tenorSticker'))
+    expect(await screen.findAllByTestId('online-item')).toHaveLength(2)
+    expect(api.onlineSearch).toHaveBeenCalledWith('tenorSticker', '', null)
+
+    await userEvent.click(screen.getByTestId('lib-audio'))
+    await userEvent.click(screen.getByTestId('audio-section-meme'))
+    await userEvent.click(screen.getByTestId('sfx-vineBoom'))
+    expect(api.addSoundEffect).toHaveBeenCalledWith(sampleSummary.folder, 'vineBoom')
+    await waitFor(() => expect(useEditorStore.getState().edit!.audioClips).toHaveLength(1))
+    expect(await screen.findByTestId('speech-voice')).toHaveValue('voice-anna')
+    await userEvent.selectOptions(screen.getByTestId('speech-voice'), 'voice-bao')
+    await userEvent.click(screen.getByTestId('speech-line-1'))
+    await waitFor(() => expect(useEditorStore.getState().edit!.audioClips).toHaveLength(2))
+    expect(api.speak).toHaveBeenCalledWith(sampleSummary.folder, 'Ối dồi ôi', 'voice-bao')
+    await userEvent.type(screen.getByTestId('speech-text'), 'Xin chào{Enter}')
+    await waitFor(() =>
+      expect(api.speak).toHaveBeenLastCalledWith(sampleSummary.folder, 'Xin chào', 'voice-bao'),
+    )
+    expect(useEditorStore.getState().edit!.audioClips.map((c) => c.name)).toEqual([
+      'vineBoom',
+      'Ối dồi ôi',
+      'Xin chào',
+    ])
+  })
+
+  it('nút chỉ có biểu tượng đều có tên và chú thích khi rê chuột', async () => {
+    setup()
+    await screen.findByTestId('editor')
+    const unnamed = screen
+      .getAllByRole('button')
+      .filter((b) => !b.textContent?.trim() && !b.getAttribute('aria-label'))
+    expect(unnamed.map((b) => b.outerHTML.slice(0, 120))).toEqual([])
+    await userEvent.hover(screen.getByTestId('lib-audio'))
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Âm thanh')
+    await userEvent.unhover(screen.getByTestId('lib-audio'))
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument())
+    await userEvent.hover(screen.getByTestId('split'))
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('TáchS')
   })
 })

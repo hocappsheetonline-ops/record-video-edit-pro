@@ -140,7 +140,8 @@ export function PropertiesPanel() {
             <button
               type="button"
               aria-label={t('editor.delete')}
-              title={`${t('editor.delete')} (Delete)`}
+              data-tooltip={t('editor.delete')}
+              data-shortcut="Delete"
               data-testid="props-delete"
               onClick={deleteSelection}
               className="rounded-md p-1.5 text-muted hover:bg-danger/15 hover:text-danger"
@@ -171,17 +172,19 @@ export function PropertiesPanel() {
               role="tab"
               aria-selected={active}
               data-testid={`tab-${name}`}
-              title={t(`editor.tabs.${name}`)}
+              data-tooltip={t(`editor.tabs.${name}`)}
+              aria-label={t(`editor.tabs.${name}`)}
               onClick={() => {
                 setTab(name)
                 if (selection?.kind === 'camera') select(null)
               }}
-              className={`flex flex-col items-center justify-start gap-1 border-b-2 px-0.5 pb-1.5 pt-2 text-[10px] transition-colors ${
-                active ? 'border-accent text-text' : 'border-transparent text-muted hover:text-text'
+              className={`flex h-11 items-center justify-center border-b-2 transition-colors ${
+                active
+                  ? 'border-accent text-accent'
+                  : 'border-transparent text-muted hover:bg-surface-2 hover:text-text'
               }`}
             >
-              <Icon size={17} aria-hidden />
-              <span className="w-full text-center leading-tight">{t(`editor.tabs.${name}`)}</span>
+              <Icon size={18} strokeWidth={1.75} aria-hidden />
             </button>
           )
         })}
