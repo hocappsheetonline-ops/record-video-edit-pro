@@ -2,18 +2,17 @@ import { readFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 
 export interface MockContentFiles {
-  /** Video meme (MP4) mà kết quả Tenor / Pixabay video trỏ tới. */
+  /** Video (MP4) mà kết quả Pixabay video trỏ tới. */
   video: string
-  /** Ảnh GIF (sticker / ảnh). */
+  /** Ảnh GIF (kết quả ảnh). */
   gif: string
   /** Ảnh JPG thu nhỏ. */
   thumb: string
 }
 
 /**
- * Máy chủ giả Tenor + Pixabay: trả JSON đúng cấu trúc API thật, các URL ảnh / video trỏ về chính
- * máy chủ này. Key hợp lệ: Tenor `AIzaMockTenorKey…`, Pixabay `mock-pixabay-key…`. Ghi lại các
- * request để test kiểm tra.
+ * Máy chủ giả Pixabay: trả JSON đúng cấu trúc API thật, các URL ảnh / video trỏ về chính máy
+ * chủ này. Key hợp lệ: `mock-pixabay-key…`. Ghi lại các request để test kiểm tra.
  */
 export async function startMockContent(files: MockContentFiles): Promise<{
   url: string
@@ -43,38 +42,6 @@ export async function startMockContent(files: MockContentFiles): Promise<{
       if (url.pathname.endsWith('.mp4')) return file(files.video, 'video/mp4')
       if (url.pathname.endsWith('.gif')) return file(files.gif, 'image/gif')
       return file(files.thumb, 'image/jpeg')
-    }
-    if (url.pathname === '/v2/search' || url.pathname === '/v2/featured') {
-      if (!key.startsWith('AIzaMock')) return json(400, { error: { message: 'API key not valid' } })
-      const sticker = url.searchParams.get('searchfilter') === 'sticker'
-      const q = url.searchParams.get('q') ?? 'featured'
-      const pos = Number(url.searchParams.get('pos') ?? 0)
-      const results = Array.from({ length: 3 }, (_, i) => {
-        const id = `${sticker ? 's' : 't'}${pos + i}`
-        const media = (name: string, ext: string, dims: number[]) => ({
-          url: `${base}/media/${id}-${name}.${ext}`,
-          dims,
-          duration: 2,
-          size: 1000,
-        })
-        return {
-          id,
-          title: '',
-          content_description: `${q} ${pos + i + 1}`,
-          media_formats: sticker
-            ? {
-                gif_transparent: media('gif', 'gif', [200, 200]),
-                tinygif_transparent: media('tiny', 'gif', [100, 100]),
-              }
-            : {
-                mp4: media('mp4', 'mp4', [320, 180]),
-                tinymp4: media('tinymp4', 'mp4', [160, 90]),
-                gif: media('gif', 'gif', [320, 180]),
-                tinygif: media('tinygif', 'gif', [160, 90]),
-              },
-        }
-      })
-      return json(200, { results, next: pos < 3 ? String(pos + 3) : '' })
     }
     if (url.pathname === '/api/videos/' || url.pathname === '/api/') {
       if (!key.startsWith('mock-pixabay'))

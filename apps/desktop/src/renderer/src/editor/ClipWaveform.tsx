@@ -1,23 +1,45 @@
 import { memo } from 'react'
 import { waveformSlice, type Clip, type Waveform } from '@lumora/core'
 
-/** Số cột: khoảng 1 cột cho mỗi 60ms nguồn, đủ mịn khi timeline dài mà vẫn nhẹ. */
+/** Số điểm: khoảng 1 điểm cho mỗi 60ms nguồn, đủ mịn khi timeline dài mà vẫn nhẹ. */
 function barCount(clip: Clip): number {
   return Math.max(4, Math.min(800, Math.ceil((clip.sourceEnd - clip.sourceStart) / 60)))
 }
 
+/** Làm mượt nhẹ (trung bình có trọng số 3 điểm) để đường bao liền mạch thay vì răng cưa. */
+function smooth(values: readonly number[]): number[] {
+  if (values.length < 3) return [...values]
+  return values.map((v, i) => {
+    const a = values[i - 1] ?? v
+    const b = values[i + 1] ?? v
+    return (a + 2 * v + b) / 4
+  })
+}
+
+/** Nửa chiều cao (trên thang 0–50) của một điểm; luôn có một vạch mỏng ở chỗ im lặng. */
+const half = (v: number) => Math.max(1.2, v * 47)
+
 /**
- * Dạng sóng âm thanh vẽ đối xứng lên/xuống bên trong clip video, theo đúng đoạn nguồn của clip
- * (đã cắt, đổi tốc độ thì clip co giãn và sóng co giãn theo).
+ * Đường dẫn SVG của dạng sóng kiểu CapCut: một vùng tô liền, đối xứng qua trục giữa (y = 50),
+ * đi qua đường bao trên rồi quay về theo đường bao dưới. Toạ độ x là chỉ số điểm (viewBox giãn
+ * theo khung chứa).
  */
-/** Vẽ các cột dạng sóng đối xứng lên/xuống (một path SVG, giãn theo khung chứa). */
-export function WaveBars({ bars, testId }: { bars: readonly number[]; testId?: string }) {
-  const d = bars
-    .map((v, i) => {
-      const h = Math.max(1.5, v * 46)
-      return `M${i + 0.15} ${50 - h}h0.7v${h * 2}h-0.7z`
-    })
+export function wavePath(bars: readonly number[]): string {
+  const env = smooth(bars)
+  const n = Math.max(1, env.length)
+  const top = env.map((v, i) => `L${i + 0.5} ${(50 - half(v)).toFixed(1)}`).join('')
+  const bottom = env
+    .map((v, i) => `L${i + 0.5} ${(50 + half(v)).toFixed(1)}`)
+    .reverse()
     .join('')
+  return `M0 50${top}L${n} 50${bottom}Z`
+}
+
+/**
+ * Dạng sóng âm thanh (giống CapCut): vùng tô liền đối xứng lên / xuống, màu lấy từ
+ * `currentColor` của khung chứa, giãn theo chiều rộng và chiều cao của khung.
+ */
+export function WaveBars({ bars, testId }: { bars: readonly number[]; testId?: string }) {
   return (
     <svg
       data-testid={testId}
@@ -27,14 +49,14 @@ export function WaveBars({ bars, testId }: { bars: readonly number[]; testId?: s
       preserveAspectRatio="none"
       className="pointer-events-none absolute inset-0 h-full w-full"
     >
-      <path d={d} fill="currentColor" />
+      <path d={wavePath(bars)} fill="currentColor" />
     </svg>
   )
 }
 
 /**
- * Dạng sóng âm thanh vẽ đối xứng lên/xuống bên trong clip video, theo đúng đoạn nguồn của clip
- * (đã cắt, đổi tốc độ thì clip co giãn và sóng co giãn theo).
+ * Dạng sóng của clip video, theo đúng đoạn nguồn của clip (đã cắt, đổi tốc độ thì clip co giãn
+ * và sóng co giãn theo).
  */
 export const ClipWaveform = memo(function ClipWaveform({
   clip,

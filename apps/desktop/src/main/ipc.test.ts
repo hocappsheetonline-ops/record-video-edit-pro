@@ -60,7 +60,6 @@ beforeEach(async () => {
   validators = {
     elevenlabs: vi.fn<Validators['elevenlabs']>(async () => ({ ok: true })),
     anthropic: vi.fn<Validators['anthropic']>(async () => ({ ok: true })),
-    tenor: vi.fn<Validators['tenor']>(async () => ({ ok: true })),
     pixabay: vi.fn<Validators['pixabay']>(async () => ({ ok: true })),
   }
   registerIpc(
@@ -100,7 +99,7 @@ beforeEach(async () => {
         })),
       },
       online: {
-        search: vi.fn(async () => ({ items: [], next: null, attribution: 'Powered by Tenor' })),
+        search: vi.fn(async () => ({ items: [], next: null, attribution: 'Video từ Pixabay' })),
         download: vi.fn(async (_source: string, id: string) => ({
           file: `meme-${id}.mp4`,
           name: id,
@@ -361,14 +360,19 @@ describe('registerIpc', () => {
   })
 
   it('kho online: chỉ nhận nguồn đã biết, từ khóa ngắn; tải theo mã; bộ nhớ đệm', async () => {
-    expect(await call(IPC.onlineSearch, 'tenor', 'bruh', null)).toMatchObject({ items: [] })
+    expect(await call(IPC.onlineSearch, 'pixabayVideo', 'bruh', null)).toMatchObject({
+      items: [],
+    })
     await expect(call(IPC.onlineSearch, 'giphy', 'x', null)).rejects.toThrow('online_unknown')
-    await expect(call(IPC.onlineSearch, 'tenor', 'x'.repeat(101), null)).rejects.toThrow(
+    // Tenor đã ngừng hoạt động: không còn là nguồn hợp lệ.
+    await expect(call(IPC.onlineSearch, 'tenor', 'x', null)).rejects.toThrow('online_unknown')
+    await expect(call(IPC.onlineSearch, 'pixabayVideo', 'x'.repeat(101), null)).rejects.toThrow(
       'online_query',
     )
-    await expect(call(IPC.onlineSearch, 'tenor', 'x', 5)).rejects.toThrow('online_query')
+    await expect(call(IPC.onlineSearch, 'pixabayVideo', 'x', 5)).rejects.toThrow('online_query')
     expect(await call(IPC.onlineDownload, 'pixabay', '42')).toMatchObject({ file: 'meme-42.mp4' })
     await expect(call(IPC.onlineDownload, 'http://evil', '42')).rejects.toThrow('online_unknown')
+    await expect(call(IPC.onlineDownload, 'tenor', '42')).rejects.toThrow('online_unknown')
     expect(await call(IPC.cacheInfo)).toBe(1234)
     expect(await call(IPC.cacheClear)).toBe(1234)
   })

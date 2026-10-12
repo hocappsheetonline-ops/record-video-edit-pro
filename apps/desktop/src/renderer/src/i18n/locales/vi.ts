@@ -145,7 +145,9 @@ export const vi = {
       merging: 'Đang ghép…',
       mergeEmpty: 'Chưa có bản quay nào khác.',
       mergeFailed: 'Không ghép được bản quay này.',
-      importVideo: 'Nhập video làm clip chính',
+      importVideo: 'Nhập video',
+      importVideoHint:
+        'Chọn video trên máy để chỉnh sửa: video được nối vào hàng Video làm clip chính',
       importingVideo: 'Đang nhập video…',
       importNoVideo: 'File này không có hình video.',
       importTooLong: 'Video dài quá 2 giờ.',
@@ -154,19 +156,15 @@ export const vi = {
       clear: 'Xóa',
       sources: {
         mine: 'Của tôi',
-        tenor: 'Meme',
         pixabayVideo: 'Video',
         pixabayImage: 'Ảnh',
         emoji: 'Emoji',
         shapes: 'Hình vẽ',
-        tenorSticker: 'Sticker động',
       },
-      noKey: { tenor: 'Cần key Tenor để tìm meme', pixabay: 'Cần key Pixabay để tìm video, ảnh' },
+      noKey: { pixabay: 'Cần key Pixabay để tìm video, ảnh' },
       noKeyText: 'Key miễn phí, nhập một lần trong Cài đặt → API key.',
       openSettings: 'Mở Cài đặt',
       searchPlaceholder: {
-        tenor: 'Tìm meme (bruh, mèo, green screen…)',
-        tenorSticker: 'Tìm sticker động',
         pixabayVideo: 'Tìm video miễn phí',
         pixabayImage: 'Tìm ảnh miễn phí',
       },
@@ -209,7 +207,7 @@ export const vi = {
       scriptHint:
         'Các câu được đặt nối tiếp nhau từ đầu phát trên hàng Âm thanh. Bấm Hoàn tác để bỏ cả kịch bản.',
       tabs: {
-        media: 'Meme',
+        media: 'Phương tiện',
         audio: 'Âm thanh',
         text: 'Văn bản',
         stickers: 'Nhãn dán',
@@ -219,17 +217,18 @@ export const vi = {
         captions: 'Phụ đề',
         ai: 'AI',
       },
-      import: 'Nhập video / ảnh meme',
+      import: 'Nhập ảnh',
+      importHint: 'Thêm ảnh, GIF (hoặc video ngắn làm lớp phủ) vào thư viện của tôi',
       processing: 'Đang xử lý…',
-      addToProject: 'Thêm video / ảnh từ máy vào riêng dự án này',
+      addToProject: 'Thêm ảnh / video từ máy vào riêng dự án này (không lưu vào thư viện)',
       filters: { all: 'Tất cả', video: 'Video', image: 'Ảnh & GIF' },
-      emptyTitle: 'Thư viện meme của bạn',
+      emptyTitle: 'Thư viện của bạn',
       empty:
-        'Kéo thả video meme (MP4, MOV, WEBM…) hoặc ảnh / GIF vào đây. Thêm một lần, dùng lại ở mọi dự án.',
+        'Kéo thả ảnh / GIF hoặc video ngắn (MP4, MOV, WEBM…) vào đây. Thêm một lần, dùng lại ở mọi dự án. Bấm một mục để đặt lên video tại đầu phát.',
       clickToAdd: 'Bấm để thêm vào đầu phát',
       remove: 'Xóa khỏi thư viện',
-      tips: 'Mẹo: video meme phông xanh → chọn "Xóa phông" ở bảng bên phải. Lumora không kèm sẵn meme có bản quyền; hãy dùng video bạn có quyền sử dụng.',
-      drop: 'Thả để thêm vào thư viện meme',
+      tips: 'Mẹo: video phông xanh → chọn "Xóa phông" ở bảng bên phải. Lumora không kèm sẵn nội dung có bản quyền; hãy dùng ảnh / video bạn có quyền sử dụng.',
+      drop: 'Thả để thêm vào thư viện',
       defaultText: 'Nhập chữ',
       addText: 'Thêm chữ',
       sample: 'Chữ mẫu',
@@ -766,7 +765,7 @@ export const vi = {
       done: 'Bắt đầu',
       library: {
         title: 'Thư viện',
-        text: 'Meme, âm thanh, chữ, nhãn dán, hiệu ứng, bộ lọc, phụ đề và AI. Bấm để thêm tại đầu phát, hoặc kéo thả vào timeline.',
+        text: 'Phương tiện (nhập video, ảnh), âm thanh, chữ, nhãn dán, hiệu ứng, bộ lọc, phụ đề và AI. Bấm để thêm tại đầu phát, hoặc kéo thả vào timeline.',
       },
       preview: {
         title: 'Khung xem trước',
@@ -1153,10 +1152,11 @@ export const vi = {
     themes: { system: 'Theo hệ thống', dark: 'Tối', light: 'Sáng' },
     apiKeys: 'API key',
     apiKeysHint:
-      'Key được mã hóa và chỉ lưu trên máy này. Lumora dùng key để tạo phụ đề, giọng đọc AI, tự biên tập video và tìm meme / video miễn phí.',
+      'Key được mã hóa và chỉ lưu trên máy này. Lumora dùng key để tạo phụ đề, giọng đọc AI, tự biên tập video và tìm video / ảnh miễn phí.',
     storage: 'Bộ nhớ',
     cache: 'Bộ nhớ đệm',
-    cacheHint: 'File tải tạm và giọng đọc AI đã lưu. Xóa không ảnh hưởng dự án và thư viện meme.',
+    cacheHint:
+      'File tải tạm và giọng đọc AI đã lưu. Xóa không ảnh hưởng dự án và thư viện của bạn.',
     cacheClear: 'Xóa',
     encryptionUnavailable: 'Máy này không hỗ trợ mã hóa nên không thể lưu API key an toàn.',
     about: 'Thông tin',
@@ -1177,10 +1177,6 @@ export const vi = {
   keys: {
     elevenlabs: { name: 'ElevenLabs', purpose: 'Chuyển giọng nói thành phụ đề' },
     anthropic: { name: 'Claude (Anthropic)', purpose: 'AI tự biên tập, tạo tiêu đề và chương' },
-    tenor: {
-      name: 'Tenor (Google)',
-      purpose: 'Tìm meme GIF / video và sticker ngay trong thư viện. Key miễn phí từ Google Cloud.',
-    },
     pixabay: {
       name: 'Pixabay',
       purpose: 'Video và ảnh miễn phí (không cần ghi nguồn). Key miễn phí khi đăng ký tài khoản.',

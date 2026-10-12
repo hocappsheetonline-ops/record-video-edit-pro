@@ -8,8 +8,6 @@ import { EmptyState, ErrorNote, formatDuration, SearchBox, useErrorText } from '
 
 /** Từ khóa gợi ý cho từng nguồn (bấm là tìm luôn). */
 const SUGGESTIONS: Record<OnlineSource, string[]> = {
-  tenor: ['bruh', 'green screen', 'cat', 'laugh', 'cry', 'wow', 'fail', 'dance'],
-  tenorSticker: ['wow', 'lol', 'heart', 'fire', 'arrow', 'subscribe', 'cat', 'ok'],
   pixabayVideo: ['city', 'nature', 'technology', 'abstract', 'ocean', 'night'],
   pixabayImage: ['background', 'texture', 'gradient', 'workspace', 'sky'],
 }
@@ -91,8 +89,8 @@ function ResultCard({
 }
 
 /**
- * Tìm và tải nội dung từ kho online (Tenor / Pixabay). Tải xong được lưu vào thư viện của tôi để
- * dùng offline, rồi `onUse` thêm vào video tại đầu phát.
+ * Tìm và tải nội dung từ kho online (Pixabay). Tải xong được lưu vào thư viện của tôi để dùng
+ * offline, rồi `onUse` thêm vào video tại đầu phát.
  */
 export function OnlineGrid({
   source,
@@ -102,8 +100,7 @@ export function OnlineGrid({
   onUse: (item: MemeItem) => Promise<void>
 }) {
   const { t } = useTranslation()
-  const keyName = source.startsWith('tenor') ? 'tenor' : 'pixabay'
-  const hasKey = useAppStore((s) => s.secrets?.[keyName]?.state === 'saved')
+  const hasKey = useAppStore((s) => s.secrets?.pixabay?.state === 'saved')
   const setPage = useAppStore((s) => s.setPage)
   const [q, setQ] = useState('')
   const [items, setItems] = useState<OnlineItem[]>([])
@@ -179,7 +176,7 @@ export function OnlineGrid({
     return (
       <EmptyState
         icon={KeyRound}
-        title={t(`editor.library.noKey.${keyName}`)}
+        title={t('editor.library.noKey.pixabay')}
         text={t('editor.library.noKeyText')}
         action={
           <button
@@ -194,7 +191,6 @@ export function OnlineGrid({
       />
     )
 
-  const square = source === 'tenorSticker'
   return (
     <div className="flex flex-col gap-3" data-testid="online-grid">
       <SearchBox
@@ -233,7 +229,7 @@ export function OnlineGrid({
           text={t('editor.library.noResultsText')}
         />
       ) : (
-        <div className={`grid gap-1.5 ${square ? 'grid-cols-3' : 'grid-cols-2'}`}>
+        <div className="grid grid-cols-2 gap-1.5">
           {items.map((item) => {
             const key = `${item.source}:${item.id}`
             return (

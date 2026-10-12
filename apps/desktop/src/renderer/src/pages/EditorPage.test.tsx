@@ -40,7 +40,6 @@ const keys = (elevenlabs: boolean) =>
       secrets: {
         elevenlabs: elevenlabs ? { state: 'saved', masked: 'el••' } : { state: 'missing' },
         anthropic: { state: 'missing' },
-        tenor: { state: 'missing' },
         pixabay: { state: 'missing' },
       },
     })
@@ -302,7 +301,7 @@ describe('EditorPage', () => {
     const zone = await screen.findByTestId('media-tab')
     const file = new File(['x'], 'bruh.mp4', { type: 'video/mp4' })
     fireEvent.dragOver(zone, { dataTransfer: { files: [file] } })
-    expect(screen.getByText('Thả để thêm vào thư viện meme')).toBeInTheDocument()
+    expect(screen.getByText('Thả để thêm vào thư viện')).toBeInTheDocument()
     fireEvent.drop(zone, { dataTransfer: { files: [file] } })
     await waitFor(() => expect(api.addMemePaths).toHaveBeenCalledWith(['C:/drop/bruh.mp4']))
     api.addMemePaths.mockRejectedValueOnce(
@@ -439,11 +438,13 @@ describe('EditorPage', () => {
     expect(input).toHaveValue('41%')
   })
 
-  it('kho meme online: chưa có key thì hướng dẫn; có key thì tìm, xem thêm, tải và thêm vào video', async () => {
+  it('kho video online: chưa có key thì hướng dẫn; có key thì tìm, xem thêm, tải và thêm vào video', async () => {
     const api = setup()
     await screen.findByTestId('editor')
-    await userEvent.click(screen.getByTestId('media-source-tenor'))
-    expect(screen.getByText('Cần key Tenor để tìm meme')).toBeInTheDocument()
+    // Tenor đã ngừng hoạt động: không còn nguồn meme / sticker động.
+    expect(screen.queryByTestId('media-source-tenor')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByTestId('media-source-pixabayVideo'))
+    expect(screen.getByText('Cần key Pixabay để tìm video, ảnh')).toBeInTheDocument()
     await userEvent.click(screen.getByTestId('online-open-settings'))
     expect(useAppStore.getState().page).toBe('settings')
     act(() => {
@@ -452,25 +453,26 @@ describe('EditorPage', () => {
         secrets: {
           elevenlabs: { state: 'missing' },
           anthropic: { state: 'missing' },
-          tenor: { state: 'saved', masked: 'AIza••••' },
-          pixabay: { state: 'missing' },
+          pixabay: { state: 'saved', masked: '1234••••' },
         },
       })
     })
     expect(await screen.findAllByTestId('online-item')).toHaveLength(2)
-    expect(api.onlineSearch).toHaveBeenCalledWith('tenor', '', null)
-    expect(screen.getByTestId('online-attribution')).toHaveTextContent('Powered by Tenor')
-    await userEvent.type(screen.getByTestId('online-search'), 'bruh{Enter}')
-    await waitFor(() => expect(api.onlineSearch).toHaveBeenLastCalledWith('tenor', 'bruh', null))
+    expect(api.onlineSearch).toHaveBeenCalledWith('pixabayVideo', '', null)
+    expect(screen.getByTestId('online-attribution')).toHaveTextContent('Video từ Pixabay')
+    await userEvent.type(screen.getByTestId('online-search'), 'city{Enter}')
+    await waitFor(() =>
+      expect(api.onlineSearch).toHaveBeenLastCalledWith('pixabayVideo', 'city', null),
+    )
     await userEvent.click(screen.getByTestId('online-more'))
     await waitFor(() => expect(screen.getAllByTestId('online-item')).toHaveLength(3))
-    expect(api.onlineSearch).toHaveBeenLastCalledWith('tenor', 'bruh', '2')
+    expect(api.onlineSearch).toHaveBeenLastCalledWith('pixabayVideo', 'city', '2')
     expect(screen.queryByTestId('online-more')).not.toBeInTheDocument()
 
     act(() => useEditorStore.getState().setTime(500))
     await userEvent.click(screen.getAllByTestId('online-item')[0]!)
     await waitFor(() => expect(useEditorStore.getState().edit!.overlays).toHaveLength(1))
-    expect(api.onlineDownload).toHaveBeenCalledWith('tenor', '0')
+    expect(api.onlineDownload).toHaveBeenCalledWith('pixabay', '0')
     expect(api.useMeme).toHaveBeenCalledWith(sampleSummary.folder, 'meme-dl-0.mp4')
     expect(screen.getAllByTestId('online-item')[0]).toHaveAttribute('data-state', 'done')
     // Bấm lần nữa: không tải lại.
@@ -486,23 +488,14 @@ describe('EditorPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('API key không đúng')
   })
 
-  it('sticker động Tenor và âm thanh meme + giọng đọc AI', async () => {
+  it('nhãn dán chỉ còn emoji và hình vẽ; âm thanh meme + giọng đọc AI', async () => {
     const api = setup()
     await screen.findByTestId('editor')
-    act(() => {
-      useAppStore.setState({
-        secrets: {
-          elevenlabs: { state: 'saved', masked: 'el••' },
-          anthropic: { state: 'missing' },
-          tenor: { state: 'saved', masked: 'AIza••' },
-          pixabay: { state: 'missing' },
-        },
-      })
-    })
+    keys(true)
     await userEvent.click(screen.getByTestId('lib-stickers'))
-    await userEvent.click(screen.getByTestId('sticker-source-tenorSticker'))
-    expect(await screen.findAllByTestId('online-item')).toHaveLength(2)
-    expect(api.onlineSearch).toHaveBeenCalledWith('tenorSticker', '', null)
+    expect(screen.queryByTestId('sticker-source-tenorSticker')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByTestId('sticker-source-shapes'))
+    expect(api.onlineSearch).not.toHaveBeenCalled()
 
     await userEvent.click(screen.getByTestId('lib-audio'))
     await userEvent.click(screen.getByTestId('audio-section-meme'))

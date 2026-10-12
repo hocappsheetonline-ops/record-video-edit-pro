@@ -17,12 +17,13 @@
 :root,
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --lm-bg: #0b0b10;
-  --lm-surface: #14141c;
-  --lm-surface-2: #1c1c27;
-  --lm-border: #2a2a38;
-  --lm-text: #ececf1;
-  --lm-muted: #9a9aad;
+  /* Xám than trung tính như CapCut (không ám xanh). */
+  --lm-bg: #0f0f0f;
+  --lm-surface: #181818;
+  --lm-surface-2: #242424;
+  --lm-border: #2c2c2c;
+  --lm-text: #ededed;
+  --lm-muted: #9c9c9c;
   --lm-accent: #2563eb;
   --lm-accent-fg: #ffffff;
   --lm-success: #34d399;

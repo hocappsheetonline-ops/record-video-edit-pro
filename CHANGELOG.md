@@ -2,6 +2,13 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.0.1
+
+- **Bỏ kho meme Tenor**: Google đã khai tử Tenor API ngày 30/6/2026 nên app không còn ô key Tenor, nguồn Meme và Sticker động; kho **Pixabay** (video, ảnh miễn phí) giữ nguyên. Meme đã tải trước đó vẫn nằm trong thư viện của bạn.
+- Mục **Meme** đổi thành **Phương tiện** như CapCut: nút **Nhập video** (chọn video trên máy để chỉnh sửa, nối vào hàng Video làm clip chính) và **Nhập ảnh** (ảnh / GIF vào thư viện của tôi).
+- **Dạng sóng âm thanh giống CapCut**: vùng tô liền, đối xứng qua trục giữa và được làm mượt thay vì các cột rời; dải sóng trong clip video nền tối với sóng xanh nhạt; đoạn âm thanh là khối màu đặc với sóng trắng.
+- **Giao diện giống CapCut hơn**: cột mục thư viện có biểu tượng kèm nhãn; bảng màu tối chuyển sang xám than trung tính (không ám xanh).
+
 ## 1.0.0
 
 - Hoàn tất lộ trình kiểu CapCut (ROADMAP Bước 1–6): giao diện biểu tượng, kho meme, âm thanh và lọc tạp âm, bộ lọc / keyframe / mặt nạ / xóa phông AI, chữ / phụ đề / giọng AI, timeline chuyên nghiệp, nhập video ngoài, việc nền, lịch sử, ổn định.

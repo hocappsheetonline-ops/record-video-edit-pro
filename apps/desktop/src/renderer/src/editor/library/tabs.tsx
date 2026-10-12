@@ -26,8 +26,6 @@ import { useEditorStore } from '../store'
 import { ghostButton, Segmented } from '../ui'
 import { dragProps } from '../library-drag'
 import { Card } from './common'
-import { addLibraryItem } from './MediaTab'
-import { OnlineGrid } from './OnlineGrid'
 import { ShapesGrid } from '../TextPanels'
 
 const EFFECT_ICONS: Record<EffectKind, LucideIcon> = {
@@ -77,29 +75,22 @@ function EmojiGrid() {
   )
 }
 
-/** Nhãn dán: emoji có sẵn, hình vẽ sẵn (mũi tên, khoanh tròn…) hoặc sticker động nền trong suốt từ Tenor. */
+/** Nhãn dán: emoji có sẵn hoặc hình vẽ sẵn (mũi tên, khoanh tròn…). */
 export function StickersTab() {
   const { t } = useTranslation()
-  const [source, setSource] = useState<'emoji' | 'shapes' | 'tenorSticker'>('emoji')
+  const [source, setSource] = useState<'emoji' | 'shapes'>('emoji')
   return (
     <div className="flex flex-col gap-3 p-3">
       <Segmented
         options={[
           { value: 'emoji', label: t('editor.library.sources.emoji') },
           { value: 'shapes', label: t('editor.library.sources.shapes') },
-          { value: 'tenorSticker', label: t('editor.library.sources.tenorSticker') },
         ]}
         value={source}
         onChange={setSource}
         testIdPrefix="sticker-source-"
       />
-      {source === 'emoji' ? (
-        <EmojiGrid />
-      ) : source === 'shapes' ? (
-        <ShapesGrid />
-      ) : (
-        <OnlineGrid source="tenorSticker" onUse={addLibraryItem} />
-      )}
+      {source === 'emoji' ? <EmojiGrid /> : <ShapesGrid />}
     </div>
   )
 }

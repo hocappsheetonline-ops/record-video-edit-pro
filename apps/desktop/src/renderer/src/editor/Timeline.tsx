@@ -761,7 +761,11 @@ export function Timeline() {
                           )}
                         </span>
                       </div>
-                      <div className="relative h-4 shrink-0 bg-black/40 text-accent">
+                      {/* Dải sóng âm kiểu CapCut: nền tối, sóng màu xanh nhạt tô liền. */}
+                      <div
+                        className="relative h-4 shrink-0 bg-[#0d1117] text-sky-300/90"
+                        data-testid="clip-wave-band"
+                      >
                         {waveform && !clip.freeze && (
                           <ClipWaveform clip={clip} waveform={waveform} />
                         )}

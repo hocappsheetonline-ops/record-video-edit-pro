@@ -8,7 +8,6 @@ import type { MemeItem, OnlineItem, OnlineSearch, OnlineSource } from '@shared/i
 import type { FetchLike } from '../key-validation'
 import type { MemeLibrary } from '../projects/images'
 import { searchPixabay } from './pixabay'
-import { searchTenor } from './tenor'
 import { ContentError } from './types'
 
 /** Kết quả tìm kiếm giữ lại 10 phút: gõ lại từ khóa cũ không tốn lượt gọi API. */
@@ -18,15 +17,13 @@ export const MAX_DOWNLOAD_BYTES = 150 * 1024 * 1024
 const DOWNLOAD_TIMEOUT_MS = 120_000
 
 export interface OnlineDeps {
-  getKey(name: 'tenor' | 'pixabay'): Promise<string | undefined>
+  getKey(name: 'pixabay'): Promise<string | undefined>
   library: MemeLibrary
   /** Thư mục tạm cho file đang tải. */
   tmpDir: string
   fetchImpl?: FetchLike
   now?: () => number
 }
-
-const keyFor = (source: OnlineSource) => (source.startsWith('tenor') ? 'tenor' : 'pixabay')
 
 const EXTENSIONS: Record<string, string> = {
   'video/mp4': 'mp4',
@@ -45,9 +42,9 @@ function extensionOf(url: string, contentType: string): string {
 }
 
 /**
- * Kho nội dung online (Tenor, Pixabay): tìm kiếm qua main process (giấu key, tránh CORS), tải
- * về thư viện meme cá nhân để dùng offline. Chỉ tải được mục vừa có trong kết quả tìm kiếm, nên
- * giao diện không thể bắt app tải một địa chỉ tùy ý.
+ * Kho nội dung online (Pixabay; Tenor đã bị Google khai tử ngày 30/6/2026): tìm kiếm qua main
+ * process (giấu key, tránh CORS), tải về thư viện phương tiện cá nhân để dùng offline. Chỉ tải
+ * được mục vừa có trong kết quả tìm kiếm, nên giao diện không thể bắt app tải một địa chỉ tùy ý.
  */
 export class OnlineService {
   private readonly cache = new Map<string, { at: number; result: OnlineSearch }>()
@@ -60,8 +57,8 @@ export class OnlineService {
     return (this.deps.now ?? Date.now)()
   }
 
-  private async key(source: OnlineSource): Promise<string> {
-    const key = await this.deps.getKey(keyFor(source))
+  private async key(): Promise<string> {
+    const key = await this.deps.getKey('pixabay')
     if (!key) throw new Error('key_missing')
     return key
   }
@@ -70,29 +67,20 @@ export class OnlineService {
     const cacheKey = JSON.stringify([source, q.trim().toLowerCase(), next])
     const hit = this.cache.get(cacheKey)
     if (hit && this.now() - hit.at < CACHE_MS) return hit.result
-    const apiKey = await this.key(source)
-    const fetchImpl = this.deps.fetchImpl
-    const result =
-      source === 'tenor' || source === 'tenorSticker'
-        ? await searchTenor(apiKey, {
-            q,
-            kind: source === 'tenor' ? 'gif' : 'sticker',
-            next,
-            fetchImpl,
-          })
-        : await searchPixabay(apiKey, {
-            q,
-            kind: source === 'pixabayVideo' ? 'video' : 'image',
-            next,
-            fetchImpl,
-          })
+    const apiKey = await this.key()
+    const result = await searchPixabay(apiKey, {
+      q,
+      kind: source === 'pixabayVideo' ? 'video' : 'image',
+      next,
+      fetchImpl: this.deps.fetchImpl,
+    })
     for (const item of result.items) this.known.set(`${item.source}:${item.id}`, item)
     this.cache.set(cacheKey, { at: this.now(), result })
     return result
   }
 
-  /** Tải một mục vào thư viện meme (đã có thì dùng lại, không tải lần hai). */
-  download(source: 'tenor' | 'pixabay', id: string): Promise<MemeItem> {
+  /** Tải một mục vào thư viện phương tiện (đã có thì dùng lại, không tải lần hai). */
+  download(source: 'pixabay', id: string): Promise<MemeItem> {
     const key = `${source}:${id}`
     const running = this.downloading.get(key)
     if (running) return running
@@ -101,7 +89,7 @@ export class OnlineService {
     return task
   }
 
-  private async doDownload(source: 'tenor' | 'pixabay', id: string): Promise<MemeItem> {
+  private async doDownload(source: 'pixabay', id: string): Promise<MemeItem> {
     const existing = (await this.deps.library.list()).find(
       (m) => m.origin?.source === source && m.origin.id === id,
     )
