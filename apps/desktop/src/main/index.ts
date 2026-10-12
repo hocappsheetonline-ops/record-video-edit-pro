@@ -160,8 +160,8 @@ if (!app.requestSingleInstanceLock()) {
       // Đóng cửa sổ chính khi đang quay: lưu lại phần đã quay.
       if (recording.isRecording) void recording.finish().catch(() => undefined)
     })
-    // Kiểm tra bản mới sau khi app mở xong, không làm chậm lúc khởi động.
-    setTimeout(() => void updates.check(), 10_000)
+    // Kiểm tra bản mới sau khi app mở xong (không làm chậm lúc khởi động), rồi 4 giờ một lần.
+    updates.schedule()
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) mainWindow = createMainWindow()
     })

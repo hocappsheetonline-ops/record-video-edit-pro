@@ -123,3 +123,82 @@ test('mở lại app: bản chỉnh sửa vẫn còn', async () => {
   await expect(page.getByTestId('timeline-clip')).toHaveCount(2)
   await app.close()
 })
+
+/** Chụp khung xem trước (canvas có video khác nguồn nên không đọc pixel trực tiếp được). */
+async function previewPixel(page: Page, x: number, y: number): Promise<number[]> {
+  const file = join(projectDir, `.preview-${Date.now()}.png`)
+  await page.getByTestId('editor-canvas').screenshot({ path: file })
+  return pixelAt(file, x, y, 0)
+}
+
+const near = (a: number[], b: number[]) => a.every((v, i) => Math.abs(v - b[i]!) < 12)
+
+test('xem trước đổi ngay khi chỉnh (không cần bấm Play); chế độ dọc 9:16 tự cắt và xuất đúng', async () => {
+  const { app, page, errors } = await launchApp(dirs.userData)
+  await openEditor(page)
+  const timecode = await page.getByTestId('timecode').textContent()
+
+  // Đổi nền khi đang dừng: góc khung (phần lề) đổi màu ngay.
+  await page.getByTestId('tab-frame').click()
+  await page.getByTestId('bg-preset-6').click()
+  await expect
+    .poll(() => previewPixel(page, 4, 4).then((p) => near(p, [0xf5, 0xf5, 0xf4])))
+    .toBe(true)
+  await page.getByTestId('bg-preset-0').click()
+  await expect
+    .poll(() => previewPixel(page, 4, 4).then((p) => near(p, [0xf5, 0xf5, 0xf4])))
+    .toBe(false)
+  // Vẫn đang dừng ở đúng chỗ cũ.
+  await expect(page.getByTestId('timecode')).toHaveText(timecode!)
+
+  // Chế độ dọc: khung 9:16, video phủ kín (góc không còn là nền), lấp đầy được bật sẵn.
+  await page.getByTestId('bg-preset-6').click()
+  await page.getByTestId('preset-vertical').click()
+  await expect
+    .poll(() =>
+      page
+        .getByTestId('editor-canvas')
+        .evaluate((c) => [
+          (c as unknown as { width: number }).width,
+          (c as unknown as { height: number }).height,
+        ]),
+    )
+    .toEqual([720, 1280])
+  await expect(page.getByTestId('frame-fill')).toBeChecked()
+  await expect
+    .poll(() => previewPixel(page, 4, 300).then((p) => near(p, [0xf5, 0xf5, 0xf4])))
+    .toBe(false)
+
+  // Webcam dạng dải ở dưới.
+  await page.getByTestId('tab-camera').click()
+  await page.getByTestId('cam-layout-stack').click()
+  await page.getByTestId('cam-stack-bottom').click()
+
+  await page.getByTestId('tab-export').click()
+  await page.getByTestId('resolution-720').click()
+  await expect(page.getByTestId('export-size')).toHaveText('720 × 1280')
+  await page.getByTestId('export-start').click()
+  await expect(page.getByTestId('export-result')).toBeVisible({ timeout: 150_000 })
+
+  const [mp4] = exported('.mp4')
+  const file = join(projectDir, 'exports', mp4!)
+  const info = probeMedia(file)
+  expect({ width: info.width, height: info.height }).toEqual({ width: 720, height: 1280 })
+  // Kiểu cũ (video 16:9 nằm giữa khung dọc) thì phía trên và dưới là nền. Giờ phía trên là
+  // video màn hình (cắt dọc), phía dưới là dải webcam — không còn chỗ nào lộ nền.
+  for (const [x, y] of [
+    [360, 100],
+    [360, 400],
+    [360, 900],
+    [360, 1180],
+  ] as const) {
+    const p = pixelAt(file, x, y)
+    expect(near(p, [0xf5, 0xf5, 0xf4]), `${x},${y}: ${p}`).toBe(false)
+  }
+
+  const saved = JSON.parse(readFileSync(join(projectDir, 'edit.json'), 'utf8'))
+  expect(saved.frame).toMatchObject({ aspect: '9:16', fill: true })
+  expect(saved.camera).toMatchObject({ layout: 'stack', position: 'bottom-left' })
+  expect(errors).toEqual([])
+  await app.close()
+})

@@ -81,6 +81,20 @@ export class UpdateService {
     return this.current
   }
 
+  /**
+   * Kiểm tra lần đầu sau `firstDelayMs` (để app mở nhanh), rồi định kỳ mỗi `intervalMs`
+   * — app để mở lâu ngày vẫn nhận được bản mới. Trả về hàm hủy lịch.
+   */
+  schedule(firstDelayMs = 10_000, intervalMs = 4 * 60 * 60 * 1000): () => void {
+    if (!this.deps.updater) return () => undefined
+    const first = setTimeout(() => void this.check(), firstDelayMs)
+    const repeat = setInterval(() => void this.check(), intervalMs)
+    return () => {
+      clearTimeout(first)
+      clearInterval(repeat)
+    }
+  }
+
   install(): void {
     if (this.current.state !== 'ready') throw new Error('update_not_ready')
     this.deps.updater?.quitAndInstall(false, true)

@@ -29,6 +29,11 @@ export interface FrameStyle {
   /** Độ đậm của bóng đổ 0..1. */
   shadow: number
   background: Background
+  /**
+   * Lấp đầy khung: video màn hình phủ kín khung (không lề, không nền), phần thừa được cắt bớt
+   * và khung nhìn tự đi theo con trỏ. Dùng cho video dọc 9:16 (TikTok, Shorts, Reels).
+   */
+  fill: boolean
 }
 
 export interface CursorStyle {
@@ -47,7 +52,14 @@ export interface CameraStyle {
   /** Cạnh bong bóng, tỉ lệ theo cạnh ngắn của khung (0.05..0.6). */
   size: number
   position: Corner
+  /** `bubble`: bong bóng nổi trên video. `stack`: dải webcam chiếm trọn chiều ngang ở trên/dưới. */
+  layout: CameraLayout
+  /** Chiều cao dải webcam khi `stack`, tỉ lệ theo chiều cao khung (0.2..0.6). */
+  split: number
 }
+
+export const CAMERA_LAYOUTS = ['bubble', 'stack'] as const
+export type CameraLayout = (typeof CAMERA_LAYOUTS)[number]
 
 export interface AudioMix {
   /** Âm lượng 0..2 (1 = giữ nguyên). */
@@ -97,6 +109,7 @@ export function createDefaultEdit(
       radius: 0.025,
       shadow: 0.5,
       background: { ...BACKGROUND_PRESETS[0]! },
+      fill: false,
     },
     // Chỉ vẽ con trỏ khi con trỏ gốc không nằm sẵn trong video.
     cursor: {
@@ -106,7 +119,14 @@ export function createDefaultEdit(
       clickEffect: true,
       hideIdle: true,
     },
-    camera: { visible: true, shape: 'circle', size: 0.22, position: 'bottom-right' },
+    camera: {
+      visible: true,
+      shape: 'circle',
+      size: 0.22,
+      position: 'bottom-right',
+      layout: 'bubble',
+      split: 0.4,
+    },
     audio: { mic: 1, system: 1 },
     export: { resolution: 1080, fps: project.fps >= 60 ? 60 : 30, format: 'mp4' },
     captions: { ...DEFAULT_CAPTIONS, lines: [] },
@@ -240,6 +260,7 @@ export function parseEditState(
         color2: color(bg.color2, base.frame.background.color2),
         angle: num(bg.angle, base.frame.background.angle, 0, 360),
       },
+      fill: bool(f.fill, base.frame.fill),
     },
     cursor: {
       visible: bool(c.visible, base.cursor.visible),
@@ -253,6 +274,8 @@ export function parseEditState(
       shape: pick(['circle', 'rounded', 'square'] as const, cam.shape, base.camera.shape),
       size: num(cam.size, base.camera.size, 0.05, 0.6),
       position: pick(CORNERS, cam.position, base.camera.position),
+      layout: pick(CAMERA_LAYOUTS, cam.layout, base.camera.layout),
+      split: num(cam.split, base.camera.split, 0.2, 0.6),
     },
     audio: { mic: num(a.mic, 1, 0, 2), system: num(a.system, 1, 0, 2) },
     export: {

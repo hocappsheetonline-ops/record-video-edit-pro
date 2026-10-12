@@ -67,6 +67,14 @@ export class PreviewEngine {
     this.needsDraw = true
   }
 
+  /** Những gì quyết định khung hình lần vẽ trước; đổi bất kỳ cái nào (kể cả khi đang dừng) là vẽ lại. */
+  private drawn: unknown[] = []
+  private changedSinceDraw(): boolean {
+    const s = useEditorStore.getState()
+    const deps = [s.edit, s.time, s.videoSize, s.cursor, s.follow]
+    return deps.some((d, i) => d !== this.drawn[i])
+  }
+
   private el(segment: number, kind: TrackKind): MediaEl | undefined {
     return this.media.get(`${segment}:${kind}`)
   }
@@ -88,7 +96,8 @@ export class PreviewEngine {
       }
       this.lastTick = playing ? now : 0
       this.sync(edit, useEditorStore.getState().time, playing)
-      if (this.needsDraw || playing) this.draw(edit, useEditorStore.getState().time)
+      if (this.needsDraw || playing || this.changedSinceDraw())
+        this.draw(edit, useEditorStore.getState().time)
     }
     this.frame = requestAnimationFrame(this.loop)
   }
@@ -125,6 +134,7 @@ export class PreviewEngine {
     if (!ctx) return
     this.needsDraw = false
     const store = useEditorStore.getState()
+    this.drawn = [store.edit, store.time, store.videoSize, store.cursor, store.follow]
     const hit = outputToSource(edit.clips, time)
     const source = hit?.source ?? 0
     const item = segmentAt(this.segments, source)

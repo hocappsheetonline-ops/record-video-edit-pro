@@ -1,3 +1,4 @@
+import { coverSource } from '@lumora/core'
 import type { FrameScene } from './scene'
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
@@ -194,26 +195,18 @@ export function drawScene(
     const { x, y, width, height } = cam.rect
     ctx.save()
     const r = cam.shape === 'circle' ? width / 2 : cam.shape === 'rounded' ? width * 0.18 : 0
-    ctx.shadowColor = 'rgba(0,0,0,0.4)'
-    ctx.shadowBlur = width * 0.08
+    if (cam.shape !== 'strip') {
+      ctx.shadowColor = 'rgba(0,0,0,0.4)'
+      ctx.shadowBlur = width * 0.08
+    }
     roundedRect(ctx, x, y, width, height, r)
     ctx.fillStyle = '#000000'
     ctx.fill()
     ctx.shadowColor = 'transparent'
     ctx.clip()
-    // Cắt giữa khung webcam thành hình vuông (cover).
-    const side = Math.min(camFrame.width, camFrame.height)
-    camFrame.draw(
-      ctx,
-      (camFrame.width - side) / 2,
-      (camFrame.height - side) / 2,
-      side,
-      side,
-      x,
-      y,
-      width,
-      height,
-    )
+    // Cắt giữa khung webcam cho vừa ô hiển thị (cover).
+    const crop = coverSource({ width: camFrame.width, height: camFrame.height }, cam.rect)
+    camFrame.draw(ctx, crop.x, crop.y, crop.width, crop.height, x, y, width, height)
     ctx.restore()
   }
   drawCaptions(ctx, scene)

@@ -120,6 +120,12 @@ export const en: Messages = {
       padding: 'Padding',
       radius: 'Corner radius',
       shadow: 'Shadow',
+      vertical: 'Auto vertical 9:16',
+      verticalHint:
+        'For TikTok, Shorts, Reels: the video fills the vertical frame, auto-cropped to follow the cursor, with your webcam inside.',
+      fill: 'Fill frame (auto-crop to cursor)',
+      fillHint:
+        'The screen video fills the whole frame; the overflow is cropped and the view follows the cursor.',
     },
     cursor: {
       visible: 'Show cursor (smoothly redrawn)',
@@ -152,6 +158,10 @@ export const en: Messages = {
         'top-right': 'Top right',
         'top-left': 'Top left',
       },
+      layout: 'Layout',
+      layouts: { bubble: 'Inside the video', stack: 'Separate strip' },
+      split: 'Webcam strip height',
+      stackPosition: { top: 'Top', bottom: 'Bottom' },
     },
     audio: { mic: 'Microphone', system: 'Computer audio' },
     export: {
@@ -316,6 +326,11 @@ export const en: Messages = {
       alreadyLive: 'Already live.',
       generic: 'Error: {{message}}',
     },
+  },
+  update: {
+    ready:
+      'Lumora {{version}} has been downloaded. Restart to use it (or it installs automatically when you quit).',
+    later: 'Later',
   },
   settings: {
     title: 'Settings',

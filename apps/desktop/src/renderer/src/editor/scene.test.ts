@@ -187,3 +187,103 @@ describe('computeScene', () => {
     expect(scene.captions?.words.map((w) => w.text)).toEqual(['Xin', 'chào'])
   })
 })
+
+describe('computeScene — video dọc tự cắt theo con trỏ', () => {
+  const vertical = { width: 1080, height: 1920 }
+
+  function verticalEdit() {
+    const edit = createDefaultEdit(project)
+    edit.frame = { ...edit.frame, aspect: '9:16', fill: true, padding: 0.1 }
+    return edit
+  }
+
+  it('lấp đầy: video phủ kín khung dọc, cắt một dải 9:16 quanh con trỏ, không bo góc', () => {
+    const scene = computeScene({
+      edit: verticalEdit(),
+      output: vertical,
+      video,
+      source: 2000,
+      cursor: track(0.8, 0.3),
+      follow: track(0.8, 0.3),
+      hasCamera: false,
+    })
+    expect(scene.content).toEqual({ x: 0, y: 0, width: 1080, height: 1920 })
+    expect(scene.radius).toBe(0)
+    expect(scene.shadow).toBe(0)
+    expect((scene.view.width * video.width) / (scene.view.height * video.height)).toBeCloseTo(
+      9 / 16,
+    )
+    expect(scene.view.x + scene.view.width / 2).toBeCloseTo(0.8)
+    // Con trỏ nằm trong khung hình và ở đúng giữa theo chiều ngang (vì khung đi theo nó).
+    expect(scene.cursor!.x).toBeCloseTo(540)
+    expect(scene.cursor!.y).toBeCloseTo(0.3 * 1920)
+  })
+
+  it('con trỏ sát mép phải: khung dừng ở mép video, con trỏ lệch về bên phải', () => {
+    const scene = computeScene({
+      edit: verticalEdit(),
+      output: vertical,
+      video,
+      source: 2000,
+      cursor: track(0.98, 0.5),
+      follow: track(0.98, 0.5),
+      hasCamera: false,
+    })
+    expect(scene.view.x + scene.view.width).toBeCloseTo(1)
+    expect(scene.cursor!.x).toBeGreaterThan(900)
+    expect(scene.cursor!.x).toBeLessThan(1080)
+  })
+
+  it('webcam bong bóng nằm trong khung dọc', () => {
+    const edit = verticalEdit()
+    edit.camera = { ...edit.camera, size: 0.32, position: 'top-left' }
+    const scene = computeScene({
+      edit,
+      output: vertical,
+      video,
+      source: 2000,
+      cursor: null,
+      follow: null,
+      hasCamera: true,
+    })
+    expect(scene.camera!.shape).toBe('circle')
+    expect(scene.camera!.rect.x).toBeLessThan(100)
+    expect(scene.camera!.rect.width).toBeCloseTo(0.32 * 1080)
+    expect(scene.content.height).toBe(1920)
+  })
+
+  it('webcam dạng dải ở trên: video màn hình lấp phần bên dưới', () => {
+    const edit = verticalEdit()
+    edit.camera = { ...edit.camera, layout: 'stack', split: 0.4, position: 'top-left' }
+    const scene = computeScene({
+      edit,
+      output: vertical,
+      video,
+      source: 2000,
+      cursor: null,
+      follow: null,
+      hasCamera: true,
+    })
+    expect(scene.camera).toEqual({ rect: { x: 0, y: 0, width: 1080, height: 768 }, shape: 'strip' })
+    expect(scene.content).toEqual({ x: 0, y: 768, width: 1080, height: 1152 })
+    expect((scene.view.width * video.width) / (scene.view.height * video.height)).toBeCloseTo(
+      1080 / 1152,
+    )
+  })
+
+  it('không có webcam thì dải không chiếm chỗ', () => {
+    const edit = verticalEdit()
+    edit.camera = { ...edit.camera, layout: 'stack' }
+    const scene = computeScene({
+      edit,
+      output: vertical,
+      video,
+      source: 2000,
+      cursor: null,
+      follow: null,
+      hasCamera: false,
+    })
+    expect(scene.camera).toBeNull()
+    expect(scene.content.height).toBe(1920)
+  })
+})

@@ -116,8 +116,8 @@ export function cameraFollowTrack(track: CursorTrack): CursorTrack {
 }
 
 /** Giữ tâm khung nhìn để khung không vượt ra ngoài video. */
-export function clampCenter(value: number, scale: number): number {
-  const half = 0.5 / scale
+export function clampCenter(value: number, scale: number, base = 1): number {
+  const half = (0.5 * base) / scale
   return Math.min(1 - half, Math.max(half, value))
 }
 
@@ -138,21 +138,25 @@ export function cameraAt(
   regions: readonly ZoomRegion[],
   s: number,
   follow: CursorTrack | null,
+  /** Tâm khung nhìn khi không zoom (mặc định giữa video; chế độ lấp đầy dùng vị trí con trỏ). */
+  rest: { x: number; y: number } = { x: 0.5, y: 0.5 },
+  /** Kích thước khung nhìn khi chưa zoom (chuẩn hóa); khung dọc hẹp hơn nên đi sát mép được hơn. */
+  base: { width: number; height: number } = { width: 1, height: 1 },
 ): Camera {
   const region = regions.find((r) => s >= r.start && s <= r.end)
-  if (!region) return { scale: 1, x: 0.5, y: 0.5 }
+  if (!region) return { scale: 1, x: rest.x, y: rest.y }
   const p = zoomProgress(region, s)
   const scale = 1 + (region.scale - 1) * p
   const target =
     region.mode === 'follow' && follow
       ? (cursorAt(follow, s) ?? { x: region.x, y: region.y })
       : { x: region.x, y: region.y }
-  const tx = clampCenter(target.x, region.scale)
-  const ty = clampCenter(target.y, region.scale)
+  const tx = clampCenter(target.x, region.scale, base.width)
+  const ty = clampCenter(target.y, region.scale, base.height)
   return {
     scale,
-    x: clampCenter(0.5 + (tx - 0.5) * p, scale),
-    y: clampCenter(0.5 + (ty - 0.5) * p, scale),
+    x: clampCenter(rest.x + (tx - rest.x) * p, scale, base.width),
+    y: clampCenter(rest.y + (ty - rest.y) * p, scale, base.height),
   }
 }
 

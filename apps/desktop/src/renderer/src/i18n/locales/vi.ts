@@ -117,6 +117,11 @@ export const vi = {
       padding: 'Lề',
       radius: 'Bo góc',
       shadow: 'Bóng đổ',
+      vertical: 'Dọc 9:16 tự động',
+      verticalHint:
+        'Cho TikTok, Shorts, Reels: video phủ kín khung dọc, tự cắt theo con trỏ, webcam nằm trong khung.',
+      fill: 'Lấp đầy khung (tự cắt theo con trỏ)',
+      fillHint: 'Video màn hình phủ kín khung; phần thừa được cắt và khung nhìn đi theo con trỏ.',
     },
     cursor: {
       visible: 'Hiện con trỏ (vẽ lại mượt)',
@@ -149,6 +154,10 @@ export const vi = {
         'top-right': 'Trên phải',
         'top-left': 'Trên trái',
       },
+      layout: 'Bố cục',
+      layouts: { bubble: 'Nằm trong video', stack: 'Dải riêng' },
+      split: 'Chiều cao dải webcam',
+      stackPosition: { top: 'Ở trên', bottom: 'Ở dưới' },
     },
     audio: { mic: 'Micro', system: 'Âm thanh máy' },
     export: {
@@ -313,6 +322,11 @@ export const vi = {
       alreadyLive: 'Đang phát rồi.',
       generic: 'Lỗi: {{message}}',
     },
+  },
+  update: {
+    ready:
+      'Đã tải xong Lumora {{version}}. Khởi động lại để dùng bản mới (hoặc bản mới tự cài khi bạn thoát app).',
+    later: 'Để sau',
   },
   settings: {
     title: 'Cài đặt',

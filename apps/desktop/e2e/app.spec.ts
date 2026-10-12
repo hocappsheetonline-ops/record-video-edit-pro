@@ -1,7 +1,12 @@
+import { readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { expect, test } from '@playwright/test'
 import { createTestDirs, launchApp, type TestDirs } from './helpers'
+
+const VERSION = (
+  JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf8')) as { version: string }
+).version
 
 const CLAUDE_KEY = 'sk-ant-api03-e2e-test-key-abcdefghijklmnop-9876'
 
@@ -56,7 +61,7 @@ test('lưu API key đã mã hóa và giữ lại sau khi mở lại app', async 
   let { app, page } = await launch()
   await page.getByTestId('nav-settings').click()
   await expect(page.getByRole('alert')).toHaveCount(0)
-  await expect(page.getByTestId('app-version')).toHaveText('Lumora · Phiên bản 0.1.0')
+  await expect(page.getByTestId('app-version')).toHaveText(`Lumora · Phiên bản ${VERSION}`)
 
   const card = page.getByTestId('key-card-anthropic')
   await card.getByLabel('Claude (Anthropic)').fill(CLAUDE_KEY)
@@ -132,7 +137,7 @@ test('nhật ký lỗi: ghi lúc khởi động, ghi lỗi IPC và che API key; 
   const logFile = join(userDataDir, 'logs', 'main.log')
   await expect.poll(() => readFile(logFile, 'utf8').catch(() => '')).toContain('[ipc projects:get]')
   const log = await readFile(logFile, 'utf8')
-  expect(log).toMatch(/INFO {2}\[app\] Lumora 0\.1\.0/)
+  expect(log).toContain(`INFO  [app] Lumora ${VERSION} (`)
   expect(log).toContain('Thư mục dự án không hợp lệ')
   expect(log).not.toContain('abcdefghijklmnop')
   await app.close()

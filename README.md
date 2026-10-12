@@ -45,7 +45,9 @@ Mở một dự án và bấm **Chỉnh sửa**:
 - **Tự động zoom**: lần đầu mở, app gom các click chuột và đoạn gõ phím liên tục để tự tạo đoạn zoom. Khung nhìn đi theo con trỏ và chuyển vào/ra mượt. Trên timeline, kéo đoạn zoom để di chuyển, kéo mép để đổi độ dài. Mức zoom và kiểu zoom (theo con trỏ hoặc cố định) chỉnh trong tab **Zoom**.
 - **Con trỏ** được vẽ lại từ dữ liệu chuột, làm mượt bằng mô phỏng lò xo. Có thể phóng to con trỏ, bật hiệu ứng khi click, và tự ẩn khi chuột đứng yên.
 - **Khung**: chọn tỉ lệ 16:9, 9:16, 1:1, 4:3 hoặc giữ tỉ lệ gốc; nền trơn hoặc chuyển màu; lề, bo góc, bóng đổ.
-- **Webcam**: bong bóng tròn, bo góc hoặc vuông, chỉnh kích thước và góc đặt.
+- **Video dọc 9:16 (TikTok, Shorts, Reels)**: bấm **Dọc 9:16 tự động** ở tab **Khung**. Video màn hình phủ kín khung dọc, phần thừa được cắt và khung nhìn tự đi theo con trỏ (giống Screen Studio), các đoạn zoom vẫn giữ nguyên. Webcam nằm trong khung (bong bóng) hoặc thành một dải riêng ở trên/dưới (tab **Webcam** → **Bố cục** → **Dải riêng**). Tùy chọn **Lấp đầy khung** dùng được cho mọi tỉ lệ.
+- **Webcam**: bong bóng tròn, bo góc hoặc vuông, chỉnh kích thước và góc đặt; hoặc dải webcam chiếm trọn chiều ngang.
+- Mọi thay đổi hiện ngay trên khung xem trước, không cần bấm phát.
 - **Timeline**: tách (phím S), xóa (Delete), đổi tốc độ từng đoạn, hoàn tác/làm lại (Ctrl+Z / Ctrl+Y). Bản chỉnh sửa được tự lưu vào `edit.json`.
 - **Xuất**: MP4 (H.264 + AAC) hoặc GIF; 720p, 1080p, 1440p hoặc 4K; 30 hoặc 60 fps. File được lưu trong thư mục `exports` của dự án.
 
@@ -84,7 +86,7 @@ Nếu FFmpeg dừng giữa chừng (mất mạng, sai key) hoặc mọi kênh đ
 
 ## Cập nhật và nhật ký lỗi
 
-- **Tự cập nhật**: bản đã cài tự kiểm tra GitHub Releases khoảng 10 giây sau khi mở, rồi tải bản mới ở nền. Tải xong, vào **Cài đặt → Thông tin** và bấm **Khởi động lại để cập nhật**. Nếu không bấm, bản mới tự cài khi bạn thoát app. Bạn cũng kiểm tra được bằng tay ở cùng chỗ đó.
+- **Tự cập nhật**: bản đã cài tự kiểm tra GitHub Releases khoảng 10 giây sau khi mở và cứ 4 giờ một lần, rồi tải bản mới ở nền. Tải xong, một thanh báo hiện ở đầu app: bấm **Khởi động lại để cập nhật**, hoặc bỏ qua thì bản mới tự cài khi bạn thoát app. Kiểm tra bằng tay ở **Cài đặt → Thông tin**.
 - **Nhật ký lỗi**: `%APPDATA%\Lumora\logs\main.log` (tối đa 5 MB, giữ thêm một bản cũ `main.old.log`). Bấm **Mở thư mục nhật ký lỗi** trong **Cài đặt → Thông tin**. API key, token và stream key được che trước khi ghi.
 
 ## Phát hành bản mới

@@ -93,4 +93,28 @@ describe('UpdateService', () => {
     expect(sent).toEqual([{ state: 'error', message: 'HttpError: 404' }])
     expect(log).toHaveBeenCalledTimes(1)
   })
+
+  it('lịch kiểm tra: lần đầu sau khi mở app, rồi định kỳ; hủy được', async () => {
+    vi.useFakeTimers()
+    try {
+      const { service, updater } = setup()
+      updater.checkForUpdates.mockImplementation(async () => {
+        updater.emit('update-not-available')
+        return null
+      })
+      const stop = service.schedule(10_000, 60_000)
+      await vi.advanceTimersByTimeAsync(9_999)
+      expect(updater.checkForUpdates).toHaveBeenCalledTimes(0)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(updater.checkForUpdates).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(120_000)
+      expect(updater.checkForUpdates).toHaveBeenCalledTimes(3)
+      stop()
+      await vi.advanceTimersByTimeAsync(600_000)
+      expect(updater.checkForUpdates).toHaveBeenCalledTimes(3)
+      expect(setup(null).service.schedule()).toBeTypeOf('function')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

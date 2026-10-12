@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { Theme } from '@lumora/core'
 import { Sidebar } from './components/Sidebar'
+import { UpdateBanner } from './components/UpdateBanner'
 import { EditorPage } from './pages/EditorPage'
 import { LivePage } from './pages/LivePage'
 import { ProjectsPage } from './pages/ProjectsPage'
@@ -42,15 +43,18 @@ export function App() {
   return (
     <div className="flex h-full bg-bg text-text">
       <Sidebar />
-      <main
-        className={`flex-1 ${page === 'editor' || page === 'live' ? 'overflow-hidden' : 'overflow-y-auto'}`}
-      >
-        {page === 'record' && <RecordPage />}
-        {page === 'projects' && <ProjectsPage />}
-        {page === 'editor' && <EditorPage />}
-        {page === 'live' && <LivePage />}
-        {page === 'settings' && <SettingsPage />}
-      </main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <UpdateBanner />
+        <main
+          className={`min-h-0 flex-1 ${page === 'editor' || page === 'live' ? 'overflow-hidden' : 'overflow-y-auto'}`}
+        >
+          {page === 'record' && <RecordPage />}
+          {page === 'projects' && <ProjectsPage />}
+          {page === 'editor' && <EditorPage />}
+          {page === 'live' && <LivePage />}
+          {page === 'settings' && <SettingsPage />}
+        </main>
+      </div>
     </div>
   )
 }

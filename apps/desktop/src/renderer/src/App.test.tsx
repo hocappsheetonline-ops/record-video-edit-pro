@@ -130,3 +130,19 @@ describe('Cài đặt API key', () => {
     expect(screen.getByLabelText('Claude (Anthropic)')).toBeDisabled()
   })
 })
+
+describe('Thông báo cập nhật', () => {
+  it('bản mới tải xong: hiện thanh báo ở mọi trang, bấm để cập nhật hoặc để sau', async () => {
+    const fake = makeFakeApi()
+    await renderApp(fake.api)
+    expect(screen.queryByTestId('update-banner')).not.toBeInTheDocument()
+    act(() => fake.emitUpdate({ state: 'ready', version: '0.2.0' }))
+    expect(await screen.findByTestId('update-banner')).toHaveTextContent('Lumora 0.2.0')
+    await userEvent.click(screen.getByTestId('nav-projects'))
+    expect(screen.getByTestId('update-banner')).toBeInTheDocument()
+    await userEvent.click(screen.getByTestId('update-banner-install'))
+    expect(fake.api.installUpdate).toHaveBeenCalled()
+    await userEvent.click(screen.getByRole('button', { name: 'Để sau' }))
+    expect(screen.queryByTestId('update-banner')).not.toBeInTheDocument()
+  })
+})
