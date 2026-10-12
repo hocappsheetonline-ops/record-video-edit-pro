@@ -405,10 +405,18 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
     deps.ai.summarize((await projectPath(folder)).path),
   )
   ipcMain.handle(IPC.aiVoices, () => deps.ai.voices())
-  ipcMain.handle(IPC.aiSpeak, async (_event, folder: unknown, text: unknown, voice: unknown) => {
-    if (typeof text !== 'string' || typeof voice !== 'string') throw new Error('speech_empty')
-    return deps.ai.speak((await projectPath(folder)).path, text, voice)
-  })
+  ipcMain.handle(
+    IPC.aiSpeak,
+    async (_event, folder: unknown, text: unknown, voice: unknown, options: unknown) => {
+      if (typeof text !== 'string' || typeof voice !== 'string') throw new Error('speech_empty')
+      const o =
+        typeof options === 'object' && options !== null ? (options as Record<string, unknown>) : {}
+      return deps.ai.speak((await projectPath(folder)).path, text, voice, {
+        speed: typeof o.speed === 'number' ? o.speed : undefined,
+        stability: typeof o.stability === 'number' ? o.stability : undefined,
+      })
+    },
+  )
   ipcMain.handle(IPC.onlineSearch, (_event, source: unknown, q: unknown, next: unknown) => {
     if (!ONLINE_SOURCES.includes(source as OnlineSource)) throw new Error('online_unknown')
     if (typeof q !== 'string' || q.length > 100) throw new Error('online_query')

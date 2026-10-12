@@ -513,10 +513,16 @@ describe('EditorPage', () => {
     await userEvent.selectOptions(screen.getByTestId('speech-voice'), 'voice-bao')
     await userEvent.click(screen.getByTestId('speech-line-1'))
     await waitFor(() => expect(useEditorStore.getState().edit!.audioClips).toHaveLength(2))
-    expect(api.speak).toHaveBeenCalledWith(sampleSummary.folder, 'Ối dồi ôi', 'voice-bao')
+    expect(api.speak).toHaveBeenCalledWith(sampleSummary.folder, 'Ối dồi ôi', 'voice-bao', {
+      speed: 1,
+      stability: 0.5,
+    })
     await userEvent.type(screen.getByTestId('speech-text'), 'Xin chào{Enter}')
     await waitFor(() =>
-      expect(api.speak).toHaveBeenLastCalledWith(sampleSummary.folder, 'Xin chào', 'voice-bao'),
+      expect(api.speak).toHaveBeenLastCalledWith(sampleSummary.folder, 'Xin chào', 'voice-bao', {
+        speed: 1,
+        stability: 0.5,
+      }),
     )
     expect(useEditorStore.getState().edit!.audioClips.map((c) => c.name)).toEqual([
       'vineBoom',
@@ -604,6 +610,8 @@ describe('EditorPage', () => {
     )
     expect(screen.getByTestId('script-count')).toHaveTextContent('3 / 40 câu')
     act(() => useEditorStore.getState().setTime(500))
+    // Giọng đọc nhanh hơn: áp dụng cho mọi câu.
+    fireEvent.change(screen.getByTestId('voice-speed'), { target: { value: '1.1' } })
     await userEvent.click(screen.getByTestId('script-generate'))
     expect(await screen.findByTestId('script-done')).toHaveTextContent('Đã thêm 3 đoạn')
     expect(api.speak).toHaveBeenCalledTimes(3)
@@ -612,6 +620,7 @@ describe('EditorPage', () => {
       sampleSummary.folder,
       'Hôm nay mình làm video',
       'voice-anna',
+      { speed: 1.1, stability: 0.5 },
     )
     const { audioClips, overlays } = useEditorStore.getState().edit!
     // Mỗi câu 900ms, cách nhau 250ms, bắt đầu từ đầu phát.
@@ -649,6 +658,30 @@ describe('EditorPage', () => {
       start: 4000,
       name: 'Nhập chữ',
     })
+  })
+
+  it('hàng Phụ đề trên timeline: mỗi dòng một khối, bấm để nhảy tới và mở mục Phụ đề', async () => {
+    setup()
+    await screen.findByTestId('editor-title')
+    expect(screen.queryByTestId('timeline-caption')).not.toBeInTheDocument()
+    act(() =>
+      useEditorStore.getState().change((e) => ({
+        ...e,
+        captions: {
+          ...e.captions,
+          enabled: true,
+          lines: [
+            { id: 'a', start: 200, end: 1500, text: 'Xin chào', words: [], edited: true },
+            { id: 'b', start: 2000, end: 3000, text: 'Tạm biệt', words: [], edited: true },
+          ],
+        },
+      })),
+    )
+    const blocks = screen.getAllByTestId('timeline-caption')
+    expect(blocks.map((b) => b.textContent)).toEqual(['Xin chào', 'Tạm biệt'])
+    fireEvent.pointerDown(blocks[1]!)
+    expect(useEditorStore.getState().time).toBe(2000)
+    expect(await screen.findByTestId('captions-panel')).toBeInTheDocument()
   })
 
   it('nút chỉ có biểu tượng đều có tên và chú thích khi rê chuột', async () => {

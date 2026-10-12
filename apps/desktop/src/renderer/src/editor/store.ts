@@ -97,6 +97,8 @@ interface EditorStore {
   bypassFx: boolean
   /** Đang ghi lồng tiếng và tắt tiếng bản gốc trong lúc ghi. */
   muteOriginal: boolean
+  /** Cài đặt giọng AI dùng chung (tốc độ 0.7–1.2, độ ổn định 0–1). */
+  voiceOptions: { speed: number; stability: number }
   /** Dạng sóng của các file nhạc/hiệu ứng đã thêm (theo tên file). */
   assetPeaks: Record<string, Waveform | null>
   cursor: CursorTrack | null
@@ -160,6 +162,7 @@ interface EditorStore {
   setSpeedCurve(id: string, curve: SpeedCurve | undefined, coalesce?: string): void
   setBypassFx(on: boolean): void
   setMuteOriginal(on: boolean): void
+  setVoiceOptions(patch: Partial<EditorStore['voiceOptions']>): void
   /** Thêm bản lồng tiếng vừa ghi tại thời điểm `at` (ms). */
   addVoiceover(data: ArrayBuffer, at: number, name: string): Promise<void>
   /** Tách tiếng của video meme ra thành đoạn âm thanh riêng trên hàng Âm thanh. */
@@ -222,6 +225,7 @@ const initial = {
   aiStatus: 'idle' as EditorStore['aiStatus'],
   bypassFx: false,
   muteOriginal: false,
+  voiceOptions: { speed: 1, stability: 0.5 },
   cursor: null,
   follow: null,
   videoSize: { width: 1920, height: 1080 },
@@ -549,6 +553,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set({ bypassFx: on })
   },
 
+  setVoiceOptions(patch) {
+    set({ voiceOptions: { ...get().voiceOptions, ...patch } })
+  },
+
   setMuteOriginal(on) {
     set({ muteOriginal: on })
   },
@@ -578,7 +586,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   async addSpeech(text, voiceId, at) {
     const { folder } = get()
     if (!folder) return
-    insertAudio(await lumora().speak(folder, text, voiceId), 'sfx', at)
+    insertAudio(await lumora().speak(folder, text, voiceId, get().voiceOptions), 'sfx', at)
   },
 
   async addNarration(lines, voiceId, options = {}) {
@@ -589,7 +597,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // Đọc hết trước rồi mới thêm vào dự án (một bước hoàn tác; lỗi giữa chừng không để dở dang).
     const assets: AudioAsset[] = []
     for (const line of list) {
-      assets.push(await lumora().speak(folder, line, voiceId))
+      assets.push(await lumora().speak(folder, line, voiceId, get().voiceOptions))
       options.onProgress?.(assets.length, list.length)
     }
     const total = outputDuration(get().edit?.clips ?? edit.clips)

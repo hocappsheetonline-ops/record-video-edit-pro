@@ -85,7 +85,7 @@ test('AI: nhập key, tạo phụ đề, cắt từ thừa, tạo chương, lưu
   expect(srt).toContain('2\n00:00:02,600 --> 00:00:03,550\nHôm nay mình demo.')
 
   // Xuất video có in phụ đề ở phía trên, trên nền sáng.
-  await page.getByRole('button', { name: 'Trên', exact: true }).click()
+  await page.getByTestId('caption-pos-top').click()
   await page.getByTestId('tab-frame').click()
   await page.getByTestId('bg-preset-6').click()
   await page.getByTestId('padding').fill('0.2')

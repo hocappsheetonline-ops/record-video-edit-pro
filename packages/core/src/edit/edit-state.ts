@@ -1,4 +1,5 @@
 import type { Project } from '../project'
+import { parseCaptionLook } from './caption-style'
 import {
   DEFAULT_CAPTIONS,
   type CaptionLine,
@@ -257,17 +258,25 @@ function parseCaptions(value: unknown, duration: number): CaptionsState {
             text: l.text.slice(0, 500),
             words: parseWords(l.words, duration),
             edited: l.edited === true,
+            ...(typeof l.translation === 'string'
+              ? { translation: l.translation.slice(0, 500) }
+              : {}),
           },
         ]
       })
     : []
+  const position = c.position === 'top' ? 'top' : 'bottom'
   return {
     enabled: bool(c.enabled, false),
     style: c.style === 'classic' ? 'classic' : 'highlight',
-    position: c.position === 'top' ? 'top' : 'bottom',
+    position,
     size: num(c.size, 1, 0.5, 2.5),
     language: typeof c.language === 'string' ? c.language.slice(0, 16) : '',
     lines,
+    look: parseCaptionLook(c.look, position),
+    bilingual: bool(c.bilingual, false),
+    translationLanguage:
+      typeof c.translationLanguage === 'string' ? c.translationLanguage.slice(0, 16) : '',
   }
 }
 

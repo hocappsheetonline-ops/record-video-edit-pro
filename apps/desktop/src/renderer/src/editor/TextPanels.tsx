@@ -31,6 +31,7 @@ import {
 import { lumora } from '../api'
 import { useAppStore } from '../store/app'
 import { loadFonts } from './fonts'
+import { VoiceSettings } from './library/AudioTab'
 import { drawShape } from './shape-draw'
 import { useEditorStore } from './store'
 import { pct, Section, Segmented, SliderRow, Toggle } from './ui'
@@ -504,6 +505,7 @@ function ReadAloudSection({ overlay }: { overlay: Overlay }) {
               </option>
             ))}
           </select>
+          <VoiceSettings />
           <button
             type="button"
             data-testid="tts-read"

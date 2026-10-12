@@ -1,6 +1,7 @@
 import {
   cameraAt,
   captionAt,
+  captionChunk,
   sourceToOutput,
   cameraRect,
   clickAt,
@@ -27,6 +28,7 @@ import {
   type ClipTransform,
   type CursorTrack,
   type LookLayers,
+  type CaptionLook,
   type EditState,
   type Rect,
   type Size,
@@ -78,13 +80,27 @@ export interface FrameScene {
   effects: ActiveEffect[]
   /** Chữ, sticker, ảnh meme đang hiện (kèm thời gian đã hiện). */
   overlays: OverlayItem[]
-  captions: {
-    words: { text: string; active: boolean }[]
-    style: 'highlight' | 'classic'
-    position: 'bottom' | 'top'
-    /** Cỡ chữ (px). */
-    fontSize: number
-  } | null
+  captions: SceneCaptions | null
+}
+
+export interface CaptionWord {
+  text: string
+  /** Từ đang nói (chỉ khi kiểu "tô sáng từ đang nói"). */
+  active: boolean
+  /** Đã nói tới (gồm từ đang nói) — cho mẫu karaoke / popWord. */
+  spoken: boolean
+  /** Thời gian từ lúc từ bắt đầu được nói (ms, âm nếu chưa tới). */
+  since: number
+}
+
+export interface SceneCaptions {
+  words: CaptionWord[]
+  style: 'highlight' | 'classic'
+  look: CaptionLook
+  /** Cỡ chữ (px). */
+  fontSize: number
+  /** Dòng dịch hiện dưới (phụ đề song ngữ). */
+  translation: string | null
 }
 
 export interface SceneInput {
@@ -160,23 +176,29 @@ export function computeScene(input: SceneInput): FrameScene {
   if (cap.enabled && cap.lines.length > 0) {
     const hit = captionAt(cap.lines, source)
     if (hit) {
-      const useWords = !hit.line.edited && hit.line.words.length > 0
-      // Từ đã bị cắt khỏi video thì không hiện trong phụ đề.
-      const words = useWords
-        ? hit.line.words.flatMap((w, i) =>
-            sourceToOutput(edit.clips, (w.start + w.end) / 2) === null
-              ? []
-              : [{ text: w.text, active: cap.style === 'highlight' && i === hit.wordIndex }],
-          )
-        : hit.line.text
-            .split(/\s+/)
-            .filter(Boolean)
-            .map((text) => ({ text, active: false }))
+      const { line } = hit
+      const useWords = !line.edited && line.words.length > 0
+      // Dòng đã sửa / đã dịch: chia đều thời gian của dòng cho các từ để vẫn có hiệu ứng từng từ.
+      const timed = useWords
+        ? line.words.filter((w) => sourceToOutput(edit.clips, (w.start + w.end) / 2) !== null)
+        : evenWords(line.text, line.start, line.end)
+      let current = -1
+      timed.forEach((w, i) => {
+        if (source >= w.start) current = i
+      })
+      const highlight = cap.style === 'highlight'
+      const [from, to] = captionChunk(timed.length, current, cap.look.maxWords)
       captions = {
-        words,
+        words: timed.slice(from, to).map((w, k) => ({
+          text: cap.look.uppercase ? w.text.toLocaleUpperCase() : w.text,
+          active: highlight && from + k === current,
+          spoken: highlight ? from + k <= current : true,
+          since: source - w.start,
+        })),
         style: cap.style,
-        position: cap.position,
+        look: cap.look,
         fontSize: Math.round(Math.min(output.width, output.height) * 0.05 * cap.size),
+        translation: cap.bilingual && line.translation ? line.translation : null,
       }
     }
   }
@@ -233,4 +255,11 @@ function cameraScene(
     border: cam.border * rect.width * 0.06,
     borderColor: cam.borderColor,
   }
+}
+
+/** Từ của một dòng không có thời gian từng từ: chia đều thời gian dòng. */
+function evenWords(text: string, start: number, end: number) {
+  const parts = text.split(/\s+/).filter(Boolean)
+  const step = (end - start) / Math.max(1, parts.length)
+  return parts.map((t, i) => ({ text: t, start: start + step * i, end: start + step * (i + 1) }))
 }

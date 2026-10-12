@@ -17,7 +17,7 @@ import { MicMeter } from '../../components/MicMeter'
 import { getMicStream, stopStream } from '../../lib/media'
 import { useAppStore } from '../../store/app'
 import { useEditorStore } from '../store'
-import { primaryButton, Segmented, Toggle } from '../ui'
+import { primaryButton, Segmented, SliderRow, Toggle } from '../ui'
 import { ErrorNote, Heading, useErrorText } from './common'
 
 /** Hiệu ứng âm thanh meme (phần cuối danh sách); phần đầu là hiệu ứng cơ bản. */
@@ -116,6 +116,7 @@ function SpeechMaker({
           ))}
         </select>
       </label>
+      <VoiceSettings />
       <div className="flex flex-wrap gap-1">
         {MEME_LINES.map((line, i) => (
           <button
@@ -187,6 +188,39 @@ function useVoices(hasKey: boolean) {
   return { voices, voice, setVoice }
 }
 
+/** Tốc độ đọc và độ ổn định của giọng AI (dùng chung cho mọi chỗ đọc bằng giọng AI). */
+export function VoiceSettings() {
+  const { t } = useTranslation()
+  const options = useEditorStore((s) => s.voiceOptions)
+  const setVoiceOptions = useEditorStore((s) => s.setVoiceOptions)
+  return (
+    <div className="flex flex-col gap-2" data-testid="voice-settings">
+      <SliderRow
+        label={t('editor.library.voiceSpeed')}
+        value={options.speed}
+        min={0.7}
+        max={1.2}
+        step={0.05}
+        format={(v) => `${v.toFixed(2)}×`}
+        defaultValue={1}
+        testId="voice-speed"
+        onChange={(speed) => setVoiceOptions({ speed })}
+      />
+      <SliderRow
+        label={t('editor.library.voiceStability')}
+        value={options.stability}
+        min={0}
+        max={1}
+        step={0.05}
+        format={(v) => `${Math.round(v * 100)}%`}
+        defaultValue={0.5}
+        testId="voice-stability"
+        onChange={(stability) => setVoiceOptions({ stability })}
+      />
+    </div>
+  )
+}
+
 /** Số câu tối đa của một kịch bản (mỗi câu một lần gọi giọng AI). */
 export const SCRIPT_MAX_LINES = 40
 
@@ -252,6 +286,7 @@ function NarrationScript({ onError }: { onError: (e: unknown) => void }) {
           ))}
         </select>
       </label>
+      <VoiceSettings />
       <textarea
         rows={7}
         value={script}

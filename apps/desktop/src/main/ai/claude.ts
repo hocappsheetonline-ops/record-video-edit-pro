@@ -52,7 +52,18 @@ export async function askJson<T>(
   }
 }
 
-const LANGUAGE_NAMES: Record<string, string> = { vi: 'Vietnamese', en: 'English' }
+const LANGUAGE_NAMES: Record<string, string> = {
+  vi: 'Vietnamese',
+  en: 'English',
+  ja: 'Japanese',
+  ko: 'Korean',
+  zh: 'Simplified Chinese',
+  th: 'Thai',
+  id: 'Indonesian',
+  fr: 'French',
+  es: 'Spanish',
+  de: 'German',
+}
 export function languageName(code: string): string {
   const key = code.toLowerCase().slice(0, 2)
   return LANGUAGE_NAMES[key] ?? (code || 'the same language as the transcript')

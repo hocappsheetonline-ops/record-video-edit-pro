@@ -268,6 +268,22 @@ describe('giọng đọc AI (meme sound)', () => {
     await rm(other, { recursive: true, force: true })
   })
 
+  it('tốc độ / độ ổn định: gửi kèm cài đặt giọng (đã kẹp), lưu thành file riêng', async () => {
+    const ai = new AiService({ getKey: async () => 'el-key', run: runFfmpeg })
+    const plain = await ai.speak(dir, 'Xin chào', 'voice-anna')
+    const fast = await ai.speak(dir, 'Xin chào', 'voice-anna', { speed: 3, stability: 0.2 })
+    expect(fast.file).not.toBe(plain.file)
+    const tts = mock.requests.filter((r) => r.path.startsWith('/v1/text-to-speech/'))
+    expect(tts).toHaveLength(2)
+    expect(JSON.parse(tts[1]!.body.toString('utf8')).voice_settings).toEqual({
+      stability: 0.2,
+      similarity_boost: 0.75,
+      speed: 1.2,
+    })
+    // Tùy chọn mặc định: cùng file với lần đọc thường.
+    expect((await ai.speak(dir, 'Xin chào', 'voice-anna', { speed: 1 })).file).toBe(plain.file)
+  })
+
   it('câu rỗng, giọng lạ, thiếu key: báo lỗi', async () => {
     const ai = new AiService({ getKey: async () => 'el-key', run: runFfmpeg })
     await expect(ai.speak(dir, '   ', 'voice-anna')).rejects.toThrow('speech_empty')

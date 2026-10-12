@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 import {
   ArrowLeftToLine,
   ArrowRightToLine,
+  Captions,
   Layers,
   Music2,
   Redo2,
@@ -38,6 +39,7 @@ import {
   type ZoomRegion,
 } from '@lumora/core'
 import { AudioTrack } from './AudioTrack'
+import { CaptionTrack } from './CaptionTrack'
 import { ClipFilmstrip } from './ClipFilmstrip'
 import { EffectTrack } from './EffectTrack'
 import { OverlayTrack } from './OverlayTrack'
@@ -269,6 +271,7 @@ export function Timeline() {
   const heights = {
     effects: laneCount(edit.effects) * LANE.effects + 4,
     overlays: laneCount(edit.overlays) * LANE.overlays + 4,
+    captions: edit.captions.lines.length > 0 ? 30 : 0,
     zoom: 32,
     clips: 72,
     audio:
@@ -370,6 +373,13 @@ export function Timeline() {
             label={t('editor.tracks.stickers')}
             height={heights.overlays}
           />
+          {heights.captions > 0 && (
+            <TrackHeader
+              icon={Captions}
+              label={t('editor.tracks.captions')}
+              height={heights.captions}
+            />
+          )}
           <TrackHeader icon={Search} label={t('editor.tracks.zooms')} height={heights.zoom} />
           <TrackHeader icon={Video} label={t('editor.tracks.clips')} height={heights.clips} />
           <TrackHeader icon={Music2} label={t('editor.tracks.audio')} height={heights.audio} />
@@ -415,6 +425,11 @@ export function Timeline() {
             <Row height={heights.overlays}>
               <OverlayTrack duration={duration} pxPerMs={pxPerMs} onSeek={seekAndDeselect} />
             </Row>
+            {heights.captions > 0 && (
+              <Row height={heights.captions}>
+                <CaptionTrack duration={duration} pxPerMs={pxPerMs} onSeek={seekAndDeselect} />
+              </Row>
+            )}
             <Row height={heights.zoom}>
               <div
                 className="relative h-full flex-1"

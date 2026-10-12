@@ -1,5 +1,6 @@
 import { beautyLayers, cameraCrop, type BeautyStyle } from '@lumora/core'
 import { applyEffects } from './effects-draw'
+import { drawCaptionBlock } from './caption-draw'
 import { applyLookLayers, joinFilters } from './look-draw'
 import { drawOverlays, type OverlayMaskFn, type OverlayMediaFn } from './overlay-draw'
 import type { FrameScene } from './scene'
@@ -115,52 +116,8 @@ function drawCursor(ctx: Ctx, x: number, y: number, size: number, opacity: numbe
   ctx.restore()
 }
 
-/** Chia các từ thành dòng vừa chiều rộng tối đa. */
-function wrapWords(ctx: Ctx, words: { text: string; active: boolean }[], maxWidth: number) {
-  const lines: { text: string; active: boolean }[][] = []
-  let current: { text: string; active: boolean }[] = []
-  for (const word of words) {
-    const candidate = [...current, word].map((w) => w.text).join(' ')
-    if (current.length > 0 && ctx.measureText(candidate).width > maxWidth) {
-      lines.push(current)
-      current = [word]
-    } else current.push(word)
-  }
-  if (current.length > 0) lines.push(current)
-  return lines
-}
-
 function drawCaptions(ctx: Ctx, scene: FrameScene) {
-  const cap = scene.captions
-  if (!cap || cap.words.length === 0) return
-  ctx.save()
-  ctx.font = `700 ${cap.fontSize}px "Segoe UI", "Inter", system-ui, sans-serif`
-  ctx.textBaseline = 'middle'
-  const maxWidth = scene.width * 0.82
-  const lines = wrapWords(ctx, cap.words, maxWidth)
-  const lineHeight = cap.fontSize * 1.3
-  const padX = cap.fontSize * 0.6
-  const padY = cap.fontSize * 0.35
-  const space = ctx.measureText(' ').width
-  const widths = lines.map((line) => ctx.measureText(line.map((w) => w.text).join(' ')).width)
-  const boxW = Math.max(...widths) + padX * 2
-  const boxH = lines.length * lineHeight + padY * 2
-  const margin = scene.height * 0.06
-  const boxX = (scene.width - boxW) / 2
-  const boxY = cap.position === 'top' ? margin : scene.height - margin - boxH
-  roundedRect(ctx, boxX, boxY, boxW, boxH, cap.fontSize * 0.35)
-  ctx.fillStyle = 'rgba(0,0,0,0.68)'
-  ctx.fill()
-  lines.forEach((line, i) => {
-    let x = (scene.width - widths[i]!) / 2
-    const y = boxY + padY + lineHeight * (i + 0.5)
-    for (const word of line) {
-      ctx.fillStyle = word.active ? '#facc15' : '#ffffff'
-      ctx.fillText(word.text, x, y)
-      x += ctx.measureText(word.text).width + space
-    }
-  })
-  ctx.restore()
+  if (scene.captions) drawCaptionBlock(ctx, scene.captions, scene.width, scene.height)
 }
 
 /** Vẽ một khung hình hoàn chỉnh. Dùng chung cho xem trước và xuất video. */

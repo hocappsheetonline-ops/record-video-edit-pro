@@ -406,7 +406,12 @@ export interface LumoraApi {
   /** Giọng đọc AI có trong tài khoản ElevenLabs. */
   listVoices(): Promise<{ id: string; name: string }[]>
   /** Đọc câu bằng giọng AI và chép vào dự án (meme sound, lời bình). */
-  speak(folder: string, text: string, voiceId: string): Promise<AudioAsset>
+  speak(
+    folder: string,
+    text: string,
+    voiceId: string,
+    options?: { speed?: number; stability?: number },
+  ): Promise<AudioAsset>
   /** Tìm trên kho online (Tenor, Pixabay). */
   onlineSearch(source: OnlineSource, q: string, next: string | null): Promise<OnlineSearch>
   /** Tải một kết quả vừa tìm được vào thư viện meme. */

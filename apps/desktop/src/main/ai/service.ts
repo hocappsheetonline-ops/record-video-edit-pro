@@ -35,7 +35,14 @@ import {
   type SummaryResponse,
   type TranslateResponse,
 } from './claude'
-import { listVoices, textToSpeech, transcribeFile, type Voice } from './elevenlabs'
+import {
+  cleanSpeechOptions,
+  listVoices,
+  textToSpeech,
+  transcribeFile,
+  type SpeechOptions,
+  type Voice,
+} from './elevenlabs'
 
 export const AI_FILE = 'ai.json'
 
@@ -91,11 +98,25 @@ export class AiService {
    * Đọc `text` bằng giọng AI rồi chép vào dự án (`asset-tts-….mp3`) để thêm vào timeline như một
    * hiệu ứng âm thanh. Cùng câu + cùng giọng thì dùng lại file đã có, không gọi API lần nữa.
    */
-  async speak(dir: string, text: string, voiceId: string): Promise<AudioAsset> {
+  async speak(
+    dir: string,
+    text: string,
+    voiceId: string,
+    options: SpeechOptions = {},
+  ): Promise<AudioAsset> {
     const clean = text.trim().slice(0, MAX_SPEECH_CHARS)
     if (!clean) throw new Error('speech_empty')
     if (!/^[\w-]{1,64}$/.test(voiceId)) throw new Error('voice_invalid')
-    const hash = createHash('sha1').update(`${voiceId}\n${clean}`).digest('hex').slice(0, 16)
+    const settings = cleanSpeechOptions(options)
+    // Giọng mặc định giữ khóa cũ để dùng lại các câu đã đọc trước đây.
+    const variant =
+      settings.speed === 1 && settings.stability === 0.5
+        ? ''
+        : `\n${settings.speed}/${settings.stability}`
+    const hash = createHash('sha1')
+      .update(`${voiceId}\n${clean}${variant}`)
+      .digest('hex')
+      .slice(0, 16)
     const file = `asset-tts-${hash}.mp3`
     const target = join(dir, file)
     const exists = (p: string) =>
@@ -112,6 +133,7 @@ export class AiService {
           voiceId,
           await this.key('elevenlabs'),
           this.deps.fetchImpl,
+          settings,
         )
         await writeFile(target, audio)
         if (cached) {

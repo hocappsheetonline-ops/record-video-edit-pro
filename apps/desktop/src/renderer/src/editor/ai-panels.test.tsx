@@ -62,6 +62,48 @@ describe('CaptionsPanel', () => {
     expect(useEditorStore.getState().edit!.captions.language).toBe('en')
   })
 
+  it('mẫu phụ đề, phông, màu nhấn, số từ, vị trí; song ngữ; tách và gộp dòng', async () => {
+    const api = await setup()
+    // jsdom không có canvas: ô xem mẫu tự bỏ qua.
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null)
+    render(<CaptionsPanel />)
+    await userEvent.click(screen.getByTestId('captions-generate'))
+    await screen.findAllByTestId('caption-line')
+    const look = () => useEditorStore.getState().edit!.captions.look
+    await userEvent.click(screen.getByTestId('caption-template-karaoke'))
+    expect(look()).toMatchObject({ template: 'karaoke', highlightColor: '#22d3ee', y: 0.88 })
+    await userEvent.selectOptions(screen.getByTestId('caption-font'), 'oswald')
+    await userEvent.click(screen.getByTestId('caption-words-3'))
+    await userEvent.click(screen.getByTestId('caption-pos-top'))
+    await userEvent.click(screen.getByTestId('caption-uppercase'))
+    expect(look()).toMatchObject({ font: 'oswald', maxWords: 3, y: 0.12, uppercase: true })
+    expect(useEditorStore.getState().edit!.captions.position).toBe('top')
+    await userEvent.click(screen.getByTestId('captions-style-classic'))
+    expect(useEditorStore.getState().edit!.captions.style).toBe('classic')
+
+    // Song ngữ sang tiếng Nhật: giữ dòng gốc, thêm dòng dịch.
+    await userEvent.selectOptions(screen.getByTestId('captions-target'), 'ja')
+    await userEvent.click(screen.getByTestId('captions-bilingual'))
+    await waitFor(() => expect(screen.getAllByTestId('caption-translation')).toHaveLength(2))
+    expect(api.translateLines).toHaveBeenLastCalledWith(expect.any(Array), 'ja')
+    const caps = () => useEditorStore.getState().edit!.captions
+    expect(caps()).toMatchObject({ bilingual: true, translationLanguage: 'ja' })
+    expect(caps().lines.map((l) => [l.text, l.translation])).toEqual([
+      ['Xin chào ừm các bạn.', 'EN: Xin chào ừm các bạn.'],
+      ['Hôm nay', 'EN: Hôm nay'],
+    ])
+    await userEvent.click(screen.getByTestId('captions-bilingual-on'))
+    expect(caps().bilingual).toBe(false)
+
+    // Tách dòng đầu (5 từ → 3 + 2), gộp lại.
+    await userEvent.click(screen.getAllByTestId('caption-split')[0]!)
+    expect(caps().lines.map((l) => l.text)).toEqual(['Xin chào ừm', 'các bạn.', 'Hôm nay'])
+    await userEvent.click(screen.getAllByTestId('caption-merge')[0]!)
+    expect(caps().lines.map((l) => l.text)).toEqual(['Xin chào ừm các bạn.', 'Hôm nay'])
+    // Dòng cuối không gộp được.
+    expect(screen.getAllByTestId('caption-merge')[1]).toBeDisabled()
+  })
+
   it('thiếu API key thì báo dễ hiểu', async () => {
     const api = await setup()
     api.transcribe.mockRejectedValueOnce(

@@ -1,3 +1,4 @@
+import { DEFAULT_CAPTION_LOOK, type CaptionLook } from './caption-style'
 import { sourceToOutput, type Clip } from './timeline'
 
 /** Một từ trong bản ghi lời nói, thời gian tính theo thời gian nguồn (ms). */
@@ -23,6 +24,8 @@ export interface CaptionLine {
   /** Các từ gốc để tô sáng từng từ; bỏ qua khi người dùng đã sửa nội dung. */
   words: TranscriptWord[]
   edited: boolean
+  /** Bản dịch (phụ đề song ngữ: hiện dưới dòng gốc). */
+  translation?: string
 }
 
 export interface CaptionsState {
@@ -34,6 +37,12 @@ export interface CaptionsState {
   size: number
   language: string
   lines: CaptionLine[]
+  /** Mẫu, phông, màu, vị trí. */
+  look: CaptionLook
+  /** Hiện bản dịch dưới dòng gốc (khi các dòng có `translation`). */
+  bilingual: boolean
+  /** Ngôn ngữ của bản dịch song ngữ. */
+  translationLanguage: string
 }
 
 export const DEFAULT_CAPTIONS: CaptionsState = {
@@ -43,6 +52,9 @@ export const DEFAULT_CAPTIONS: CaptionsState = {
   size: 1,
   language: '',
   lines: [],
+  look: DEFAULT_CAPTION_LOOK,
+  bilingual: false,
+  translationLanguage: '',
 }
 
 export interface LineOptions {

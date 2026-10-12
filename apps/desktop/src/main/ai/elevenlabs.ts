@@ -93,18 +93,43 @@ export async function listVoices(apiKey: string, fetchImpl: FetchLike = fetch): 
 }
 
 /** Đọc một câu thành MP3 bằng giọng `voiceId`. */
+/** Tùy chọn giọng đọc: tốc độ 0.7–1.2 (1 = thường), độ ổn định 0–1 (thấp = biểu cảm hơn). */
+export interface SpeechOptions {
+  speed?: number
+  stability?: number
+}
+
+/** Kẹp tùy chọn vào khoảng ElevenLabs cho phép; bỏ giá trị mặc định. */
+export function cleanSpeechOptions(options: SpeechOptions = {}): Required<SpeechOptions> {
+  const clamp = (v: unknown, lo: number, hi: number, d: number) =>
+    typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : d
+  return {
+    speed: Math.round(clamp(options.speed, 0.7, 1.2, 1) * 100) / 100,
+    stability: Math.round(clamp(options.stability, 0, 1, 0.5) * 100) / 100,
+  }
+}
+
 export async function textToSpeech(
   text: string,
   voiceId: string,
   apiKey: string,
   fetchImpl: FetchLike = fetch,
+  options: SpeechOptions = {},
 ): Promise<Buffer> {
+  const { speed, stability } = cleanSpeechOptions(options)
   const response = await fetchImpl(
     `${elevenLabsBaseUrl()}/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=mp3_44100_128`,
     {
       method: 'POST',
       headers: { 'xi-api-key': apiKey, 'content-type': 'application/json', accept: 'audio/mpeg' },
-      body: JSON.stringify({ text, model_id: TTS_MODEL }),
+      body: JSON.stringify({
+        text,
+        model_id: TTS_MODEL,
+        // Mặc định: để giọng dùng cài đặt riêng của nó.
+        ...(speed !== 1 || stability !== 0.5
+          ? { voice_settings: { stability, similarity_boost: 0.75, speed } }
+          : {}),
+      }),
       signal: AbortSignal.timeout(60_000),
     },
   )

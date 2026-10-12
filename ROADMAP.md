@@ -399,7 +399,7 @@ export function lookLayers(look): { css: string; warm: number; cool: number; vig
 
 **Nghiệm thu**: 24 mẫu chữ, 10 font Việt, viền/bóng/nền, 6 hoạt ảnh chữ, 8 mẫu phụ đề, dịch, TTS, sticker hình. Phát hành **v0.7.0**.
 
-> **Trạng thái**: v0.7.0 đã làm 4.1 (mẫu chữ, phông đi kèm ở `src/renderer/src/assets/fonts` nạp bằng FontFace, `textStyle` thay cho các trường rời), 4.3 (Đọc chữ này, Kịch bản giọng AI → nhiều đoạn lồng tiếng nối tiếp + phụ đề) và 4.4 (`kind: 'shape'`, vẽ bằng canvas thay cho SVG để xem trước và xuất giống nhau). Còn lại cho v0.7.1: 4.2 (mẫu phụ đề, dịch song ngữ, hàng Phụ đề trên timeline), tốc độ / độ ổn định giọng và cache danh sách giọng.
+> **Trạng thái**: v0.7.0 đã làm 4.1 (mẫu chữ, phông đi kèm ở `src/renderer/src/assets/fonts` nạp bằng FontFace, `textStyle` thay cho các trường rời), 4.3 (Đọc chữ này, Kịch bản giọng AI → nhiều đoạn lồng tiếng nối tiếp + phụ đề) và 4.4 (`kind: 'shape'`, vẽ bằng canvas thay cho SVG để xem trước và xuất giống nhau). v0.7.1 làm nốt 4.2 (`core/edit/caption-style.ts`: 8 mẫu, phông, màu nhấn, số từ mỗi lần, vị trí `y`; `caption-draw.ts`; dịch 10 ngôn ngữ, thay thế hoặc song ngữ qua `CaptionLine.translation`; tách / gộp dòng; hàng Phụ đề trên timeline kéo được) và tốc độ / độ ổn định giọng (danh sách giọng đã lưu đệm 1 ngày từ trước). Bước 4 hoàn tất.
 
 ---
 

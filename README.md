@@ -93,10 +93,12 @@ Phần xem trước và phần xuất dùng chung một hàm vẽ, nên video xu
 Trước tiên, nhập API key **ElevenLabs** và **Claude** trong **Cài đặt**. Sau đó, trong trình chỉnh sửa:
 
 - **Phụ đề** (ElevenLabs Scribe v2): nhận dạng tiếng Việt, tiếng Anh hoặc tự nhận diện ngôn ngữ, có thời gian từng từ.
-  - Có hai kiểu: tô sáng từ đang nói (giống TikTok) hoặc hiện cả dòng; đặt ở trên hoặc dưới; chỉnh cỡ chữ.
-  - Sửa được nội dung từng dòng.
+  - **8 mẫu phụ đề** có xem trước: Hộp tối, Karaoke (tô dần các từ đã nói), Viền đen, Nảy từng từ, Bật từng từ, Gạch chân, Neon, TikTok (chữ in hoa đậm, khối màu sau từ đang nói). Chỉnh phông (10 phông đi kèm), màu chữ, màu nhấn, chữ in hoa, số từ hiện mỗi lần (1–4 hoặc cả dòng), vị trí trên / giữa / dưới hoặc kéo độ cao, cỡ chữ; tô sáng từ đang nói hoặc hiện cả dòng.
+  - Sửa nội dung từng dòng; **tách** dòng làm đôi hoặc **gộp** với dòng sau.
+  - Hàng **Phụ đề** trên timeline: mỗi dòng một khối, bấm để nhảy tới, kéo để dời, kéo mép để chỉnh thời gian.
+  - **Dịch** bằng Claude sang 10 ngôn ngữ (Việt, Anh, Nhật, Hàn, Trung, Thái, Indonesia, Pháp, Tây Ban Nha, Đức): thay nội dung bằng bản dịch, hoặc **phụ đề song ngữ** (dòng dịch nhỏ hơn hiện bên dưới, sửa riêng được).
   - Lưu ra SRT/VTT hoặc in thẳng vào video khi xuất.
-  - Dịch Việt ↔ Anh bằng Claude.
+- **Giọng đọc AI** (ElevenLabs): chỉnh **tốc độ đọc** (0.7–1.2×) và **độ ổn định** của giọng, dùng chung cho câu meme, kịch bản và "Đọc chữ này".
 - **AI** (Claude):
   - Tìm từ đệm, câu nói lặp và khoảng lặng dài. Bạn duyệt danh sách rồi mới áp dụng.
   - Chỉnh video bằng văn bản: chọn các từ muốn bỏ, phần video tương ứng sẽ bị cắt.

@@ -155,11 +155,16 @@ describe('computeScene', () => {
         hasCamera: false,
       }).captions
     expect(at(600)?.words).toEqual([
-      { text: 'Xin', active: false },
-      { text: 'chào', active: true },
+      { text: 'Xin', active: false, spoken: true, since: 600 },
+      { text: 'chào', active: true, spoken: true, since: 100 },
     ])
     expect(at(600)?.fontSize).toBe(54)
-    expect(at(2500)?.words.map((w) => w.text)).toEqual(['Đã', 'sửa', 'lại'])
+    // Dòng đã sửa: thời gian chia đều cho các từ, vẫn tô sáng từ đang nói.
+    expect(at(2500)?.words.map((w) => [w.text, w.active])).toEqual([
+      ['Đã', false],
+      ['sửa', true],
+      ['lại', false],
+    ])
     expect(at(1500)).toBeNull()
     edit.captions.enabled = false
     expect(at(600)).toBeNull()
@@ -200,6 +205,54 @@ describe('computeScene', () => {
       hasCamera: false,
     })
     expect(scene.captions?.words.map((w) => w.text)).toEqual(['Xin', 'chào'])
+  })
+
+  it('phụ đề theo mẫu: chỉ hiện nhóm vài từ quanh từ đang nói, chữ in hoa, dòng dịch song ngữ', () => {
+    const edit = createDefaultEdit(project)
+    edit.captions = {
+      ...edit.captions,
+      enabled: true,
+      bilingual: true,
+      look: { ...edit.captions.look, template: 'tiktok', maxWords: 2, uppercase: true },
+      lines: [
+        {
+          id: 'l0',
+          start: 0,
+          end: 2000,
+          text: 'một hai ba bốn năm',
+          edited: false,
+          translation: 'one two three four five',
+          words: ['một', 'hai', 'ba', 'bốn', 'năm'].map((text, i) => ({
+            text,
+            start: i * 400,
+            end: i * 400 + 350,
+          })),
+        },
+      ],
+    }
+    const at = (source: number) =>
+      computeScene({
+        edit,
+        time: 0,
+        output,
+        video,
+        source,
+        cursor: null,
+        follow: null,
+        hasCamera: false,
+      }).captions!
+    expect(at(900).words.map((w) => [w.text, w.active])).toEqual([
+      ['BA', true],
+      ['BỐN', false],
+    ])
+    expect(at(1700).words.map((w) => w.text)).toEqual(['NĂM'])
+    expect(at(900).translation).toBe('one two three four five')
+    expect(at(900).look.template).toBe('tiktok')
+    edit.captions.bilingual = false
+    expect(at(900).translation).toBeNull()
+    // Kiểu "cả dòng": không tô từ nào, mọi từ coi như đã nói.
+    edit.captions.style = 'classic'
+    expect(at(900).words.every((w) => !w.active && w.spoken)).toBe(true)
   })
 })
 

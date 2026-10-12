@@ -83,7 +83,8 @@ const api: LumoraApi = {
   summarize: (folder) => ipcRenderer.invoke(IPC.aiSummarize, folder),
   translateLines: (lines, target) => ipcRenderer.invoke(IPC.aiTranslate, lines, target),
   listVoices: () => ipcRenderer.invoke(IPC.aiVoices),
-  speak: (folder, text, voiceId) => ipcRenderer.invoke(IPC.aiSpeak, folder, text, voiceId),
+  speak: (folder, text, voiceId, options) =>
+    ipcRenderer.invoke(IPC.aiSpeak, folder, text, voiceId, options),
   onlineSearch: (source, q, next) => ipcRenderer.invoke(IPC.onlineSearch, source, q, next),
   onlineDownload: (source, id) => ipcRenderer.invoke(IPC.onlineDownload, source, id),
   cacheInfo: () => ipcRenderer.invoke(IPC.cacheInfo),
