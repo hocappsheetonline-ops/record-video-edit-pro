@@ -116,6 +116,7 @@ beforeEach(async () => {
         transcribe: vi.fn(async () => ({ language: 'vi', words: [] })),
         getTranscript: vi.fn(async () => null),
         suggestCuts: vi.fn(async () => []),
+        plan: vi.fn(async () => [{ kind: 'captions' as const }]),
         summarize: vi.fn(async () => ({ titles: [], description: '', hashtags: [], chapters: [] })),
         translate: vi.fn(async (lines: { id: string; text: string }[]) => lines),
         voices: vi.fn(async () => [{ id: 'v1', name: 'Anna' }]),
@@ -399,6 +400,13 @@ describe('registerIpc', () => {
     expect(await call(IPC.musicRecentDownloads)).toEqual([])
     await call(IPC.musicOpenYouTube)
     expect(await call(IPC.musicList)).toEqual([])
+  })
+
+  it('trợ lý AI: chuyển lời yêu cầu và ngữ cảnh đã kiểm tra tới dịch vụ AI', async () => {
+    expect(
+      await call(IPC.aiPlan, 'thêm phụ đề', { language: 'vi', durationMs: 5000, hasTranscript: 1 }),
+    ).toEqual([{ kind: 'captions' }])
+    await expect(call(IPC.aiPlan, 42, {})).rejects.toThrow('plan_input')
   })
 
   it('cửa sổ không viền: thu nhỏ, phóng to / thu về, đóng, hỏi trạng thái', async () => {

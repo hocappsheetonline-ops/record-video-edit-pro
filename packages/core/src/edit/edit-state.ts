@@ -144,6 +144,8 @@ export interface ExportSettings {
   resolution: Resolution
   fps: 30 | 60
   format: 'mp4' | 'gif'
+  /** Nâng cao chất lượng (HD): giảm nhiễu và làm nét khi mã hóa lại video xuất. */
+  enhance: boolean
 }
 
 export interface EditState {
@@ -231,7 +233,7 @@ export function createDefaultEdit(
     effects: [],
     overlays: [],
     look: { ...DEFAULT_LOOK, adjust: { ...DEFAULT_LOOK.adjust } },
-    export: { resolution: 1080, fps: project.fps >= 60 ? 60 : 30, format: 'mp4' },
+    export: { resolution: 1080, fps: project.fps >= 60 ? 60 : 30, format: 'mp4', enhance: false },
     captions: { ...DEFAULT_CAPTIONS, lines: [] },
     markers: [],
     tracks: DEFAULT_TRACKS,
@@ -435,6 +437,7 @@ export function parseEditState(
       resolution: pick(RESOLUTIONS, e.resolution, base.export.resolution),
       fps: pick([30, 60] as const, e.fps, base.export.fps),
       format: e.format === 'gif' ? 'gif' : 'mp4',
+      enhance: e.enhance === true,
     },
     captions: parseCaptions(input.captions, duration),
     markers: parseMarkers(input.markers, Number.POSITIVE_INFINITY),

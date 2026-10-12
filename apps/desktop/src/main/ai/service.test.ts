@@ -108,6 +108,15 @@ function fakeApis() {
       const system = String(body.system)
       if (system.includes('cleaning up'))
         return message({ cuts: [{ from: 1, to: 2, kind: 'repeat', reason: 'Nói lặp' }] })
+      if (system.includes('editing assistant'))
+        return message({
+          commands: [
+            { kind: 'cutSilences' },
+            { kind: 'speed', factor: 1.5 },
+            { kind: 'filter', preset: 'bogus' },
+            { kind: 'aspect', aspect: '9:16' },
+          ],
+        })
       if (system.includes('metadata')) {
         return message({
           titles: ['A', 'B', 'C'],
@@ -290,5 +299,24 @@ describe('giọng đọc AI (meme sound)', () => {
     await expect(ai.speak(dir, 'hi', '../x')).rejects.toThrow('voice_invalid')
     const noKey = new AiService({ getKey: async () => undefined, run: runFfmpeg })
     await expect(noKey.speak(dir, 'hi', 'voice-anna')).rejects.toBeInstanceOf(MissingKeyError)
+  })
+})
+
+describe('AiService.plan (trợ lý AI)', () => {
+  it('gửi yêu cầu cho Claude kèm ngữ cảnh, lọc lệnh sai; yêu cầu rỗng không gọi mạng', async () => {
+    const { calls, fetchImpl } = fakeApis()
+    const ai = service(fetchImpl)
+    const ctx = { language: 'vi', durationMs: 60_000, hasTranscript: true }
+    expect(await ai.plan('   ', ctx)).toEqual([])
+    expect(calls).toHaveLength(0)
+    expect(await ai.plan('cắt im lặng, nhanh 1.5x, dọc', ctx)).toEqual([
+      { kind: 'cutSilences' },
+      { kind: 'speed', factor: 1.5 },
+      { kind: 'aspect', aspect: '9:16' },
+    ])
+    const body = calls[0]!.body as { system: string; messages: { content: string }[] }
+    expect(body.system).toContain('duration 60 s')
+    expect(body.messages[0]!.content).toBe('cắt im lặng, nhanh 1.5x, dọc')
+    await expect(service(fetchImpl, {}).plan('x', ctx)).rejects.toThrow()
   })
 })

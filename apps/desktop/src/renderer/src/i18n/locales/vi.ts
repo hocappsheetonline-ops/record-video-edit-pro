@@ -147,7 +147,7 @@ export const vi = {
       markers: 'Marker',
     },
     library: {
-      merge: 'Ghép bản quay khác vào cuối',
+      merge: 'Ghép bản quay',
       merging: 'Đang ghép…',
       mergeEmpty: 'Chưa có bản quay nào khác.',
       mergeFailed: 'Không ghép được bản quay này.',
@@ -288,6 +288,8 @@ export const vi = {
       animation: 'Chuyển động',
     },
     timeline: {
+      add: 'Thêm phương tiện (mở Thư viện)',
+      voiceover: 'Ghi lồng tiếng',
       zoom: 'Phóng to timeline',
       zoomIn: 'Phóng to timeline',
       zoomOut: 'Thu nhỏ timeline',
@@ -951,6 +953,8 @@ export const vi = {
       format: 'Định dạng',
       resolution: 'Độ phân giải',
       fps: 'Số khung hình/giây',
+      enhance: 'Nâng cao chất lượng (HD)',
+      enhanceHint: 'Giảm nhiễu và làm nét khi xuất; xuất lâu hơn một chút.',
       start: 'Xuất video',
       rendering: 'Đang dựng hình… {{percent}}%',
       muxing: 'Đang ghép âm thanh…',
@@ -1021,6 +1025,47 @@ export const vi = {
   },
   ai: {
     working: 'Đang xử lý…',
+    assistant: {
+      title: 'Trợ lý AI',
+      intro:
+        'Mô tả những gì bạn muốn chỉnh sửa, AI hiểu thành các bước rồi làm ngay (Claude; không có key thì hiểu theo từ khóa). Hoàn tác một lần để quay lại.',
+      placeholder: 'Ví dụ: cắt khoảng lặng, thêm phụ đề, bộ lọc điện ảnh, làm video dọc 9:16…',
+      run: 'Làm ngay',
+      job: 'Trợ lý AI',
+      done: 'Trợ lý AI đã làm xong. Hoàn tác (Ctrl+Z) để quay lại.',
+      none: 'AI chưa hiểu yêu cầu này. Thử nói rõ hơn, ví dụ "cắt khoảng lặng và thêm phụ đề".',
+      examples: {
+        silences: 'Cắt khoảng lặng và bỏ từ thừa',
+        captions: 'Thêm phụ đề và làm sạch âm thanh',
+        vertical: 'Làm video dọc 9:16 cho TikTok',
+        cinematic: 'Bộ lọc điện ảnh, tốc độ 1.5x',
+      },
+      kinds: {
+        cutSilences: 'Cắt khoảng lặng',
+        removeFillers: 'Bỏ từ thừa',
+        autoZoom: 'Tự zoom',
+        captions: 'Phụ đề',
+        cleanAudio: 'Làm sạch âm thanh',
+        title: 'Tiêu đề',
+        filter: 'Bộ lọc',
+        speed: 'Tốc độ',
+        aspect: 'Khung hình',
+        trimStart: 'Cắt đầu',
+        trimEnd: 'Cắt cuối',
+      },
+    },
+    shorts: {
+      title: 'Chia nhỏ video thành video ngắn',
+      intro:
+        'Mỗi đoạn thành một dự án riêng (bản sao chỉ giữ đoạn đó) để xuất thành video ngắn. Chia theo chương do AI tìm (cần phụ đề và key Claude) hoặc mỗi N giây.',
+      byChapters: 'Theo chương (AI)',
+      every: 'Mỗi {{s}} giây',
+      vertical: 'Khung dọc 9:16 (TikTok, Shorts, Reels)',
+      run: 'Chia thành video ngắn',
+      job: 'Chia nhỏ video',
+      done: 'Đã tạo {{count}} dự án video ngắn. Xem ở trang Dự án.',
+      tooShort: 'Video quá ngắn để chia (mỗi đoạn tối thiểu 5 giây).',
+    },
     auto: {
       title: 'AI tự biên tập',
       intro:

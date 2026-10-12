@@ -11,6 +11,9 @@ import {
   timestampedTranscript,
   TRANSCRIPT_FILE,
   wordsToRanges,
+  normalizeAssistantCommands,
+  type AssistantCommand,
+  type AssistantContext,
   type CutSuggestion,
   type Project,
   type Transcript,
@@ -24,6 +27,8 @@ import { writeJsonFile } from '../json-file'
 import type { FetchLike } from '../key-validation'
 import {
   askJson,
+  ASSISTANT_SCHEMA,
+  assistantSystem,
   createClaude,
   CUTS_SCHEMA,
   CUTS_SYSTEM,
@@ -31,6 +36,7 @@ import {
   summarySystem,
   TRANSLATE_SCHEMA,
   translateSystem,
+  type AssistantResponse,
   type CutResponse,
   type SummaryResponse,
   type TranslateResponse,
@@ -275,6 +281,20 @@ export class AiService {
     }
     await writeJsonFile(join(dir, AI_FILE), summary)
     return summary
+  }
+
+  /** Trợ lý AI: mô tả bằng lời → danh sách lệnh chỉnh sửa (Claude; kiểm tra lại bằng core). */
+  async plan(instruction: string, context: AssistantContext): Promise<AssistantCommand[]> {
+    const text = instruction.trim().slice(0, 2000)
+    if (!text) return []
+    const client = createClaude(await this.key('anthropic'), this.deps.fetchImpl)
+    const answer = await askJson<AssistantResponse>(client, {
+      system: assistantSystem(context),
+      user: text,
+      schema: ASSISTANT_SCHEMA,
+      effort: 'low',
+    })
+    return normalizeAssistantCommands(answer.commands)
   }
 
   async translate(

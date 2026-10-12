@@ -7,6 +7,7 @@ import { ipcErrorMessage } from '../lib/prefs'
 import { ExportCancelled, exportVideo, type ExportProgress } from './exporter'
 import { runJob, useJobs } from './jobs'
 import { useEditorStore } from './store'
+import { Toggle } from './ui'
 
 const segmented = (active: boolean) =>
   `rounded-md px-2.5 py-1 text-xs ${active ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-muted hover:text-text'}`
@@ -142,6 +143,13 @@ export function ExportPanel() {
           ))}
         </div>
       </div>
+      <Toggle
+        label={t('editor.export.enhance')}
+        hint={t('editor.export.enhanceHint')}
+        checked={edit.export.enhance}
+        testId="export-enhance"
+        onChange={(enhance) => setExport({ enhance })}
+      />
       <p className="text-xs text-muted" data-testid="export-size">
         {size.width} × {size.height}
       </p>

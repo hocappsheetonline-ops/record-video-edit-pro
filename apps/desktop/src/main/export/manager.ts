@@ -10,7 +10,7 @@ import {
   type Project,
   applyTrackState,
 } from '@lumora/core'
-import { buildExportMuxArgs, buildGifArgs } from '../ffmpeg/args'
+import { buildExportMuxArgs, buildGifArgs, ENHANCE_FILTER } from '../ffmpeg/args'
 import type { FfmpegRunner } from '../ffmpeg/runner'
 import { AudioProcessor } from '../audio/process'
 import { ClipReverser } from '../clips/reverse'
@@ -132,7 +132,13 @@ export class ExportManager {
       const pieces = [...recorded, ...added]
       const tmpOut = join(job.dir, `.mux-${id}.mp4`)
       const muxed = await this.run(
-        buildExportMuxArgs({ video: job.tmpPath, pieces, durationS, output: tmpOut }),
+        buildExportMuxArgs({
+          video: job.tmpPath,
+          pieces,
+          durationS,
+          output: tmpOut,
+          videoFilter: edit.export.enhance ? ENHANCE_FILTER : undefined,
+        }),
         600_000,
       )
       if (muxed.code !== 0) throw new Error(`Ghép âm thanh thất bại: ${muxed.stderr.slice(-400)}`)

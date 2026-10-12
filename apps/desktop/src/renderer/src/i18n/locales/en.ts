@@ -296,6 +296,8 @@ export const en: Messages = {
       animation: 'Animation',
     },
     timeline: {
+      add: 'Add media (open Library)',
+      voiceover: 'Record voice-over',
       zoom: 'Timeline zoom',
       zoomIn: 'Zoom timeline in',
       zoomOut: 'Zoom timeline out',
@@ -961,6 +963,8 @@ export const en: Messages = {
       format: 'Format',
       resolution: 'Resolution',
       fps: 'Frame rate',
+      enhance: 'Enhance quality (HD)',
+      enhanceHint: 'Denoise and sharpen on export; takes a little longer.',
       start: 'Export video',
       rendering: 'Rendering… {{percent}}%',
       muxing: 'Adding audio…',
@@ -1031,6 +1035,47 @@ export const en: Messages = {
   },
   ai: {
     working: 'Working…',
+    assistant: {
+      title: 'AI assistant',
+      intro:
+        'Describe what you want changed; the AI turns it into steps and does them right away (Claude; without a key it goes by keywords). Undo once to go back.',
+      placeholder: 'e.g. trim silences, add captions, cinematic filter, make it vertical 9:16…',
+      run: 'Do it',
+      job: 'AI assistant',
+      done: 'The AI assistant is done. Undo (Ctrl+Z) to go back.',
+      none: 'The AI did not understand that. Try something like "trim silences and add captions".',
+      examples: {
+        silences: 'Trim silences and remove filler words',
+        captions: 'Add captions and clean up audio',
+        vertical: 'Make it vertical 9:16 for TikTok',
+        cinematic: 'Cinematic filter, 1.5x speed',
+      },
+      kinds: {
+        cutSilences: 'Trim silences',
+        removeFillers: 'Remove fillers',
+        autoZoom: 'Auto zoom',
+        captions: 'Captions',
+        cleanAudio: 'Clean up audio',
+        title: 'Title',
+        filter: 'Filter',
+        speed: 'Speed',
+        aspect: 'Aspect',
+        trimStart: 'Trim start',
+        trimEnd: 'Trim end',
+      },
+    },
+    shorts: {
+      title: 'Split into short videos',
+      intro:
+        'Each segment becomes its own project (a copy keeping only that part) to export as a short. Split by AI chapters (needs captions and a Claude key) or every N seconds.',
+      byChapters: 'By chapters (AI)',
+      every: 'Every {{s}} s',
+      vertical: 'Vertical 9:16 (TikTok, Shorts, Reels)',
+      run: 'Split into shorts',
+      job: 'Splitting video',
+      done: 'Created {{count}} short-video projects. See the Projects page.',
+      tooShort: 'The video is too short to split (segments are at least 5 seconds).',
+    },
     auto: {
       title: 'AI auto edit',
       intro:

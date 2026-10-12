@@ -170,7 +170,7 @@ describe('Màu chủ đạo', () => {
   it('mặc định xanh dương; chọn màu khác thì cả app đổi theo', async () => {
     await renderApp(createFakeApi())
     await waitFor(() =>
-      expect(document.documentElement.style.getPropertyValue('--lm-accent')).toBe('#0a84ff'),
+      expect(document.documentElement.style.getPropertyValue('--lm-accent')).toBe('#1ed6d6'),
     )
     await userEvent.click(screen.getByTestId('nav-settings'))
     await userEvent.click(screen.getByTestId('accent-#30d158'))

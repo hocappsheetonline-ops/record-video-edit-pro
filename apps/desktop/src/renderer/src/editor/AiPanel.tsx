@@ -1,6 +1,14 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { removeSourceRanges, sourceToOutput, wordsToRanges, type CutSuggestion } from '@lumora/core'
+import { Scissors, Sparkles, WandSparkles } from 'lucide-react'
+import {
+  removeSourceRanges,
+  sourceToOutput,
+  wordsToRanges,
+  type AssistantCommand,
+  type CutSuggestion,
+} from '@lumora/core'
+import { useAppStore } from '../store/app'
 import type { AiSummary } from '@shared/ipc'
 import { lumora } from '../api'
 import { aiErrorText } from './ai-errors'
@@ -19,6 +27,228 @@ const DEFAULT_AUTO: AutoEditOptions = {
   captions: true,
   audio: true,
   title: false,
+}
+
+/** Nhãn ngắn của một lệnh trợ lý (hiện thành thẻ sau khi AI hiểu yêu cầu). */
+function commandLabel(t: ReturnType<typeof useTranslation>['t'], c: AssistantCommand): string {
+  switch (c.kind) {
+    case 'title':
+      return `${t('ai.assistant.kinds.title')}: “${c.text}”`
+    case 'filter':
+      return `${t('ai.assistant.kinds.filter')}: ${t(`editor.look.filters.${c.preset}`, { defaultValue: c.preset })}`
+    case 'speed':
+      return `${t('ai.assistant.kinds.speed')}: ${c.factor}×`
+    case 'aspect':
+      return `${t('ai.assistant.kinds.aspect')}: ${c.aspect}`
+    case 'trimStart':
+    case 'trimEnd':
+      return `${t(`ai.assistant.kinds.${c.kind}`)}: ${(c.ms / 1000).toFixed(0)}s`
+    default:
+      return t(`ai.assistant.kinds.${c.kind}`)
+  }
+}
+
+/** Trợ lý AI kiểu EditPilot: gõ yêu cầu, AI hiểu thành lệnh rồi làm; hoàn tác một lần. */
+function Assistant() {
+  const { t } = useTranslation()
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [commands, setCommands] = useState<AssistantCommand[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const run = async () => {
+    if (!text.trim()) return
+    setBusy(true)
+    setError(null)
+    try {
+      const result = await runJob(t('ai.assistant.job'), (progress) =>
+        useEditorStore
+          .getState()
+          .runAssistant(text, (done, total, step) =>
+            progress(done / total, t(`ai.auto.steps.${step}`)),
+          ),
+      )
+      setCommands(result.commands)
+      if (result.commands.length > 0)
+        useJobs.getState().toast({ kind: 'success', text: t('ai.assistant.done') })
+    } catch (e) {
+      setError(aiErrorText(t, e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <section
+      className="flex flex-col gap-2 rounded-xl border border-accent/30 bg-accent/5 p-3"
+      data-testid="ai-assistant"
+    >
+      <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+        <WandSparkles size={15} className="text-accent" aria-hidden />
+        {t('ai.assistant.title')}
+      </h3>
+      <p className="text-xs text-muted">{t('ai.assistant.intro')}</p>
+      <textarea
+        value={text}
+        rows={2}
+        data-testid="assistant-input"
+        placeholder={t('ai.assistant.placeholder')}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault()
+            void run()
+          }
+        }}
+        className="resize-none rounded-lg border border-border bg-surface-2 px-2.5 py-2 text-sm outline-none focus:border-accent"
+      />
+      <div className="flex flex-wrap gap-1">
+        {(['silences', 'captions', 'vertical', 'cinematic'] as const).map((k) => (
+          <button
+            key={k}
+            type="button"
+            data-testid={`assistant-example-${k}`}
+            onClick={() => setText(t(`ai.assistant.examples.${k}`))}
+            className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted hover:text-text"
+          >
+            {t(`ai.assistant.examples.${k}`)}
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        data-testid="assistant-run"
+        disabled={busy || !text.trim()}
+        onClick={() => void run()}
+        className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-accent-fg shadow-sm hover:brightness-110 disabled:opacity-50"
+      >
+        {busy ? t('ai.working') : t('ai.assistant.run')}
+      </button>
+      {commands && commands.length === 0 && (
+        <p className="text-xs text-muted" data-testid="assistant-none">
+          {t('ai.assistant.none')}
+        </p>
+      )}
+      {commands && commands.length > 0 && (
+        <ul className="flex flex-wrap gap-1" data-testid="assistant-commands">
+          {commands.map((c, i) => (
+            <li
+              key={i}
+              data-testid="assistant-command"
+              data-kind={c.kind}
+              className="rounded-full bg-accent/15 px-2 py-0.5 text-[11px] text-accent"
+            >
+              {commandLabel(t, c)}
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && (
+        <p role="alert" className="rounded-lg bg-danger/10 p-3 text-sm text-danger">
+          {error}
+        </p>
+      )}
+    </section>
+  )
+}
+
+/** Chia video dài thành nhiều video ngắn (dự án riêng), theo chương AI hoặc mỗi N giây. */
+function Shorts() {
+  const { t } = useTranslation()
+  const setPage = useAppStore((s) => s.setPage)
+  const [mode, setMode] = useState<'chapters' | 'fixed'>('fixed')
+  const [seconds, setSeconds] = useState(60)
+  const [vertical, setVertical] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [count, setCount] = useState<number | null>(null)
+  const run = async () => {
+    setBusy(true)
+    setError(null)
+    setCount(null)
+    try {
+      const n = await runJob(t('ai.shorts.job'), (progress) =>
+        useEditorStore
+          .getState()
+          .splitIntoShorts({ mode, seconds, vertical }, (done, total) => progress(done / total)),
+      )
+      setCount(n)
+      if (n > 0)
+        useJobs.getState().toast({
+          kind: 'success',
+          text: t('ai.shorts.done', { count: n }),
+          action: { label: t('nav.projects'), run: () => setPage('projects') },
+        })
+    } catch (e) {
+      setError(aiErrorText(t, e))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <section className="flex flex-col gap-3" data-testid="ai-shorts">
+      <h3 className={`${heading} flex items-center gap-1.5`}>
+        <Scissors size={14} aria-hidden className="text-muted" />
+        {t('ai.shorts.title')}
+      </h3>
+      <p className="text-xs text-muted">{t('ai.shorts.intro')}</p>
+      <div className="flex flex-wrap gap-1">
+        {(
+          [
+            ['fixed', 60],
+            ['fixed', 90],
+            ['fixed', 120],
+            ['chapters', 0],
+          ] as const
+        ).map(([m, s]) => {
+          const active = mode === m && (m === 'chapters' || seconds === s)
+          return (
+            <button
+              key={`${m}-${s}`}
+              type="button"
+              data-testid={m === 'chapters' ? 'shorts-mode-chapters' : `shorts-mode-${s}`}
+              aria-pressed={active}
+              onClick={() => {
+                setMode(m)
+                if (m === 'fixed') setSeconds(s)
+              }}
+              className={`rounded-full border px-2.5 py-0.5 text-[11px] ${
+                active
+                  ? 'border-accent bg-accent/15 text-accent'
+                  : 'border-border text-muted hover:text-text'
+              }`}
+            >
+              {m === 'chapters' ? t('ai.shorts.byChapters') : t('ai.shorts.every', { s })}
+            </button>
+          )
+        })}
+      </div>
+      <label className="flex items-center gap-2 text-xs">
+        <input
+          type="checkbox"
+          className="size-4 accent-accent"
+          data-testid="shorts-vertical"
+          checked={vertical}
+          onChange={(e) => setVertical(e.target.checked)}
+        />
+        {t('ai.shorts.vertical')}
+      </label>
+      <button
+        type="button"
+        data-testid="shorts-run"
+        disabled={busy}
+        onClick={() => void run()}
+        className={button}
+      >
+        <Sparkles size={14} aria-hidden className="mr-1 inline" />
+        {busy ? t('ai.working') : t('ai.shorts.run')}
+      </button>
+      {count === 0 && <p className="text-xs text-muted">{t('ai.shorts.tooShort')}</p>}
+      {error && (
+        <p role="alert" className="rounded-lg bg-danger/10 p-3 text-sm text-danger">
+          {error}
+        </p>
+      )}
+    </section>
+  )
 }
 
 /** Một bấm: AI tự cắt, zoom, phụ đề, âm thanh, tiêu đề theo các ô đã chọn; hoàn tác một lần. */
@@ -196,7 +426,9 @@ export function AiPanel() {
 
   return (
     <div className="flex flex-col gap-6" data-testid="ai-panel">
+      <Assistant />
       <AutoEdit />
+      <Shorts />
 
       <section className="flex flex-col gap-3">
         <h3 className={heading}>{t('ai.cuts.title')}</h3>

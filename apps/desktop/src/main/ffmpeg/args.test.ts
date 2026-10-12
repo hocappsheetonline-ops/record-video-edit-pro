@@ -104,6 +104,19 @@ describe('xuất video: ghép âm thanh', () => {
     expect(args.join(' ')).toContain('-map 0:v -c:v copy -an -movflags +faststart -t 3 o.mp4')
   })
 
+  it('nâng cao chất lượng: mã hóa lại với bộ lọc giảm nhiễu + làm nét thay vì chép video', async () => {
+    const { buildExportMuxArgs, ENHANCE_FILTER } = await import('./args')
+    const args = buildExportMuxArgs({
+      video: 'v.mp4',
+      pieces: [],
+      durationS: 3,
+      output: 'o.mp4',
+      videoFilter: ENHANCE_FILTER,
+    })
+    expect(args.join(' ')).toContain(`-vf ${ENHANCE_FILTER} -c:v libx264 -preset medium -crf 18`)
+    expect(args).not.toContain('copy')
+  })
+
   it('cắt, đổi tốc độ, đặt vị trí và trộn các mảnh âm thanh', async () => {
     const { buildExportMuxArgs } = await import('./args')
     const args = buildExportMuxArgs({

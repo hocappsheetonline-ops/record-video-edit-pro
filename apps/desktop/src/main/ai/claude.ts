@@ -143,6 +143,83 @@ Write everything in ${languageName(language)}.
 - chapters: YouTube chapters in chronological order; the first starts at 0; at least 10 seconds apart; only when the video is long enough (otherwise return an empty list).`
 }
 
+export interface AssistantResponse {
+  commands: unknown[]
+}
+
+/** Lệnh trợ lý AI: cùng tập lệnh với `AssistantCommand` trong core. */
+export const ASSISTANT_SCHEMA: Schema = {
+  type: 'object',
+  properties: {
+    commands: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          kind: {
+            type: 'string',
+            enum: [
+              'cutSilences',
+              'removeFillers',
+              'autoZoom',
+              'captions',
+              'cleanAudio',
+              'title',
+              'filter',
+              'speed',
+              'aspect',
+              'trimStart',
+              'trimEnd',
+            ],
+          },
+          text: { type: 'string', description: 'title: the opening title text' },
+          preset: {
+            type: 'string',
+            enum: [
+              'cinematic',
+              'vintage',
+              'cold',
+              'warm',
+              'bw',
+              'fade',
+              'vivid',
+              'noir',
+              'pastel',
+              'tealOrange',
+              'sunset',
+            ],
+            description: 'filter: colour look preset',
+          },
+          intensity: { type: 'number', description: 'filter: 0.1-1' },
+          factor: { type: 'number', description: 'speed: playback factor 0.25-8' },
+          aspect: { type: 'string', enum: ['16:9', '9:16', '1:1', '4:3', 'source'] },
+          ms: { type: 'integer', description: 'trimStart / trimEnd: milliseconds to cut' },
+        },
+        required: ['kind'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['commands'],
+  additionalProperties: false,
+}
+
+export function assistantSystem(context: {
+  language: string
+  durationMs: number
+  hasTranscript: boolean
+}): string {
+  return `You are the editing assistant inside a screen-recording video editor. The user describes, in ${languageName(context.language)} or English, what they want done to their video (duration ${Math.round(context.durationMs / 1000)} s, transcript ${context.hasTranscript ? 'available' : 'not available'}).
+Translate the request into a list of editing commands from this fixed set, in the order they should run:
+- cutSilences: remove long pauses. removeFillers: remove filler words / repeated phrases. autoZoom: zoom in on mouse activity.
+- captions: generate subtitles. cleanAudio: noise reduction, voice enhancement, loudness normalisation.
+- title {text}: add an opening title card with the given text (write the text yourself if the user asks for "a title" without giving one).
+- filter {preset, intensity}: colour look. speed {factor}: change playback speed of the whole video.
+- aspect {aspect}: output aspect ratio ("9:16" for TikTok / Shorts / Reels, "1:1" square, "16:9" landscape).
+- trimStart {ms} / trimEnd {ms}: cut that many milliseconds from the beginning / end.
+Only include commands the user actually asked for (or clearly implied). If nothing applies, return an empty list.`
+}
+
 export interface TranslateResponse {
   lines: { id: string; text: string }[]
 }

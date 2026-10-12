@@ -129,7 +129,14 @@ export interface IpcDeps {
   exports: Pick<ExportManager, 'start' | 'write' | 'finish' | 'cancel'>
   ai: Pick<
     AiService,
-    'transcribe' | 'getTranscript' | 'suggestCuts' | 'summarize' | 'translate' | 'voices' | 'speak'
+    | 'transcribe'
+    | 'getTranscript'
+    | 'suggestCuts'
+    | 'summarize'
+    | 'plan'
+    | 'translate'
+    | 'voices'
+    | 'speak'
   >
   online: Pick<OnlineService, 'search' | 'download'>
   cache: { size(): Promise<number>; clear(): Promise<void> }
@@ -506,6 +513,16 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
   ipcMain.handle(IPC.aiSummarize, async (_event, folder: unknown) =>
     deps.ai.summarize((await projectPath(folder)).path),
   )
+  ipcMain.handle(IPC.aiPlan, (_event, instruction: unknown, context: unknown) => {
+    if (typeof instruction !== 'string' || instruction.length > 2000) throw new Error('plan_input')
+    const c =
+      typeof context === 'object' && context !== null ? (context as Record<string, unknown>) : {}
+    return deps.ai.plan(instruction, {
+      language: typeof c.language === 'string' ? c.language.slice(0, 10) : '',
+      durationMs: typeof c.durationMs === 'number' ? Math.max(0, c.durationMs) : 0,
+      hasTranscript: c.hasTranscript === true,
+    })
+  })
   ipcMain.handle(IPC.aiVoices, () => deps.ai.voices())
   ipcMain.handle(
     IPC.aiSpeak,

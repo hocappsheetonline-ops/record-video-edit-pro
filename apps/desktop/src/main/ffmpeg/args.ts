@@ -209,16 +209,35 @@ const sec = (n: number) => Number(n.toFixed(6))
  * Ghép video đã dựng (chưa có tiếng) với âm thanh: cắt từng mảnh, đổi tốc độ, chỉnh âm lượng,
  * đặt đúng vị trí rồi trộn lại. Video được chép nguyên, không mã hóa lại.
  */
+/** Nâng cao chất lượng (HD): giảm nhiễu nhẹ rồi làm nét, như "Nâng cao chất lượng" của CapCut. */
+export const ENHANCE_FILTER = 'hqdn3d=1.5:1.5:6:6,unsharp=5:5:0.8:5:5:0'
+
 export function buildExportMuxArgs(options: {
   video: string
   pieces: readonly MuxAudioPiece[]
   durationS: number
   output: string
+  /** Bộ lọc hình (ví dụ ENHANCE_FILTER): có thì mã hóa lại video thay vì chép nguyên. */
+  videoFilter?: string
 }): string[] {
-  const { video, pieces, durationS, output } = options
+  const { video, pieces, durationS, output, videoFilter } = options
   const head = ['-hide_banner', '-loglevel', 'error', '-y', '-i', video]
   const tail = ['-movflags', '+faststart', '-t', String(sec(durationS)), output]
-  if (pieces.length === 0) return [...head, '-map', '0:v', '-c:v', 'copy', '-an', ...tail]
+  const videoCodec = videoFilter
+    ? [
+        '-vf',
+        videoFilter,
+        '-c:v',
+        'libx264',
+        '-preset',
+        'medium',
+        '-crf',
+        '18',
+        '-pix_fmt',
+        'yuv420p',
+      ]
+    : ['-c:v', 'copy']
+  if (pieces.length === 0) return [...head, '-map', '0:v', ...videoCodec, '-an', ...tail]
 
   const files = [...new Set(pieces.map((p) => p.path))]
   // File cần lặp được mở với -stream_loop -1; atrim phía sau giới hạn độ dài.
@@ -275,8 +294,7 @@ export function buildExportMuxArgs(options: {
     '0:v',
     '-map',
     '[aout]',
-    '-c:v',
-    'copy',
+    ...videoCodec,
     '-c:a',
     'aac',
     '-b:a',

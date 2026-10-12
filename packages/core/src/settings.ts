@@ -5,10 +5,11 @@ export const THEMES = ['system', 'dark', 'light'] as const
 export type Theme = (typeof THEMES)[number]
 
 /**
- * Màu nhấn có sẵn (bộ màu hệ thống của macOS: xanh dương, tím, hồng, đỏ, cam, vàng, xanh lá,
- * than chì); người dùng cũng có thể chọn màu bất kỳ (mã hex).
+ * Màu nhấn có sẵn: xanh ngọc kiểu CapCut (mặc định) và bộ màu hệ thống của macOS (xanh dương,
+ * tím, hồng, đỏ, cam, vàng, xanh lá, than chì); người dùng cũng có thể chọn màu bất kỳ (mã hex).
  */
 export const ACCENT_PRESETS = [
+  '#1ed6d6',
   '#0a84ff',
   '#bf5af2',
   '#ff375f',

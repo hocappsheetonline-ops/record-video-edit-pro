@@ -349,6 +349,7 @@ export function createFakeApi(
       { id: 'ai0', kind: 'filler', start: 800, end: 1100, text: 'ừm', reason: 'Từ đệm' },
       { id: 's0', kind: 'silence', start: 2500, end: 4000, text: '', reason: '' },
     ]),
+    planEdits: vi.fn<LumoraApi['planEdits']>(async () => []),
     summarize: vi.fn<LumoraApi['summarize']>(async () => ({
       titles: ['Hướng dẫn Lumora', 'Lumora trong 5 phút', 'Quay màn hình đẹp'],
       description: 'Video hướng dẫn.',

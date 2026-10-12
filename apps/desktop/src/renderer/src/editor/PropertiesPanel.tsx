@@ -166,7 +166,7 @@ export function PropertiesPanel() {
   return (
     <div className="flex h-full flex-col" data-testid="properties">
       <div
-        className="grid shrink-0 grid-cols-8 border-b border-border"
+        className="flex shrink-0 overflow-x-auto border-b border-border [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         role="tablist"
         aria-label={t('editor.props.project')}
       >
@@ -186,13 +186,14 @@ export function PropertiesPanel() {
                 setTab(name)
                 if (selection?.kind === 'camera') select(null)
               }}
-              className={`flex h-11 items-center justify-center border-b-2 transition-colors ${
+              className={`flex h-10 shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 text-xs transition-colors ${
                 active
-                  ? 'border-accent text-accent'
-                  : 'border-transparent text-muted hover:bg-text/5 hover:text-text'
+                  ? 'border-accent font-medium text-accent'
+                  : 'border-transparent text-muted hover:text-text'
               }`}
             >
-              <Icon size={18} strokeWidth={1.75} aria-hidden />
+              <Icon size={14} strokeWidth={1.75} aria-hidden />
+              {t(`editor.tabs.${name}`)}
             </button>
           )
         })}
