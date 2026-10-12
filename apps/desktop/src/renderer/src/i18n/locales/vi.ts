@@ -1273,6 +1273,20 @@ export const vi = {
       pulled: 'Đã tải model {{model}}, sẵn sàng dùng.',
       pullNotFound: 'Không có model tên "{{model}}" trên ollama.com. Kiểm tra lại tên.',
       downloading: 'Đang tải bộ cài Ollama…',
+      benchmark: 'Chạy thử',
+      benchmarkResult: 'Nạp {{load}} s · {{tps}} token/giây · {{verdict}}',
+      verdict: {
+        fast: 'nhanh, dùng tốt',
+        ok: 'chấp nhận được (trợ lý mất vài giây)',
+        slow: 'chậm, nên chọn model nhỏ hơn (qwen2.5:3b)',
+      },
+      picks: {
+        balanced: 'Khuyên dùng: tiếng Việt tốt, cần ~8 GB RAM (hoặc GPU 6 GB)',
+        light: 'Nhẹ, nhanh trên máy yếu, chất lượng vừa',
+        gemma: 'Gemma 3 của Google, đa ngôn ngữ, ~4 GB',
+        llama: 'Llama 3.2 nhỏ, rất nhanh, tiếng Việt kém hơn',
+        big: 'Chất lượng cao nhất, cần máy mạnh (~16 GB RAM hoặc GPU 12 GB)',
+      },
       models:
         'Gợi ý: qwen2.5:7b (tiếng Việt tốt, cần ~8 GB RAM), llama3.2 (nhẹ, ~3 GB), gemma3. Phụ đề vẫn cần key ElevenLabs.',
     },

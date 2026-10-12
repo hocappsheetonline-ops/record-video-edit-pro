@@ -75,6 +75,7 @@ import {
   canReverse,
   type SpeedCurve,
   buildCaptionLines,
+  normalizeAssistantCommands,
   parseAssistantRequest,
   sourceToOutput,
   type AssistantCommand,
@@ -1431,7 +1432,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     } catch {
       // Không có key Claude / mất mạng: hiểu theo từ khóa.
     }
-    if (commands.length === 0) commands = parseAssistantRequest(text)
+    // Gộp với bộ hiểu từ khóa: model (nhất là model cục bộ nhỏ) hay bỏ sót lệnh rõ ràng.
+    commands = normalizeAssistantCommands([...commands, ...parseAssistantRequest(text)])
     if (commands.length === 0 || get().folder !== folder) return { commands, report: [] }
     const pastBefore = get().past
     const has = (kind: AssistantCommand['kind']) => commands.some((c) => c.kind === kind)

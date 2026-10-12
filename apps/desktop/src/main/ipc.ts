@@ -138,6 +138,7 @@ export interface IpcDeps {
     | 'plan'
     | 'listLocalModels'
     | 'pullLocalModel'
+    | 'benchmarkLocalModel'
     | 'translate'
     | 'voices'
     | 'speak'
@@ -542,6 +543,11 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
     return deps.ai.pullLocalModel(local.baseUrl, local.model, (p) =>
       deps.localAi.sendProgress({ kind: 'pull', ...p }),
     )
+  })
+  ipcMain.handle(IPC.aiBenchmark, (_event, baseUrl: unknown, model: unknown) => {
+    const local = normalizeLocalAi({ baseUrl, model })
+    if (typeof model !== 'string' || local.model !== model.trim()) throw new Error('ollama_model')
+    return deps.ai.benchmarkLocalModel(local.baseUrl, local.model)
   })
   ipcMain.handle(IPC.aiInstallOllama, () =>
     deps.localAi.installOllama((completed, total) =>

@@ -1284,6 +1284,20 @@ export const en: Messages = {
       pulled: 'Model {{model}} is ready.',
       pullNotFound: 'No model named "{{model}}" on ollama.com. Check the name.',
       downloading: 'Downloading the Ollama installer…',
+      benchmark: 'Run test',
+      benchmarkResult: 'Load {{load}} s · {{tps}} tokens/s · {{verdict}}',
+      verdict: {
+        fast: 'fast, good to go',
+        ok: 'acceptable (the assistant takes a few seconds)',
+        slow: 'slow, pick a smaller model (qwen2.5:3b)',
+      },
+      picks: {
+        balanced: 'Recommended: good Vietnamese, needs ~8 GB RAM (or a 6 GB GPU)',
+        light: 'Light and fast on weak machines, medium quality',
+        gemma: 'Google Gemma 3, multilingual, ~4 GB',
+        llama: 'Small Llama 3.2, very fast, weaker Vietnamese',
+        big: 'Highest quality, needs a strong machine (~16 GB RAM or a 12 GB GPU)',
+      },
       models:
         'Suggested: qwen2.5:7b (good Vietnamese, ~8 GB RAM), llama3.2 (light, ~3 GB), gemma3. Captions still need an ElevenLabs key.',
     },

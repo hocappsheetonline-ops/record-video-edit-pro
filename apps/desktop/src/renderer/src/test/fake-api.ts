@@ -361,6 +361,11 @@ export function createFakeApi(
         l({ kind: 'pull', status: 'success', completed: 0, total: 0 }),
       )
     }),
+    benchmarkLocalModel: vi.fn<LumoraApi['benchmarkLocalModel']>(async () => ({
+      loadMs: 1200,
+      tokensPerSecond: 24.5,
+      totalMs: 4000,
+    })),
     installOllama: vi.fn<LumoraApi['installOllama']>(async () => {
       localAiListeners.forEach((l) =>
         l({ kind: 'install', status: 'download', completed: 10, total: 100 }),

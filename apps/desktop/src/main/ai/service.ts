@@ -50,7 +50,15 @@ import {
   type SpeechOptions,
   type Voice,
 } from './elevenlabs'
-import { askJsonOllama, listOllamaModels, pullOllamaModel, type PullProgress } from './ollama'
+import {
+  askJsonOllama,
+  benchmarkOllama,
+  listOllamaModels,
+  OllamaError,
+  pullOllamaModel,
+  type OllamaBenchmark,
+  type PullProgress,
+} from './ollama'
 
 export const AI_FILE = 'ai.json'
 
@@ -70,6 +78,9 @@ export interface AiDeps {
   /** Thư mục lưu đệm giọng đọc AI (dùng chung mọi dự án, đọc lại câu cũ không tốn credit). */
   soundsDir?: string
 }
+
+/** Số từ mỗi đoạn gửi cho model cục bộ khi tìm từ thừa. */
+const LOCAL_CUTS_WINDOW = 400
 
 /** Câu đọc tối đa (ký tự): meme sound / lời bình ngắn. */
 export const MAX_SPEECH_CHARS = 500
@@ -178,17 +189,37 @@ export class AiService {
     effort?: 'low' | 'medium' | 'high'
   }): Promise<T> {
     const local = await this.deps.getLocalAi?.()
-    if (local?.enabled)
-      return askJsonOllama<T>({
-        baseUrl: local.baseUrl,
-        model: local.model,
-        system: options.system,
-        user: options.user,
-        schema: options.schema,
-        fetchImpl: this.deps.fetchImpl,
-      })
+    if (local?.enabled) {
+      const ask = (system: string) =>
+        askJsonOllama<T>({
+          baseUrl: local.baseUrl,
+          model: local.model,
+          system,
+          user: options.user,
+          schema: options.schema,
+          fetchImpl: this.deps.fetchImpl,
+        })
+      try {
+        return await ask(options.system)
+      } catch (error) {
+        // Model nhỏ thỉnh thoảng trả JSON hỏng: thử lại một lần với lời nhắc nghiêm hơn.
+        if (!(error instanceof OllamaError && error.code === 'ollama_bad_json')) throw error
+        return ask(
+          `${options.system}\nIMPORTANT: reply with exactly one JSON object matching the schema, no prose, no markdown.`,
+        )
+      }
+    }
     const client = createClaude(await this.key('anthropic'), this.deps.fetchImpl)
     return askJson<T>(client, options)
+  }
+
+  private async usingLocalAi(): Promise<boolean> {
+    return (await this.deps.getLocalAi?.())?.enabled === true
+  }
+
+  /** Đo tốc độ model cục bộ trên máy này (và nạp sẵn model). */
+  benchmarkLocalModel(baseUrl: string, model: string): Promise<OllamaBenchmark> {
+    return benchmarkOllama(baseUrl, model, this.deps.fetchImpl)
   }
 
   /** Model đã tải trong Ollama (để chọn trong Cài đặt). */
@@ -251,14 +282,29 @@ export class AiService {
   /** Gợi ý đoạn cần cắt: khoảng lặng dài (tự tính) + từ thừa, nói lặp (Claude). */
   async suggestCuts(dir: string): Promise<CutSuggestion[]> {
     const { words, language } = await this.requireTranscript(dir)
-    const answer = await this.askJson<CutResponse>({
-      system: CUTS_SYSTEM,
-      user: `Transcript (${words.length} words):\n${indexedTranscript(words)}`,
-      schema: CUTS_SCHEMA,
-    })
+    // Model cục bộ có cửa sổ ngữ cảnh nhỏ và dễ lạc khi đầu vào dài: chia lời thoại thành từng
+    // đoạn (giữ nguyên chỉ số toàn cục) rồi gộp kết quả. Claude đọc cả bản một lần.
+    const window = (await this.usingLocalAi()) ? LOCAL_CUTS_WINDOW : words.length
+    const cuts: CutResponse['cuts'] = []
+    for (let from = 0; from < words.length; from += window) {
+      const to = Math.min(words.length, from + window)
+      const part = words
+        .slice(from, to)
+        .map((w, i) => `[${from + i}]${w.text}`)
+        .join(' ')
+      const answer = await this.askJson<CutResponse>({
+        system: CUTS_SYSTEM,
+        user:
+          window >= words.length
+            ? `Transcript (${words.length} words):\n${indexedTranscript(words)}`
+            : `Transcript part (words ${from}-${to - 1} of ${words.length}):\n${part}`,
+        schema: CUTS_SCHEMA,
+      })
+      cuts.push(...(answer.cuts ?? []))
+    }
     const suggestions: CutSuggestion[] = []
     const covered = new Set<number>()
-    for (const cut of answer.cuts ?? []) {
+    for (const cut of cuts) {
       const from = Math.max(0, Math.min(cut.from, cut.to))
       const to = Math.min(words.length - 1, Math.max(cut.from, cut.to))
       if (!Number.isInteger(from) || !Number.isInteger(to) || from > to) continue

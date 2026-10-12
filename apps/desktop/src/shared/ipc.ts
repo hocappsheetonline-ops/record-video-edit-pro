@@ -91,6 +91,7 @@ export const IPC = {
   aiLocalModels: 'ai:local-models',
   aiPullModel: 'ai:pull-model',
   aiInstallOllama: 'ai:install-ollama',
+  aiBenchmark: 'ai:benchmark',
   aiTranslate: 'ai:translate',
   aiVoices: 'ai:voices',
   aiSpeak: 'ai:speak',
@@ -484,6 +485,11 @@ export interface LumoraApi {
   pullLocalModel(baseUrl: string, model: string): Promise<void>
   /** Tải bộ cài Ollama về máy rồi mở nó (Windows / macOS); nơi khác mở trang tải. */
   installOllama(): Promise<void>
+  /** Chạy thử model cục bộ: thời gian nạp và token / giây trên máy này. */
+  benchmarkLocalModel(
+    baseUrl: string,
+    model: string,
+  ): Promise<{ loadMs: number; tokensPerSecond: number; totalMs: number }>
   onLocalAiProgress(listener: (p: LocalAiProgress) => void): Unsubscribe
   /** Lưu bản lồng tiếng vừa ghi (WebM) vào dự án. */
   addVoiceover(folder: string, data: ArrayBuffer): Promise<AudioAsset>

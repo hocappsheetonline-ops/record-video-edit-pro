@@ -124,6 +124,11 @@ beforeEach(async () => {
         suggestCuts: vi.fn(async () => []),
         plan: vi.fn(async () => [{ kind: 'captions' as const }]),
         listLocalModels: vi.fn(async (url: string) => [`${url}:llama3.2`]),
+        benchmarkLocalModel: vi.fn(async () => ({
+          loadMs: 100,
+          tokensPerSecond: 20,
+          totalMs: 900,
+        })),
         pullLocalModel: vi.fn(
           async (_url: string, _model: string, onProgress: (p: unknown) => void) => {
             onProgress({ status: 'pulling', completed: 5, total: 10 })
@@ -430,6 +435,11 @@ describe('registerIpc', () => {
       'ollama_model',
     )
     await call(IPC.aiInstallOllama)
+    expect(await call(IPC.aiBenchmark, 'http://127.0.0.1:11434', 'llama3.2')).toEqual({
+      loadMs: 100,
+      tokensPerSecond: 20,
+      totalMs: 900,
+    })
   })
 
   it('cửa sổ không viền: thu nhỏ, phóng to / thu về, đóng, hỏi trạng thái', async () => {

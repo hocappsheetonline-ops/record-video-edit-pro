@@ -104,6 +104,7 @@ const api: LumoraApi = {
   listLocalModels: (baseUrl) => ipcRenderer.invoke(IPC.aiLocalModels, baseUrl),
   pullLocalModel: (baseUrl, model) => ipcRenderer.invoke(IPC.aiPullModel, baseUrl, model),
   installOllama: () => ipcRenderer.invoke(IPC.aiInstallOllama),
+  benchmarkLocalModel: (baseUrl, model) => ipcRenderer.invoke(IPC.aiBenchmark, baseUrl, model),
   onLocalAiProgress: (listener) => subscribe(EVENTS.localAiProgress, listener),
   translateLines: (lines, target) => ipcRenderer.invoke(IPC.aiTranslate, lines, target),
   listVoices: () => ipcRenderer.invoke(IPC.aiVoices),
