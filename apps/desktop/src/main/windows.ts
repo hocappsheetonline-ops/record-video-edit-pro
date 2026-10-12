@@ -46,7 +46,8 @@ export function createMainWindow(): BrowserWindow {
     title: 'Lumora',
     backgroundColor: '#0b0b10',
     autoHideMenuBar: true,
-    webPreferences: secureWebPreferences(),
+    // Studio livestream cần chạy đều 30 khung/giây kể cả khi cửa sổ bị che.
+    webPreferences: secureWebPreferences({ backgroundThrottling: false }),
   })
   win.once('ready-to-show', () => win.show())
   hardenNavigation(win)

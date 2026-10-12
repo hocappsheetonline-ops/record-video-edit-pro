@@ -10,10 +10,11 @@ Kế hoạch đầy đủ nằm trong [PLAN.md](PLAN.md).
 | Giai đoạn | Nội dung                                                              | Trạng thái   |
 | --------- | --------------------------------------------------------------------- | ------------ |
 | 0         | Khung app, Cài đặt (API key, ngôn ngữ, giao diện), CI tự build `.exe` | ✅ Xong      |
-| 1         | Quay màn hình, webcam, micro                                          | ⏳ Tiếp theo |
-| 2         | Trình chỉnh sửa, auto-zoom                                            |              |
-| 3         | AI: phụ đề, tự biên tập                                               |              |
-| 4         | Livestream                                                            |              |
+| 1         | Quay màn hình, webcam, micro                                          | ✅ Xong      |
+| 2         | Trình chỉnh sửa, auto-zoom                                            | ✅ Xong      |
+| 3         | AI: phụ đề, tự biên tập                                               | ✅ Xong      |
+| 4         | Livestream (đa nền tảng, khách mời, bình luận, phụ đề trực tiếp)      | ✅ Xong      |
+| 5         | Hoàn thiện: icon, tự cập nhật, nhật ký lỗi                            | ⏳ Tiếp theo |
 
 ## Tải bản cài về chạy thử (không cần cài gì thêm)
 
@@ -66,6 +67,21 @@ Trước tiên, nhập API key **ElevenLabs** và **Claude** trong **Cài đặt
 
 Mọi lệnh gọi Claude dùng model `claude-opus-5-5` kèm structured outputs (kết quả JSON đúng schema). Các lệnh này cũng bật `fallbacks: "default"`: khi bộ lọc an toàn từ chối một yêu cầu, máy chủ Anthropic tự chạy lại yêu cầu đó trên một model dự phòng phù hợp.
 
+## Livestream
+
+Mở tab **Livestream**. Studio vẽ cảnh 30 khung hình/giây (720p hoặc 1080p), FFmpeg mã hóa một lần rồi phát **cùng lúc** tới mọi kênh đã bật.
+
+- **Kênh phát**: YouTube, Facebook, TikTok, Twitch hoặc RTMP tùy chỉnh. Stream key được mã hóa như API key (`live-secrets.json`), không nằm trong file cấu hình và không hiện lại trên giao diện. Mỗi kênh hiện trạng thái riêng (đang kết nối, đang phát, lỗi); một kênh lỗi không làm dừng các kênh khác.
+- **Studio**: bố cục một người, lưới, màn hình kèm người, PiP; chia sẻ màn hình hoặc cửa sổ; banner; tên hiển thị trên từng người.
+- **Khách mời**: bấm **Mở phòng khách mời**, gửi link cho khách. Khách mở bằng trình duyệt, không cần cài gì, vào **hậu trường** trước, rồi host đưa lên hoặc xuống sóng hay mời ra. Hình và tiếng đi thẳng giữa hai máy qua WebRTC. Khách nghe mọi người trừ chính mình (mix-minus) và xem được hình chương trình.
+  - Khách cùng mạng nội bộ dùng link IP (cổng 47800).
+  - Khách ở xa: tạo một đường hầm (ví dụ `cloudflared tunnel --url http://localhost:47800`) rồi dán địa chỉ công khai vào **Cài đặt → Địa chỉ công khai**.
+- **Bình luận**: đọc chat YouTube (API key YouTube Data v3 + ID video) và bình luận Facebook (Page access token + ID video). Bấm **Hiện lên sóng** để đưa một bình luận lên khung hình.
+- **Phụ đề trực tiếp**: cứ 5 giây, micro được gửi tới ElevenLabs và chữ hiện ở đầu khung hình.
+- **Ghi lại trong máy** (bật sẵn): kết thúc buổi live, bản ghi `live.mkv` thành một dự án. Bạn mở dự án đó để chỉnh sửa, làm phụ đề và tạo chương bằng AI như video quay thường.
+
+Nếu FFmpeg dừng giữa chừng (mất mạng, sai key) hoặc mọi kênh đều lỗi mà không ghi trong máy, buổi phát tự kết thúc và app báo lỗi.
+
 ## Chạy từ mã nguồn
 
 Cần cài: [Node.js 22 LTS](https://nodejs.org), [Git](https://git-scm.com) và pnpm (`npm install -g pnpm`).
@@ -92,6 +108,8 @@ Mỗi lần push, GitHub Actions chạy toàn bộ test trên Windows rồi mớ
 | Giao diện React                                       | Vitest + Testing Library | `apps/desktop/src/renderer/**/*.test.tsx` |
 | End-to-end (app Electron thật)                        | Playwright               | `apps/desktop/e2e/`                       |
 
+Test E2E của livestream dùng FFmpeg làm máy chủ RTMP thật, mở một trình duyệt Chromium làm khách mời (webcam và micro giả) và dựng máy chủ giả lập YouTube và ElevenLabs.
+
 ## Cấu trúc
 
 ```
@@ -104,6 +122,11 @@ apps/desktop/          Ứng dụng Electron
   src/main/ffmpeg/     Dò phần cứng, tạo lệnh FFmpeg, chạy và dừng FFmpeg
   src/main/recording/  Phiên quay, bộ điều phối, ghi chuột/bàn phím, lập kế hoạch quay
   src/main/projects/   Đọc danh sách dự án, giao thức lumora-media:// (hỗ trợ tua video)
+  src/main/export/     Ghi file xuất, trộn âm thanh, tạo GIF
+  src/main/ai/         ElevenLabs (phụ đề) và Claude (cắt, tiêu đề, chương, dịch)
+  src/main/live/       Phát RTMP, máy chủ báo hiệu + trang khách mời, bình luận, phụ đề trực tiếp
+  src/renderer/src/editor/  Trình chỉnh sửa: timeline, xem trước, xuất video
+  src/renderer/src/live/    Studio livestream: ghép cảnh, trộn âm thanh, WebRTC với khách
 packages/core/         Logic thuần, không phụ thuộc Electron, dễ test
 ```
 

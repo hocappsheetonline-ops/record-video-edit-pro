@@ -22,6 +22,7 @@ import { validateKey, type Validators } from './key-validation'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AiService } from './ai/service'
+import type { LiveController } from './live/controller'
 import { EXPORTS_DIR, safeFileName, type ExportManager } from './export/manager'
 import {
   isProjectFolderName,
@@ -66,6 +67,21 @@ export interface IpcDeps {
   projects: ProjectsIpc
   exports: Pick<ExportManager, 'start' | 'write' | 'finish' | 'cancel'>
   ai: Pick<AiService, 'transcribe' | 'getTranscript' | 'suggestCuts' | 'summarize' | 'translate'>
+  live: Pick<
+    LiveController,
+    | 'getConfig'
+    | 'updateConfig'
+    | 'secrets'
+    | 'setSecret'
+    | 'openRoom'
+    | 'closeRoom'
+    | 'start'
+    | 'write'
+    | 'stop'
+    | 'startComments'
+    | 'stopComments'
+    | 'caption'
+  >
 }
 
 function assertSecretKey(value: unknown) {
@@ -272,5 +288,41 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
       await writeFile(file, content, 'utf8')
       return { path: file, fileName: name }
     },
+  )
+
+  const { live } = deps
+  ipcMain.handle(IPC.liveGetConfig, () => live.getConfig())
+  ipcMain.handle(IPC.liveUpdateConfig, (_event, patch: unknown) => live.updateConfig(patch))
+  ipcMain.handle(IPC.liveSecrets, () => live.secrets())
+  ipcMain.handle(IPC.liveSetSecret, (_event, name: unknown, value: unknown) => {
+    if (typeof name !== 'string' || typeof value !== 'string')
+      throw new Error('Dữ liệu không hợp lệ')
+    return live.setSecret(name as never, value)
+  })
+  ipcMain.handle(IPC.liveOpenRoom, () => live.openRoom())
+  ipcMain.handle(IPC.liveCloseRoom, () => live.closeRoom())
+  ipcMain.handle(IPC.liveStart, (_event, video: unknown) => {
+    const v = (typeof video === 'object' && video !== null ? video : {}) as Record<string, unknown>
+    const num = (x: unknown, d: number) => (typeof x === 'number' && Number.isFinite(x) ? x : d)
+    return live.start({
+      width: num(v.width, 1280),
+      height: num(v.height, 720),
+      fps: num(v.fps, 30),
+    })
+  })
+  ipcMain.handle(IPC.liveWrite, (_event, data: unknown) => live.write(asBytes(data)))
+  ipcMain.handle(IPC.liveStop, () => live.stop())
+  ipcMain.handle(IPC.liveCommentsStart, (_event, platforms: unknown) => {
+    const list = Array.isArray(platforms)
+      ? platforms.filter((p): p is 'youtube' | 'facebook' => p === 'youtube' || p === 'facebook')
+      : []
+    return live.startComments(list)
+  })
+  ipcMain.handle(IPC.liveCommentsStop, () => live.stopComments())
+  ipcMain.handle(IPC.liveCaption, (_event, data: unknown, language: unknown) =>
+    live.caption(
+      asBytes(data),
+      typeof language === 'string' && /^[a-z]{0,3}$/i.test(language) ? language : '',
+    ),
   )
 }

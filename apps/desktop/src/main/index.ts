@@ -4,6 +4,10 @@ import { AiService } from './ai/service'
 import { ExportManager } from './export/manager'
 import { runFfmpeg } from './ffmpeg/runner'
 import { registerIpc } from './ipc'
+import { LiveController } from './live/controller'
+import { GUEST_SCRIPT, guestHtml } from './live/guest-page'
+import { SignalingServer } from './live/signaling'
+import { Vault } from './vault'
 import { handleMediaRequest, MEDIA_SCHEME } from './projects/media-protocol'
 import { RecordingController } from './recording/controller'
 import { SecretStore } from './secret-store'
@@ -69,10 +73,22 @@ if (!app.requestSingleInstanceLock()) {
 
     const recording = new RecordingController({ mainWindow: () => mainWindow, projectsDir })
     const secrets = new SecretStore(join(userData, 'secrets.json'), safeStorage)
+    const live = new LiveController({
+      configPath: join(userData, 'live.json'),
+      vault: new Vault(join(userData, 'live-secrets.json'), safeStorage),
+      signaling: new SignalingServer({ guestHtml, guestScript: GUEST_SCRIPT }),
+      projectsDir,
+      encoder: () => recording.encoder(),
+      run: runFfmpeg,
+      send: (channel, payload) => mainWindow?.webContents.send(channel, payload),
+      elevenLabsKey: () => secrets.get('elevenlabs'),
+    })
+    app.on('before-quit', () => void live.shutdown())
 
     registerIpc(ipcMain, {
       settings,
       secrets,
+      live,
       ai: new AiService({ getKey: (key) => secrets.get(key), run: runFfmpeg }),
       recording,
       exports: new ExportManager(runFfmpeg),

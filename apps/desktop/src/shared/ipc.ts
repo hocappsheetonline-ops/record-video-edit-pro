@@ -1,5 +1,7 @@
 import type {
   AppSettings,
+  Destination,
+  LiveComment,
   CutSuggestion,
   Transcript,
   EditState,
@@ -52,10 +54,26 @@ export const IPC = {
   aiSummarize: 'ai:summarize',
   aiTranslate: 'ai:translate',
   saveExportText: 'export:save-text',
+  liveGetConfig: 'live:get-config',
+  liveUpdateConfig: 'live:update-config',
+  liveSecrets: 'live:secrets',
+  liveSetSecret: 'live:set-secret',
+  liveOpenRoom: 'live:open-room',
+  liveCloseRoom: 'live:close-room',
+  liveStart: 'live:start',
+  liveWrite: 'live:write',
+  liveStop: 'live:stop',
+  liveCommentsStart: 'live:comments-start',
+  liveCommentsStop: 'live:comments-stop',
+  liveCaption: 'live:caption',
 } as const
 
 /** Sự kiện main process gửi xuống giao diện. */
 export const EVENTS = {
+  liveStatus: 'live:status',
+  liveEnded: 'live:ended',
+  liveComments: 'live:comments',
+  liveCommentError: 'live:comment-error',
   recordingCommand: 'recording:command',
   recordingFinished: 'recording:finished',
   recordingError: 'recording:error',
@@ -81,6 +99,8 @@ export interface DisplaySource {
   primary: boolean
   /** Ảnh xem trước dạng data URL, rỗng nếu không lấy được. */
   thumbnail: string
+  /** Nguồn desktopCapturer (`screen:…`) để chia sẻ màn hình trong studio live. */
+  sourceId?: string
 }
 
 export interface WindowSource {
@@ -141,6 +161,49 @@ export interface ExportResult {
   fileName: string
 }
 
+export interface LiveConfig {
+  destinations: Destination[]
+  resolution: 720 | 1080
+  /** kbps */
+  videoBitrate: number
+  /** Lưu một bản trong máy và tạo dự án để chỉnh sửa sau buổi live. */
+  recordLocally: boolean
+  /** Địa chỉ công khai (nếu có) để tạo link mời khách qua internet. */
+  publicUrl: string
+  youtubeVideoId: string
+  facebookVideoId: string
+}
+
+export type LiveSecretName = `stream:${string}` | 'youtube-api-key' | 'facebook-token'
+
+export interface LiveSecretsStatus {
+  /** Đích phát nào đã có stream key. */
+  streamKeys: Record<string, boolean>
+  youtubeApiKey: boolean
+  facebookToken: boolean
+}
+
+export interface GuestRoom {
+  room: string
+  hostKey: string
+  port: number
+  inviteUrls: string[]
+}
+
+export interface LiveStatus {
+  seconds: number
+  bitrate: number
+  fps: number
+  destinations: Record<string, { state: 'connecting' | 'live' | 'error'; message?: string }>
+}
+
+export interface LiveEnded {
+  /** Lỗi khiến buổi phát dừng (null nếu dừng bình thường). */
+  error: string | null
+  /** Dự án tạo từ bản ghi trong máy (nếu bật). */
+  folder: string | null
+}
+
 export type Unsubscribe = () => void
 
 /** API mà preload cung cấp cho giao diện qua `window.lumora`. */
@@ -199,4 +262,23 @@ export interface LumoraApi {
   ): Promise<{ id: string; text: string }[]>
   /** Lưu file văn bản (phụ đề SRT/VTT, mô tả...) vào thư mục exports của dự án. */
   saveExportText(folder: string, fileName: string, content: string): Promise<ExportResult>
+
+  getLiveConfig(): Promise<LiveConfig>
+  updateLiveConfig(patch: Partial<LiveConfig>): Promise<LiveConfig>
+  getLiveSecrets(): Promise<LiveSecretsStatus>
+  /** Lưu (hoặc xóa khi rỗng) stream key/token đã mã hóa. */
+  setLiveSecret(name: LiveSecretName, value: string): Promise<LiveSecretsStatus>
+  openGuestRoom(): Promise<GuestRoom>
+  closeGuestRoom(): Promise<void>
+  startLive(video: { width: number; height: number; fps: number }): Promise<void>
+  writeLive(data: ArrayBuffer): Promise<void>
+  stopLive(): Promise<LiveEnded>
+  startComments(platforms: ('youtube' | 'facebook')[]): Promise<void>
+  stopComments(): Promise<void>
+  /** Nhận dạng một đoạn âm thanh ngắn (WebM) cho phụ đề trực tiếp. */
+  transcribeLiveChunk(data: ArrayBuffer, language: string): Promise<string>
+  onLiveStatus(listener: (status: LiveStatus) => void): Unsubscribe
+  onLiveEnded(listener: (ended: LiveEnded) => void): Unsubscribe
+  onLiveComments(listener: (comments: LiveComment[]) => void): Unsubscribe
+  onLiveCommentError(listener: (message: string) => void): Unsubscribe
 }

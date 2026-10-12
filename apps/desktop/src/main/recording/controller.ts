@@ -61,6 +61,16 @@ export interface ControllerContext {
 }
 
 /** Điều phối việc quay giữa main process, ffmpeg và cửa sổ thanh điều khiển. */
+function screenSource(
+  captured: Electron.DesktopCapturerSource[],
+  displayId: number,
+): { thumbnail: string; sourceId?: string } {
+  const match = captured.find(
+    (s) => s.id.startsWith('screen:') && s.display_id === String(displayId),
+  )
+  return { thumbnail: match?.thumbnail.toDataURL() ?? '', ...(match ? { sourceId: match.id } : {}) }
+}
+
 export class RecordingController {
   private capsPromise: Promise<CaptureCapabilities> | null = null
   private session: RecordingSession | null = null
@@ -76,6 +86,12 @@ export class RecordingController {
       display: process.env.DISPLAY,
     }).catch(() => NO_CAPTURE)
     return this.capsPromise
+  }
+
+  /** Bộ mã hóa H.264 tốt nhất máy hỗ trợ (dùng lại cho livestream). */
+  async encoder(): Promise<'h264_nvenc' | 'h264_amf' | 'h264_qsv' | 'libx264'> {
+    const caps = await this.captureCapabilities()
+    return caps.ddagrab?.encoder ?? caps.gdigrab?.encoder ?? caps.x11grab?.encoder ?? 'libx264'
   }
 
   async capabilities(): Promise<RecorderCapabilities> {
@@ -108,10 +124,7 @@ export class RecordingController {
         bounds: d.bounds,
         scaleFactor: d.scaleFactor,
         primary: d.id === primaryId,
-        thumbnail:
-          captured
-            .find((s) => s.id.startsWith('screen:') && s.display_id === String(d.id))
-            ?.thumbnail.toDataURL() ?? '',
+        ...screenSource(captured, d.id),
       })),
       windows: captured
         .filter((s) => s.id.startsWith('window:') && !ownWindows.has(s.id) && s.name.trim())

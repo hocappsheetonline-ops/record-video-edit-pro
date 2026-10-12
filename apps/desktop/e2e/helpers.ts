@@ -26,7 +26,12 @@ export function createTestDirs(): TestDirs {
   mkdirSync(projects)
   // Lưu dự án vào thư mục tạm thay vì thư mục Videos thật của máy.
   writeFileSync(join(userData, 'settings.json'), JSON.stringify({ projectsDir: projects }))
-  return { userData, projects, cleanup: () => rmSync(userData, { recursive: true, force: true }) }
+  return {
+    userData,
+    projects,
+    cleanup: () =>
+      rmSync(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }),
+  }
 }
 
 export async function launchApp(

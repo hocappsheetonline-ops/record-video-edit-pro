@@ -130,3 +130,42 @@ describe('xuất video: ghép âm thanh', () => {
     expect(args.slice(-4)).toEqual(['+faststart', '-t', '3', 'o.mp4'])
   })
 })
+
+describe('livestream', () => {
+  it('tee phát cùng lúc nhiều đích và ghi file, đích lỗi không làm dừng các đích khác', async () => {
+    const { buildLiveArgs } = await import('./args')
+    const args = buildLiveArgs(
+      [
+        { kind: 'rtmp', url: 'rtmp://a.rtmp.youtube.com/live2/key-1' },
+        { kind: 'rtmp', url: 'rtmps://live-api-s.facebook.com:443/rtmp/FB|key' },
+        { kind: 'file', path: 'C:\\Videos\\live.mkv' },
+      ],
+      { encoder: 'libx264', fps: 30, videoBitrate: 4500, audioBitrate: 160 },
+    )
+    expect(args.join(' ')).toContain('-i pipe:0 -map 0:v:0 -map 0:a:0?')
+    expect(args.join(' ')).toContain(
+      '-c:v libx264 -preset veryfast -tune zerolatency -b:v 4500k -maxrate 4500k -bufsize 9000k -g 60',
+    )
+    expect(args.join(' ')).toContain('-c:a aac -b:a 160k')
+    expect(args.at(-1)).toBe(
+      '[f=flv:onfail=ignore:flvflags=no_duration_filesize]rtmp://a.rtmp.youtube.com/live2/key-1|' +
+        '[f=flv:onfail=ignore:flvflags=no_duration_filesize]rtmps://live-api-s.facebook.com:443/rtmp/FB\\|key|' +
+        '[f=matroska]C:\\\\Videos\\\\live.mkv',
+    )
+  })
+
+  it('NVENC dùng CBR độ trễ thấp; không có đích thì báo lỗi', async () => {
+    const { buildLiveArgs } = await import('./args')
+    expect(
+      buildLiveArgs([{ kind: 'file', path: 'x.mkv' }], {
+        encoder: 'h264_nvenc',
+        fps: 30,
+        videoBitrate: 6000,
+        audioBitrate: 160,
+      }).join(' '),
+    ).toContain('-c:v h264_nvenc -preset p4 -tune ll -rc cbr')
+    expect(() =>
+      buildLiveArgs([], { encoder: 'libx264', fps: 30, videoBitrate: 1, audioBitrate: 1 }),
+    ).toThrow()
+  })
+})

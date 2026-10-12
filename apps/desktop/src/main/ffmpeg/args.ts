@@ -345,3 +345,128 @@ export function buildSpeechAudioArgs(options: {
     output,
   ]
 }
+
+export type LiveOutput = { kind: 'rtmp'; url: string } | { kind: 'file'; path: string }
+
+export interface LiveEncodeOptions {
+  encoder: VideoEncoder
+  fps: number
+  /** kbps */
+  videoBitrate: number
+  /** kbps */
+  audioBitrate: number
+}
+
+/** Thoát ký tự đặc biệt trong tên đầu ra của muxer tee. */
+export function escapeTee(value: string): string {
+  return value.replace(/[\\|[\]]/g, (ch) => `\\${ch}`)
+}
+
+function liveVideoArgs(o: LiveEncodeOptions): string[] {
+  const rate = `${o.videoBitrate}k`
+  const common = [
+    '-b:v',
+    rate,
+    '-maxrate',
+    rate,
+    '-bufsize',
+    `${o.videoBitrate * 2}k`,
+    '-g',
+    String(o.fps * 2),
+    '-r',
+    String(o.fps),
+  ]
+  switch (o.encoder) {
+    case 'h264_nvenc':
+      return [
+        '-c:v',
+        'h264_nvenc',
+        '-preset',
+        'p4',
+        '-tune',
+        'll',
+        '-rc',
+        'cbr',
+        ...common,
+        '-pix_fmt',
+        'yuv420p',
+      ]
+    case 'h264_amf':
+      return [
+        '-c:v',
+        'h264_amf',
+        '-quality',
+        'speed',
+        '-rc',
+        'cbr',
+        ...common,
+        '-pix_fmt',
+        'yuv420p',
+      ]
+    case 'h264_qsv':
+      return ['-c:v', 'h264_qsv', '-preset', 'veryfast', ...common, '-pix_fmt', 'nv12']
+    case 'libx264':
+      return [
+        '-c:v',
+        'libx264',
+        '-preset',
+        'veryfast',
+        '-tune',
+        'zerolatency',
+        ...common,
+        '-keyint_min',
+        String(o.fps * 2),
+        '-sc_threshold',
+        '0',
+        '-pix_fmt',
+        'yuv420p',
+      ]
+  }
+}
+
+/**
+ * Phát trực tiếp: nhận WebM (hình chương trình + âm thanh đã trộn) từ stdin, mã hóa H.264/AAC đúng chuẩn
+ * RTMP rồi đẩy cùng lúc tới mọi đích bằng muxer `tee`. `onfail=ignore`: một đích lỗi không làm dừng các đích khác.
+ */
+export function buildLiveArgs(
+  outputs: readonly LiveOutput[],
+  options: LiveEncodeOptions,
+): string[] {
+  if (outputs.length === 0) throw new Error('Chưa có đích phát nào')
+  const slaves = outputs.map((o) =>
+    o.kind === 'rtmp'
+      ? `[f=flv:onfail=ignore:flvflags=no_duration_filesize]${escapeTee(o.url)}`
+      : `[f=matroska]${escapeTee(o.path)}`,
+  )
+  return [
+    '-hide_banner',
+    '-loglevel',
+    'info',
+    '-stats_period',
+    '1',
+    '-fflags',
+    '+genpts',
+    '-thread_queue_size',
+    '1024',
+    '-i',
+    'pipe:0',
+    '-map',
+    '0:v:0',
+    '-map',
+    '0:a:0?',
+    ...liveVideoArgs(options),
+    '-c:a',
+    'aac',
+    '-b:a',
+    `${options.audioBitrate}k`,
+    '-ar',
+    '48000',
+    '-ac',
+    '2',
+    '-flags',
+    '+global_header',
+    '-f',
+    'tee',
+    slaves.join('|'),
+  ]
+}

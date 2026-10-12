@@ -40,6 +40,9 @@ jobs:
       - name: Unit test & test giao diện
         run: pnpm test
 
+      - name: Cài Chromium cho test khách mời livestream
+        run: pnpm --filter @lumora/desktop exec playwright install chromium
+
       - name: Test E2E (mở app Electron thật)
         run: pnpm test:e2e
 

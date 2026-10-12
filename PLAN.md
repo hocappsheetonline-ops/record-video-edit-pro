@@ -26,7 +26,7 @@ Lấy cảm hứng từ **Screen Studio, FocuSee, CursorClip** (quay + chỉnh s
 | Mã hóa/xuất video       | **WebCodecs** (dùng phần cứng) + **mp4-muxer**; **FFmpeg** (`ffmpeg-static`) để trộn âm thanh, xuất GIF, phát RTMP                               | Xuất nhanh, chất lượng cao                                                                     |
 | Phụ đề                  | **ElevenLabs Scribe** (Speech-to-Text)                                                                                                           | Có timestamp từng từ, hỗ trợ tiếng Việt                                                        |
 | AI biên tập             | **Claude API** (`@anthropic-ai/sdk`)                                                                                                             | Phát hiện từ thừa, đề xuất đoạn cắt, tạo tiêu đề, mô tả, chương, dịch phụ đề                   |
-| Livestream khách mời    | **LiveKit** (WebRTC SFU, tự host bằng Docker hoặc LiveKit Cloud)                                                                                 | Mã nguồn mở, ổn định, có SDK cho web và Node                                                   |
+| Livestream khách mời    | **WebRTC P2P** + máy chủ báo hiệu tích hợp (`ws`)                                                                                                | Không cần server riêng hay chi phí; đủ cho vài khách                                           |
 | i18n                    | **i18next**                                                                                                                                      | Giao diện Việt/Anh                                                                             |
 | Lưu API key             | `safeStorage` của Electron (dùng DPAPI trên Windows)                                                                                             | Key được mã hóa, không lưu dạng văn bản thường                                                 |
 | Đóng gói                | **electron-builder** (bộ cài NSIS `.exe`) + **electron-updater** (phát hành qua GitHub Releases)                                                 | Tạo bộ cài và tự động cập nhật                                                                 |
@@ -37,7 +37,6 @@ Lấy cảm hứng từ **Screen Studio, FocuSee, CursorClip** (quay + chỉnh s
 ```
 apps/
   desktop/          # Ứng dụng Electron (main + preload + renderer React)
-  guest-web/        # (Giai đoạn 4) Trang web cho khách tham gia livestream
 packages/
   core/             # Mô hình dự án/timeline, thuật toán auto-zoom, làm mượt con trỏ (logic thuần, dễ test)
   renderer/         # (Giai đoạn 2) Bộ ghép hình PixiJS, dùng chung cho xem trước, xuất video và livestream
@@ -98,13 +97,14 @@ Mỗi nguồn được ghi thành **file riêng**. Nhờ vậy lúc chỉnh sử
 - Chỉnh video bằng văn bản: chọn từ để cắt.
 - Test E2E chạy với máy chủ giả lập ElevenLabs và Anthropic: kiểm tra request gửi đi và kết quả trên video (SRT, độ dài video, phụ đề in trong khung hình).
 
-### Giai đoạn 4: Livestream giống StreamYard (~6–8 tuần)
+### Giai đoạn 4: Livestream giống StreamYard ✅ Đã xong
 
-- **4a. Phát đa nền tảng:** bộ ghép cảnh (màn hình, webcam, banner, logo, lớp chữ) được mã hóa bằng FFmpeg và phát RTMP **đồng thời** lên YouTube, Facebook, TikTok hoặc bất kỳ server RTMP nào. Lưu một bản ghi cục bộ.
-- **4b. Studio và cảnh:** các bố cục (một người, chia đôi, lưới, chia sẻ màn hình kèm webcam), chuyển cảnh, banner chạy chữ, lower-third (thanh tên ở mép dưới).
-- **4c. Mời khách:** server LiveKit; khách vào qua **link trên trình duyệt** (`apps/guest-web`), không cần cài app. Có phòng chờ (backstage), host đưa khách lên hoặc xuống sóng, tắt mic khách, khách chia sẻ màn hình.
-- **4d. Bình luận:** gộp chat từ YouTube và Facebook, hiển thị bình luận lên màn hình phát.
-- **4e. AI cho livestream:** phụ đề trực tiếp (ElevenLabs realtime STT), tự tạo bản tóm tắt và clip ngắn sau buổi live.
+- **4a. Phát đa nền tảng:** studio vẽ cảnh lên canvas, MediaRecorder gửi luồng cho FFmpeg (mã hóa phần cứng nếu có). FFmpeg dùng `tee` để phát RTMP/RTMPS **đồng thời** lên YouTube, Facebook, TikTok, Twitch hoặc server tùy chỉnh, và ghi `live.mkv` trong máy. Một kênh lỗi không làm dừng các kênh khác. Khi mọi kênh đều lỗi hoặc FFmpeg dừng, buổi phát tự kết thúc và app báo lỗi.
+- **4b. Studio và cảnh:** bố cục một người, lưới, màn hình kèm người, PiP; chia sẻ màn hình hoặc cửa sổ; banner; tên trên từng người.
+- **4c. Mời khách:** không cần server LiveKit. App có sẵn máy chủ báo hiệu (HTTP + WebSocket, cổng 47800) phục vụ trang khách. Kết nối WebRTC đi thẳng giữa hai máy (tối đa 8 khách), khách vào hậu trường trước rồi host đưa lên sóng; mỗi khách nghe bản trộn mix-minus.
+- **4d. Bình luận:** YouTube Live Chat API và Facebook Graph API; đưa bình luận lên khung hình.
+- **4e. AI:** phụ đề trực tiếp (gửi từng đoạn 5 giây tới ElevenLabs Scribe). Bản ghi sau buổi live thành dự án, nên dùng được toàn bộ công cụ AI của Giai đoạn 3 (phụ đề, cắt, tiêu đề, chương).
+- Test: FFmpeg làm máy chủ RTMP thật (kiểm tra H.264/AAC, kích thước, banner trong khung hình), khách mời bằng Chromium với thiết bị giả, máy chủ giả lập YouTube và ElevenLabs.
 
 ### Giai đoạn 5: Hoàn thiện và phát hành
 
@@ -123,7 +123,6 @@ Mỗi nguồn được ghi thành **file riêng**. Nhờ vậy lúc chỉnh sử
 - **Visual Studio Build Tools** (workload "Desktop development with C++") và **Python 3**, chỉ cần khi native module không có bản build sẵn
 - FFmpeg được đóng gói sẵn qua `ffmpeg-static`, không cần cài riêng
 - API key: **ElevenLabs** và **Anthropic (Claude)**, nhập trong mục Cài đặt của app
-- (Giai đoạn 4) **Docker** nếu tự host LiveKit, hoặc dùng tài khoản LiveKit Cloud
 
 > Lưu ý: app quay màn hình phải được **chạy và test trên máy Windows thật** của bạn. Môi trường cloud chỉ dùng để viết code, chạy unit test và build.
 
@@ -139,8 +138,8 @@ Cấu hình máy khuyến nghị để quay 1080p/60fps: CPU 4 nhân trở lên,
 | Chưa có máy Mac để test                                                      | Giữ phần riêng cho từng hệ điều hành tách biệt; thêm macOS khi có máy (hoặc build thử trên runner macOS của GitHub Actions) |
 | Xuất 4K/60fps chậm trên máy yếu                                              | Ưu tiên WebCodecs dùng phần cứng; fallback sang FFmpeg; có hàng đợi xuất chạy nền                                           |
 | Độ chính xác phụ đề tiếng Việt                                               | Cho chỉnh sửa transcript; dùng Claude để sửa chính tả và dấu câu                                                            |
-| Livestream có khách khá phức tạp và tốn chi phí server                       | Làm sau cùng; bắt đầu với LiveKit Cloud (có gói miễn phí) rồi mới tự host                                                   |
+| Khách ở xa không vào được (NAT, tường lửa)                                   | Dùng STUN công khai; khách ở xa vào qua tunnel (cloudflared, ngrok) trỏ tới cổng 47800                                      |
 
 ## 6. Bước tiếp theo
 
-Bắt đầu **Giai đoạn 4**: livestream giống StreamYard.
+Bắt đầu **Giai đoạn 5**: hoàn thiện và phát hành.

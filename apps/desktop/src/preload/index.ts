@@ -55,6 +55,23 @@ const api: LumoraApi = {
   translateLines: (lines, target) => ipcRenderer.invoke(IPC.aiTranslate, lines, target),
   saveExportText: (folder, fileName, content) =>
     ipcRenderer.invoke(IPC.saveExportText, folder, fileName, content),
+
+  getLiveConfig: () => ipcRenderer.invoke(IPC.liveGetConfig),
+  updateLiveConfig: (patch) => ipcRenderer.invoke(IPC.liveUpdateConfig, patch),
+  getLiveSecrets: () => ipcRenderer.invoke(IPC.liveSecrets),
+  setLiveSecret: (name, value) => ipcRenderer.invoke(IPC.liveSetSecret, name, value),
+  openGuestRoom: () => ipcRenderer.invoke(IPC.liveOpenRoom),
+  closeGuestRoom: () => ipcRenderer.invoke(IPC.liveCloseRoom),
+  startLive: (video) => ipcRenderer.invoke(IPC.liveStart, video),
+  writeLive: (data) => ipcRenderer.invoke(IPC.liveWrite, data),
+  stopLive: () => ipcRenderer.invoke(IPC.liveStop),
+  startComments: (platforms) => ipcRenderer.invoke(IPC.liveCommentsStart, platforms),
+  stopComments: () => ipcRenderer.invoke(IPC.liveCommentsStop),
+  transcribeLiveChunk: (data, language) => ipcRenderer.invoke(IPC.liveCaption, data, language),
+  onLiveStatus: (listener) => subscribe(EVENTS.liveStatus, listener),
+  onLiveEnded: (listener) => subscribe(EVENTS.liveEnded, listener),
+  onLiveComments: (listener) => subscribe(EVENTS.liveComments, listener),
+  onLiveCommentError: (listener) => subscribe(EVENTS.liveCommentError, listener),
 }
 
 contextBridge.exposeInMainWorld('lumora', api)

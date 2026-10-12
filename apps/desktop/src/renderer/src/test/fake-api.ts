@@ -3,11 +3,15 @@ import {
   DEFAULT_SETTINGS,
   maskSecret,
   type AppSettings,
+  type LiveComment,
   type Project,
   type SecretKey,
 } from '@lumora/core'
 import type {
   CaptureSources,
+  LiveConfig,
+  LiveEnded,
+  LiveStatus,
   LumoraApi,
   ProjectSummary,
   RecordingCommand,
@@ -105,6 +109,26 @@ export function createFakeApi(
   const secrets: Partial<Record<SecretKey, string>> = {}
   let projects = [sampleSummary]
   const commandListeners = new Set<(c: RecordingCommand) => void>()
+  const commentListeners = new Set<(c: LiveComment[]) => void>()
+  const statusListeners = new Set<(s: LiveStatus) => void>()
+  const endedListeners = new Set<(e: LiveEnded) => void>()
+  let liveConfig: LiveConfig = {
+    destinations: [],
+    resolution: 720,
+    videoBitrate: 4500,
+    recordLocally: true,
+    publicUrl: '',
+    youtubeVideoId: '',
+    facebookVideoId: '',
+  }
+  const secretNames = new Set<string>()
+  const liveSecrets = () => ({
+    streamKeys: Object.fromEntries(
+      liveConfig.destinations.map((d) => [d.id, secretNames.has(`stream:${d.id}`)]),
+    ),
+    youtubeApiKey: secretNames.has('youtube-api-key'),
+    facebookToken: secretNames.has('facebook-token'),
+  })
   const finishedListeners = new Set<(folder: string) => void>()
   const status = (): SecretsStatus => ({
     elevenlabs: secrets.elevenlabs
@@ -207,10 +231,52 @@ export function createFakeApi(
       path: `/x/${fileName}`,
       fileName,
     })),
+    getLiveConfig: vi.fn<LumoraApi['getLiveConfig']>(async () => liveConfig),
+    updateLiveConfig: vi.fn<LumoraApi['updateLiveConfig']>(
+      async (patch) => (liveConfig = { ...liveConfig, ...patch }),
+    ),
+    getLiveSecrets: vi.fn<LumoraApi['getLiveSecrets']>(async () => liveSecrets()),
+    setLiveSecret: vi.fn<LumoraApi['setLiveSecret']>(async (name, value) => {
+      if (value) secretNames.add(name)
+      else secretNames.delete(name)
+      return liveSecrets()
+    }),
+    openGuestRoom: vi.fn<LumoraApi['openGuestRoom']>(async () => ({
+      room: 'r1',
+      hostKey: 'k1',
+      port: 47800,
+      inviteUrls: ['http://192.168.1.5:47800/join/r1'],
+    })),
+    closeGuestRoom: vi.fn<LumoraApi['closeGuestRoom']>(async () => {}),
+    startLive: vi.fn<LumoraApi['startLive']>(async () => {}),
+    writeLive: vi.fn<LumoraApi['writeLive']>(async () => {}),
+    stopLive: vi.fn<LumoraApi['stopLive']>(async () => ({
+      error: null,
+      folder: 'Live 2026.lumora',
+    })),
+    startComments: vi.fn<LumoraApi['startComments']>(async () => {}),
+    stopComments: vi.fn<LumoraApi['stopComments']>(async () => {}),
+    transcribeLiveChunk: vi.fn<LumoraApi['transcribeLiveChunk']>(async () => ''),
+    onLiveStatus: (l: (s: LiveStatus) => void) => {
+      statusListeners.add(l)
+      return () => statusListeners.delete(l)
+    },
+    onLiveEnded: (l: (e: LiveEnded) => void) => {
+      endedListeners.add(l)
+      return () => endedListeners.delete(l)
+    },
+    onLiveComments: (l: (c: LiveComment[]) => void) => {
+      commentListeners.add(l)
+      return () => commentListeners.delete(l)
+    },
+    onLiveCommentError: () => () => {},
   } satisfies LumoraApi
   return {
     api,
     emitCommand: (c: RecordingCommand) => commandListeners.forEach((l) => l(c)),
     emitFinished: (folder: string) => finishedListeners.forEach((l) => l(folder)),
+    emitComments: (comments: LiveComment[]) => commentListeners.forEach((l) => l(comments)),
+    emitLiveStatus: (status: LiveStatus) => statusListeners.forEach((l) => l(status)),
+    emitLiveEnded: (ended: LiveEnded) => endedListeners.forEach((l) => l(ended)),
   }
 }
