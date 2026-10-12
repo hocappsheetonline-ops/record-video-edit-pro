@@ -83,7 +83,8 @@ export function PreviewCanvas({ project, folder }: { project: Project; folder: s
   const drag = useRef<Drag | null>(null)
   const [box, setBox] = useState<Box | null>(null)
   /** Vị trí / tỉ lệ thu nhỏ của canvas trên màn hình (để đặt khung chọn). */
-  const [metrics, setMetrics] = useState({ left: 0, top: 0, scale: 0 })
+  const [metrics, setMetrics] = useState({ left: 0, top: 0, scale: 0, width: 0, height: 0 })
+  const guides = useEditorStore((s) => s.guides)
   const [hover, setHover] = useState(false)
   const [dragging, setDragging] = useState(false)
 
@@ -104,6 +105,8 @@ export function PreviewCanvas({ project, folder }: { project: Project; folder: s
         left: canvas.offsetLeft,
         top: canvas.offsetTop,
         scale: canvas.width > 0 ? canvas.offsetWidth / canvas.width : 0,
+        width: canvas.offsetWidth,
+        height: canvas.offsetHeight,
       })
     }
     update()
@@ -112,7 +115,8 @@ export function PreviewCanvas({ project, folder }: { project: Project; folder: s
         s.edit !== prev.edit ||
         s.selection !== prev.selection ||
         s.time !== prev.time ||
-        s.videoSize !== prev.videoSize
+        s.videoSize !== prev.videoSize ||
+        s.guides !== prev.guides
       )
         update()
     })
@@ -276,6 +280,15 @@ export function PreviewCanvas({ project, folder }: { project: Project; folder: s
   const { left, top, scale } = metrics
   return (
     <>
+      {guides !== 'none' && metrics.width > 0 && (
+        <PreviewGuides
+          mode={guides}
+          left={left}
+          top={top}
+          width={metrics.width}
+          height={metrics.height}
+        />
+      )}
       <canvas
         ref={canvasRef}
         data-testid="editor-canvas"
@@ -330,5 +343,67 @@ export function PreviewCanvas({ project, folder }: { project: Project; folder: s
         </div>
       )}
     </>
+  )
+}
+
+/**
+ * Đường gióng trên khung xem trước (không có trong video xuất): chia ba (bố cục), hoặc vùng an
+ * toàn TikTok / Shorts — phần trên, dưới, cạnh phải thường bị chữ và nút của ứng dụng che.
+ */
+function PreviewGuides({
+  mode,
+  left,
+  top,
+  width,
+  height,
+}: {
+  mode: 'thirds' | 'safe'
+  left: number
+  top: number
+  width: number
+  height: number
+}) {
+  const line = 'absolute bg-white/50 shadow-[0_0_0_0.5px_rgba(0,0,0,0.4)]'
+  return (
+    <div
+      data-testid="preview-guides"
+      data-mode={mode}
+      className="pointer-events-none absolute z-10"
+      style={{ left, top, width, height }}
+    >
+      {mode === 'thirds' ? (
+        <>
+          {[1, 2].map((i) => (
+            <span
+              key={`v${i}`}
+              className={`${line} inset-y-0 w-px`}
+              style={{ left: `${(i * 100) / 3}%` }}
+            />
+          ))}
+          {[1, 2].map((i) => (
+            <span
+              key={`h${i}`}
+              className={`${line} inset-x-0 h-px`}
+              style={{ top: `${(i * 100) / 3}%` }}
+            />
+          ))}
+          <span className="absolute left-1/2 top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/60" />
+        </>
+      ) : (
+        <>
+          {/* Vùng bị che: trên 12%, dưới 22%, phải 14%. */}
+          <span className="absolute inset-x-0 top-0 bg-red-500/20" style={{ height: '12%' }} />
+          <span className="absolute inset-x-0 bottom-0 bg-red-500/20" style={{ height: '22%' }} />
+          <span
+            className="absolute right-0 bg-red-500/20"
+            style={{ top: '12%', bottom: '22%', width: '14%' }}
+          />
+          <span
+            className="absolute border border-dashed border-white/70"
+            style={{ top: '12%', bottom: '22%', left: '4%', right: '14%' }}
+          />
+        </>
+      )}
+    </div>
   )
 }

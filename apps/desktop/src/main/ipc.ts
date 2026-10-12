@@ -42,6 +42,8 @@ import {
   readProject,
   safeJoin,
   writeEdit,
+  duplicateProject,
+  renameProject,
 } from './projects/library'
 import { exportPack, importPack, packFileName } from './projects/share'
 import type { SecretStore } from './secret-store'
@@ -248,6 +250,17 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
     await projects.trash(path)
     return listProjects(dir)
   })
+  ipcMain.handle(IPC.projectsRename, async (_event, folder: unknown, name: unknown) => {
+    if (typeof name !== 'string') throw new Error('name_empty')
+    return renameProject(await projects.dir(), assertFolder(folder), name)
+  })
+  ipcMain.handle(IPC.projectsDuplicate, async (_event, folder: unknown, suffix: unknown) =>
+    duplicateProject(
+      await projects.dir(),
+      assertFolder(folder),
+      typeof suffix === 'string' ? suffix.slice(0, 40) : '(copy)',
+    ),
+  )
   ipcMain.handle(IPC.projectsSharePack, async (_event, folder: unknown, mode: unknown) => {
     if (mode !== 'full' && mode !== 'edits') throw new Error('Kiểu gói không hợp lệ')
     const root = await projects.dir()

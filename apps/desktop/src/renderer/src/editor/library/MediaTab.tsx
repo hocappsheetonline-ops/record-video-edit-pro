@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import type { MemeItem, OnlineSource, ProjectSummary } from '@shared/ipc'
 import { lumora } from '../../api'
+import { runJob, useJobs } from '../jobs'
 import { dragProps } from '../library-drag'
 import { useEditorStore } from '../store'
 import { ghostButton, primaryButton, Segmented } from '../ui'
@@ -208,7 +209,10 @@ function ImportVideoButton() {
     setBusy(true)
     setError(null)
     try {
-      await useEditorStore.getState().importVideo()
+      const ok = await runJob(t('editor.jobs.importVideo'), () =>
+        useEditorStore.getState().importVideo(),
+      )
+      if (ok) useJobs.getState().toast({ kind: 'success', text: t('editor.jobs.importedVideo') })
     } catch (e) {
       const m = e instanceof Error ? e.message : String(e)
       setError(
@@ -265,7 +269,8 @@ function MergeProjectButton() {
     setBusy(true)
     setError(null)
     try {
-      await useEditorStore.getState().mergeProject(other)
+      await runJob(t('editor.jobs.merge'), () => useEditorStore.getState().mergeProject(other))
+      useJobs.getState().toast({ kind: 'success', text: t('editor.jobs.merged') })
       setList(null)
     } catch {
       setError(t('editor.library.mergeFailed'))

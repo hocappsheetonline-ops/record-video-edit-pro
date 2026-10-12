@@ -23,6 +23,7 @@ import { useAppStore } from '../store/app'
 import { aiErrorText } from './ai-errors'
 import { drawCaptionBlock } from './caption-draw'
 import { loadFonts } from './fonts'
+import { runJob } from './jobs'
 import { useEditorStore } from './store'
 import { formatTimecode } from './timeline-math'
 import { Segmented, SliderRow, Toggle } from './ui'
@@ -122,7 +123,9 @@ export function CaptionsPanel() {
 
   const generate = () =>
     run('generate', async () => {
-      const transcript = await lumora().transcribe(folder, language)
+      const transcript = await runJob(t('editor.jobs.captions'), () =>
+        lumora().transcribe(folder, language),
+      )
       useEditorStore.getState().setTranscript(transcript)
       setCaptions({
         enabled: true,

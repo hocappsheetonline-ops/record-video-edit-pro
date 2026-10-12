@@ -16,6 +16,7 @@ import { lumora } from '../../api'
 import { MicMeter } from '../../components/MicMeter'
 import { getMicStream, stopStream } from '../../lib/media'
 import { useAppStore } from '../../store/app'
+import { runJob } from '../jobs'
 import { dragProps } from '../library-drag'
 import { useEditorStore } from '../store'
 import { primaryButton, Segmented, SliderRow, Toggle } from '../ui'
@@ -260,10 +261,15 @@ function NarrationScript({ onError }: { onError: (e: unknown) => void }) {
     setAdded(null)
     setProgress({ done: 0, total: lines.length })
     try {
-      const n = await useEditorStore.getState().addNarration(lines, voice, {
-        captions,
-        onProgress: (done, total) => setProgress({ done, total }),
-      })
+      const n = await runJob(t('editor.jobs.narration'), (report) =>
+        useEditorStore.getState().addNarration(lines, voice, {
+          captions,
+          onProgress: (done, total) => {
+            setProgress({ done, total })
+            report(done / total)
+          },
+        }),
+      )
       setAdded(n)
     } catch (e) {
       onError(e)

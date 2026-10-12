@@ -21,13 +21,28 @@ export interface AppSettings {
   accent: string
   /** Thư mục lưu dự án. Rỗng nghĩa là dùng thư mục mặc định (Videos/Lumora). */
   projectsDir: string
+  /** Đã xem (hoặc bỏ qua) hướng dẫn lần đầu trong trình chỉnh sửa. */
+  onboardingDone: boolean
+  /** Chất lượng xem trước: tự hạ khi máy chậm, luôn cao, hoặc luôn nhẹ (540p). */
+  previewQuality: PreviewQuality
+  /** Mẫu cho bản quay mới mở lần đầu: tỉ lệ khung hình mặc định. */
+  projectTemplate: ProjectTemplate
 }
+
+export const PREVIEW_QUALITIES = ['auto', 'high', 'low'] as const
+export type PreviewQuality = (typeof PREVIEW_QUALITIES)[number]
+/** Mẫu dự án: hướng dẫn 16:9, TikTok / Shorts 9:16, vuông 1:1. */
+export const PROJECT_TEMPLATES = ['tutorial', 'tiktok', 'square'] as const
+export type ProjectTemplate = (typeof PROJECT_TEMPLATES)[number]
 
 export const DEFAULT_SETTINGS: AppSettings = {
   language: 'vi',
   theme: 'dark',
   accent: ACCENT_PRESETS[0],
   projectsDir: '',
+  onboardingDone: false,
+  previewQuality: 'auto',
+  projectTemplate: 'tutorial',
 }
 
 function pick<T extends string>(allowed: readonly T[], value: unknown, fallback: T): T {
@@ -49,6 +64,9 @@ export function normalizeSettings(input: unknown): AppSettings {
         : DEFAULT_SETTINGS.accent,
     projectsDir:
       typeof raw.projectsDir === 'string' ? raw.projectsDir.trim() : DEFAULT_SETTINGS.projectsDir,
+    onboardingDone: raw.onboardingDone === true,
+    previewQuality: pick(PREVIEW_QUALITIES, raw.previewQuality, DEFAULT_SETTINGS.previewQuality),
+    projectTemplate: pick(PROJECT_TEMPLATES, raw.projectTemplate, DEFAULT_SETTINGS.projectTemplate),
   }
 }
 

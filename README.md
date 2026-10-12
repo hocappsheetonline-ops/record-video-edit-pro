@@ -87,6 +87,11 @@ Tính năng:
 - **Kéo thả từ thư viện**: kéo thẻ meme, hiệu ứng, mẫu chữ, emoji, hình vẽ, hiệu ứng âm thanh vào timeline để thêm đúng chỗ thả (có vạch báo vị trí). Rê chuột trên clip video để xem ảnh khung hình tại đó.
 - **Tách âm thanh clip chính** (menu chuột phải trên clip, hoặc tab Âm thanh của clip): micro và âm thanh máy thành các đoạn riêng trên hàng Âm thanh, clip tự tắt tiếng.
 - **Marker** (phím M hoặc nút cờ): cờ màu trên thước, kéo để dời, bấm đúp để đổi tên, Shift+M / Ctrl+M nhảy marker trước / sau. Cài đặt video → Marker: danh sách, đổi màu, và **chương YouTube** (sao chép hoặc lưu `.txt`).
+- **Việc chạy nền**: xuất video, nhập video, ghép bản quay, đọc kịch bản AI, tạo phụ đề hiện ở nút **Việc đang làm** trên đầu trình chỉnh sửa (tiến độ, hủy). Xuất dùng bản chụp lúc bấm nên đóng hộp thoại xuất là chỉnh sửa tiếp được; xong có thông báo kèm nút mở thư mục.
+- **Lịch sử chỉnh sửa** (nút đồng hồ trên thanh công cụ timeline): danh sách từng bước ("Thêm lớp phủ", "Sửa webcam"…), bấm để quay về hoặc tới bước bất kỳ; chú thích nút Hoàn tác / Làm lại ghi rõ bước sẽ hoàn tác.
+- **Đường gióng xem trước**: chia ba, hoặc vùng an toàn TikTok / Shorts (vùng bị chữ và nút của ứng dụng che). Khung xem trước tự hạ xuống 540p khi máy chậm (nhãn "Xem trước nhẹ"); chỉnh trong Cài đặt → Trình chỉnh sửa.
+- **Hướng dẫn lần đầu** 5 bước khi mở trình chỉnh sửa (xem lại trong Cài đặt), bảng **phím tắt** (phím ? hoặc nút bàn phím).
+- **Dự án**: đổi tên, nhân đôi (không chép video đã xuất); **mẫu cho bản quay mới** trong Cài đặt: hướng dẫn 16:9, TikTok / Shorts 9:16 (phủ kín khung, phụ đề kiểu TikTok), vuông 1:1.
 - **Phím tắt**: Space phát/dừng · S tách · **A xóa phần bên trái đầu phát** · **D xóa phần bên phải đầu phát** · Delete xóa mục đang chọn · Shift+Delete xóa dồn · Ctrl+C / X / V / D / A · M marker · N hít dính · Esc bỏ chọn · Home/End về đầu/cuối · ←/→ lùi/tới 1 giây · Ctrl+Z / Ctrl+Y.
 - **Dạng sóng âm thanh** hiện ngay trong từng clip video trên timeline (micro + âm thanh máy), nên dễ thấy chỗ đang nói và chỗ im lặng để cắt.
 - **Timeline**: tách (phím S), xóa (Delete), đổi tốc độ từng đoạn, hoàn tác/làm lại (Ctrl+Z / Ctrl+Y). Bản chỉnh sửa được tự lưu vào `edit.json`.

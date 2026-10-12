@@ -25,7 +25,10 @@ export function createTestDirs(): TestDirs {
   const projects = join(userData, 'projects')
   mkdirSync(projects)
   // Lưu dự án vào thư mục tạm thay vì thư mục Videos thật của máy.
-  writeFileSync(join(userData, 'settings.json'), JSON.stringify({ projectsDir: projects }))
+  writeFileSync(
+    join(userData, 'settings.json'),
+    JSON.stringify({ projectsDir: projects, onboardingDone: true }),
+  )
   return {
     userData,
     projects,

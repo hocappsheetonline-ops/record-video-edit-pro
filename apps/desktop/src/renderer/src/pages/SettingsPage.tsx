@@ -2,9 +2,13 @@ import { useTranslation } from 'react-i18next'
 import {
   ACCENT_PRESETS,
   LANGUAGES,
+  PREVIEW_QUALITIES,
+  PROJECT_TEMPLATES,
   SECRET_KEYS,
   THEMES,
   type Language,
+  type PreviewQuality,
+  type ProjectTemplate,
   type Theme,
 } from '@lumora/core'
 import { AboutCard } from '../components/AboutCard'
@@ -87,6 +91,58 @@ export function SettingsPage() {
               />
             </label>
           </div>
+        </div>
+      </div>
+
+      <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-muted">
+        {t('settings.editor')}
+      </h2>
+      <div className="mb-8 grid gap-4 rounded-xl border border-border bg-surface p-5 sm:grid-cols-2">
+        <label className="flex flex-col gap-1.5 text-sm">
+          {t('settings.previewQuality')}
+          <select
+            className={selectClass}
+            data-testid="settings-preview-quality"
+            value={settings.previewQuality}
+            onChange={(e) =>
+              void updateSettings({ previewQuality: e.target.value as PreviewQuality })
+            }
+          >
+            {PREVIEW_QUALITIES.map((q) => (
+              <option key={q} value={q}>
+                {t(`settings.previewQualities.${q}`)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1.5 text-sm">
+          {t('settings.projectTemplate')}
+          <select
+            className={selectClass}
+            data-testid="settings-template"
+            value={settings.projectTemplate}
+            onChange={(e) =>
+              void updateSettings({ projectTemplate: e.target.value as ProjectTemplate })
+            }
+          >
+            {PROJECT_TEMPLATES.map((p) => (
+              <option key={p} value={p}>
+                {t(`settings.projectTemplates.${p}`)}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div className="flex items-center justify-between gap-3 text-sm sm:col-span-2">
+          <span className="text-muted">{t('settings.onboardingHint')}</span>
+          <button
+            type="button"
+            data-testid="settings-onboarding"
+            disabled={!settings.onboardingDone}
+            onClick={() => void updateSettings({ onboardingDone: false })}
+            className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-2 disabled:opacity-50"
+          >
+            {t('settings.onboardingReplay')}
+          </button>
         </div>
       </div>
 

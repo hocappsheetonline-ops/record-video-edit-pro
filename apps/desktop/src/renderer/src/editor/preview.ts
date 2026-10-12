@@ -27,6 +27,7 @@ import { loadSegmenter, type PersonSegmenter } from './segmenter'
 import { imageSource } from './overlay-draw'
 import { OverlayImages } from './overlay-images'
 import { computeScene } from './scene'
+import { useAppStore } from '../store/app'
 import { fxKeyOf, revKeyOf, useEditorStore } from './store'
 
 type MediaEl = HTMLVideoElement | HTMLAudioElement
@@ -45,6 +46,9 @@ function safePlay(el: HTMLMediaElement) {
  * Xem trước khi chỉnh sửa: dùng thẻ video/audio có sẵn (giải mã phần cứng, phát mượt),
  * đồng hồ riêng chạy theo timeline đã cắt, và vẽ mỗi khung bằng đúng hàm dùng khi xuất.
  */
+/** Khung vẽ lâu hơn mức này (ms) là máy không kịp 30 hình/giây. */
+const SLOW_FRAME_MS = 33
+
 export class PreviewEngine {
   private readonly segments: SourceSegment[]
   private readonly media = new Map<string, MediaEl>()
@@ -58,6 +62,8 @@ export class PreviewEngine {
   private readonly images: OverlayImages
   /** Thẻ audio cho từng đoạn nhạc/hiệu ứng (theo id đoạn). */
   private readonly audioClips = new Map<string, HTMLAudioElement>()
+  /** Thời gian vẽ các khung gần đây (ms), để tự hạ chất lượng xem trước. */
+  private drawTimes: number[] = []
   /** Thẻ video cho từng video meme (theo id lớp), phát cả tiếng. */
   private readonly overlayVideos = new Map<string, HTMLVideoElement>()
   /** Thẻ media cho file đảo ngược của clip phát ngược (theo tên file). */
@@ -175,8 +181,11 @@ export class PreviewEngine {
       this.sync(edit, useEditorStore.getState().time, playing)
       this.syncAudioClips(edit, useEditorStore.getState().time, playing)
       this.syncOverlayVideos(edit.overlays, useEditorStore.getState().time, playing)
-      if (this.needsDraw || playing || this.changedSinceDraw())
+      if (this.needsDraw || playing || this.changedSinceDraw()) {
+        const t0 = performance.now()
         this.draw(edit, useEditorStore.getState().time)
+        this.measure(performance.now() - t0, playing)
+      }
     }
     this.frame = requestAnimationFrame(this.loop)
   }
@@ -496,8 +505,35 @@ export class PreviewEngine {
   }
 
   /** Xem trước ở độ phân giải vừa phải (cạnh ngắn 720) để nhẹ máy. */
+  /**
+   * Chất lượng xem trước: "tự động" thì hạ xuống 540p khi khung vẽ mất hơn 33ms (máy không kịp
+   * 30 hình/giây) và nâng lại khi rảnh; "nhẹ" luôn 540p; "cao" luôn 720p. Video xuất không đổi.
+   */
+  private measure(ms: number, playing: boolean) {
+    const quality = useAppStore.getState().settings?.previewQuality ?? 'auto'
+    const store = useEditorStore.getState()
+    if (quality !== 'auto') {
+      const low = quality === 'low'
+      if (store.lowPreview !== low) useEditorStore.setState({ lowPreview: low })
+      return
+    }
+    if (!playing) return
+    this.drawTimes.push(ms)
+    if (this.drawTimes.length > 60) this.drawTimes.shift()
+    const n = this.drawTimes.length
+    const avg = this.drawTimes.reduce((a, b) => a + b, 0) / Math.max(1, n)
+    if (!store.lowPreview && n >= 20 && avg > SLOW_FRAME_MS) {
+      this.drawTimes = []
+      useEditorStore.setState({ lowPreview: true })
+    } else if (store.lowPreview && n >= 60 && avg < SLOW_FRAME_MS / 3) {
+      this.drawTimes = []
+      useEditorStore.setState({ lowPreview: false })
+    }
+  }
+
   private outputSize(): Size {
-    const { edit, videoSize } = useEditorStore.getState()
+    const { edit, videoSize, lowPreview } = useEditorStore.getState()
+    const base = lowPreview ? 540 : 720
     const aspect = edit?.frame.aspect ?? '16:9'
     const ratio =
       aspect === '16:9'
@@ -510,8 +546,8 @@ export class PreviewEngine {
               ? 4 / 3
               : videoSize.width / videoSize.height
     return ratio >= 1
-      ? { width: Math.round(720 * ratio), height: 720 }
-      : { width: 720, height: Math.round(720 / ratio) }
+      ? { width: Math.round(base * ratio), height: base }
+      : { width: base, height: Math.round(base / ratio) }
   }
 
   dispose() {

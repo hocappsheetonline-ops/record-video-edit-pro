@@ -462,6 +462,9 @@ export function lookLayers(look): { css: string; warm: number; cool: number; vig
 - **Cài đặt**: thư mục dự án, bộ nhớ đệm (dung lượng, dọn), chất lượng xem trước, ngôn ngữ, phím tắt tùy chỉnh (tùy chọn).
 - **Ổn định**: khôi phục sau crash (edit.json autosave đã có + `.lock`), log lỗi renderer vào `main.log`, kiểm tra rò rỉ bộ nhớ (chạy 30 phút mở/đóng editor 50 lần trong E2E, heap không tăng > 30%).
 - **Tài liệu**: README "Hướng dẫn sử dụng" có ảnh chụp từng vùng (tạo bằng E2E `page.screenshot`), `THIRD_PARTY.md` đầy đủ, `CHANGELOG.md`.
+
+> **Trạng thái**: v0.9.0 đã làm: việc nền + thông báo (`editor/jobs.ts`, `JobsUi.tsx`; xuất dùng bản chụp `edit`), lịch sử có tên bước (`core/edit/history.ts` `describeChange`, `HistoryPanel.tsx`, `jumpHistory`), đường gióng (chia ba / vùng an toàn TikTok), tự hạ chất lượng xem trước (đo thời gian vẽ, 720p → 540p) + cài đặt chất lượng, hướng dẫn lần đầu 5 bước + hộp thoại phím tắt (`HelpUi.tsx`, `settings.onboardingDone`), đổi tên / nhân đôi dự án, mẫu dự án (`applyProjectTemplate`). Còn lại cho v0.9.1 → v1.0.0: tỉ lệ xem trước 25–200%, ổn định (khóa `.lock` + khôi phục, lỗi renderer vào `main.log`, kiểm tra rò rỉ bộ nhớ), trợ năng, CHANGELOG và hướng dẫn có ảnh.
+
 - **v1.0.0**: khi tất cả E2E (dự kiến ≥ 45 bài) xanh trên CI Windows, kiểm tra thủ công trên Windows (quay thật, webcam thật, xóa phông AI, cập nhật tự động từ v0.9 lên v1.0 thành công).
 
 ---

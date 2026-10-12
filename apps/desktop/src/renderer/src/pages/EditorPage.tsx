@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next'
 import {
   ChevronLeft,
   Download,
+  Grid3x3,
+  Keyboard,
   Maximize2,
   Pause,
   Play,
@@ -20,6 +22,8 @@ import { MediaBrowser } from '../editor/MediaBrowser'
 import { PreviewCanvas } from '../editor/PreviewCanvas'
 import { PropertiesPanel } from '../editor/PropertiesPanel'
 import { ContextMenuLayer } from '../editor/ContextMenu'
+import { Onboarding, ShortcutsDialog } from '../editor/HelpUi'
+import { JobsButton, ToastLayer } from '../editor/JobsUi'
 import { useEditorStore } from '../editor/store'
 import { Timeline } from '../editor/Timeline'
 import { formatTimecode } from '../editor/timeline-math'
@@ -136,6 +140,8 @@ function readHeight(): number {
 /** Thanh điều khiển dưới khung xem trước: thời gian, phát/dừng, nhảy, tỉ lệ khung, toàn màn hình. */
 function PlayerBar({ onFullscreen }: { onFullscreen: () => void }) {
   const { t } = useTranslation()
+  const guides = useEditorStore((s) => s.guides)
+  const lowPreview = useEditorStore((s) => s.lowPreview)
   const time = useEditorStore((s) => s.time)
   const playing = useEditorStore((s) => s.playing)
   const edit = useEditorStore((s) => s.edit)
@@ -212,7 +218,29 @@ function PlayerBar({ onFullscreen }: { onFullscreen: () => void }) {
           <SkipForward size={16} aria-hidden />
         </button>
       </div>
-      <div className="flex w-40 items-center justify-end gap-1">
+      <div className="flex w-56 items-center justify-end gap-1">
+        {lowPreview && (
+          <span
+            data-testid="preview-low"
+            data-tooltip={t('editor.player.lowHint')}
+            className="rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-400"
+          >
+            {t('editor.player.low')}
+          </span>
+        )}
+        <button
+          type="button"
+          className={`${iconButton} ${guides !== 'none' ? 'text-accent' : ''}`}
+          data-testid="guides-toggle"
+          data-mode={guides}
+          aria-label={t(`editor.player.guides.${guides}`)}
+          data-tooltip={t(`editor.player.guides.${guides}`)}
+          onClick={() =>
+            s.setGuides(guides === 'none' ? 'thirds' : guides === 'thirds' ? 'safe' : 'none')
+          }
+        >
+          <Grid3x3 size={15} aria-hidden />
+        </button>
         <select
           value={edit.frame.aspect}
           aria-label={t('editor.frame.aspect')}
@@ -305,6 +333,17 @@ export function EditorPage() {
   const edit = useEditorStore((s) => s.edit)
   const loadError = useEditorStore((s) => s.loadError)
   const [exporting, setExporting] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  // Phím ? mở bảng phím tắt.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement).tagName
+      if (e.key === '?' && tag !== 'INPUT' && tag !== 'TEXTAREA' && tag !== 'SELECT')
+        setShortcutsOpen(true)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
   const [timelineHeight, setTimelineHeight] = useState(readHeight)
   const playerRef = useRef<HTMLDivElement>(null)
   const resizing = useRef<{ y: number; h: number } | null>(null)
@@ -353,6 +392,9 @@ export function EditorPage() {
   return (
     <div className="flex h-full flex-col bg-bg" data-testid="editor">
       <ContextMenuLayer />
+      <ToastLayer />
+      <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+      <Onboarding />
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-surface px-3">
         <button
           type="button"
@@ -370,6 +412,18 @@ export function EditorPage() {
         <span className="hidden text-xs text-muted md:block" data-testid="autosave">
           {t('editor.autosave')}
         </span>
+        <JobsButton />
+        <button
+          type="button"
+          data-testid="shortcuts-open"
+          aria-label={t('editor.help.shortcuts')}
+          data-tooltip={t('editor.help.shortcuts')}
+          data-shortcut="?"
+          onClick={() => setShortcutsOpen(true)}
+          className="flex size-8 items-center justify-center rounded-md text-muted hover:bg-surface-2 hover:text-text"
+        >
+          <Keyboard size={16} aria-hidden />
+        </button>
         <button
           type="button"
           data-testid="export-open"

@@ -1,4 +1,5 @@
-import { readdir, readFile, stat } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
+import { cp, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { join, resolve, sep } from 'node:path'
 import { writeJsonFile } from '../json-file'
 import {
@@ -9,6 +10,7 @@ import {
   parseProject,
   PROJECT_FILE,
   PROJECT_FOLDER_SUFFIX,
+  projectFolderName,
   THUMBNAIL_FILE,
   type EditState,
   type InputEvent,
@@ -111,4 +113,63 @@ export async function readEvents(projectsDir: string, folder: string): Promise<I
   } catch {
     return []
   }
+}
+
+/** Đổi tên hiển thị của dự án (thư mục giữ nguyên). Trả về dự án mới. */
+export async function renameProject(
+  projectsDir: string,
+  folder: string,
+  name: string,
+): Promise<Project> {
+  const project = await readProject(projectsDir, folder)
+  const file = safeJoin(projectsDir, folder, PROJECT_FILE)
+  // Bỏ ký tự điều khiển (xuống dòng, tab…) khỏi tên.
+  const clean = [...name]
+    .filter((c) => c.charCodeAt(0) >= 32)
+    .join('')
+    .trim()
+    .slice(0, 120)
+  if (!project || !file) throw new Error('Không tìm thấy dự án')
+  if (!clean) throw new Error('name_empty')
+  const next = { ...project, name: clean }
+  await writeFile(file, `${JSON.stringify(next, null, 2)}\n`)
+  return next
+}
+
+/**
+ * Nhân đôi dự án (bản quay + bản chỉnh sửa, không chép video đã xuất) thành dự án mới tên
+ * "… (bản sao)". Trả về tên thư mục mới.
+ */
+export async function duplicateProject(
+  projectsDir: string,
+  folder: string,
+  copySuffix: string,
+): Promise<string> {
+  const project = await readProject(projectsDir, folder)
+  const from = safeJoin(projectsDir, folder)
+  if (!project || !from) throw new Error('Không tìm thấy dự án')
+  // Tên thư mục theo thời điểm nhân đôi; trùng thì lùi thêm 1 giây.
+  let when = Date.now()
+  let target = projectFolderName(new Date(when))
+  while (
+    await stat(join(projectsDir, target)).then(
+      () => true,
+      () => false,
+    )
+  ) {
+    when += 1000
+    target = projectFolderName(new Date(when))
+  }
+  const to = join(projectsDir, target)
+  await cp(from, to, {
+    recursive: true,
+    filter: (src) =>
+      !src
+        .slice(from.length)
+        .replace(/^[\\/]/, '')
+        .startsWith('exports'),
+  })
+  const copy = { ...project, id: randomUUID(), name: `${project.name} ${copySuffix}`.slice(0, 120) }
+  await writeFile(join(to, PROJECT_FILE), `${JSON.stringify(copy, null, 2)}\n`)
+  return target
 }

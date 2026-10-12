@@ -10,12 +10,22 @@ describe('normalizeSettings', () => {
 
   it('giữ giá trị hợp lệ', () => {
     expect(
-      normalizeSettings({ language: 'en', theme: 'light', projectsDir: 'D:\\Videos' }),
+      normalizeSettings({
+        language: 'en',
+        theme: 'light',
+        projectsDir: 'D:\\Videos',
+        onboardingDone: true,
+        previewQuality: 'low',
+        projectTemplate: 'tiktok',
+      }),
     ).toEqual({
       language: 'en',
       theme: 'light',
       accent: DEFAULT_SETTINGS.accent,
       projectsDir: 'D:\\Videos',
+      onboardingDone: true,
+      previewQuality: 'low',
+      projectTemplate: 'tiktok',
     })
   })
 

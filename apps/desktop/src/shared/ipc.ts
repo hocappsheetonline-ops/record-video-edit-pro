@@ -42,6 +42,8 @@ export const IPC = {
   projectsList: 'projects:list',
   projectsGet: 'projects:get',
   projectsDelete: 'projects:delete',
+  projectsRename: 'projects:rename',
+  projectsDuplicate: 'projects:duplicate',
   projectsReveal: 'projects:reveal',
   projectsGetEdit: 'projects:get-edit',
   projectsSaveEdit: 'projects:save-edit',
@@ -351,6 +353,10 @@ export interface LumoraApi {
 
   listProjects(): Promise<ProjectSummary[]>
   getProject(folder: string): Promise<Project | null>
+  /** Đổi tên hiển thị của dự án. */
+  renameProject(folder: string, name: string): Promise<Project>
+  /** Nhân đôi dự án; trả về thư mục của bản sao. */
+  duplicateProject(folder: string, suffix: string): Promise<string>
   deleteProject(folder: string): Promise<ProjectSummary[]>
   revealProject(folder: string): Promise<void>
 

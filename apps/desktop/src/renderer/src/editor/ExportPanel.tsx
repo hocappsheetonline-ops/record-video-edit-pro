@@ -5,6 +5,7 @@ import type { ExportResult } from '@shared/ipc'
 import { lumora } from '../api'
 import { ipcErrorMessage } from '../lib/prefs'
 import { ExportCancelled, exportVideo, type ExportProgress } from './exporter'
+import { runJob, useJobs } from './jobs'
 import { useEditorStore } from './store'
 
 const segmented = (active: boolean) =>
@@ -34,17 +35,43 @@ export function ExportPanel() {
     const controller = new AbortController()
     abort.current = controller
     setProgress({ phase: 'render', progress: 0 })
+    // Xuất từ bản sao lúc bấm: vẫn chỉnh sửa tiếp được trong lúc xuất (theo dõi ở Việc đang làm).
+    const snapshot = useEditorStore.getState().edit!
+    const label = t('editor.jobs.export', { format: snapshot.export.format.toUpperCase() })
     try {
-      const done = await exportVideo({
-        folder,
-        project,
-        edit: useEditorStore.getState().edit!,
-        events,
-        videoSize,
-        signal: controller.signal,
-        onProgress: setProgress,
-      })
+      const done = await runJob(
+        label,
+        (report) =>
+          exportVideo({
+            folder,
+            project,
+            edit: snapshot,
+            events,
+            videoSize,
+            signal: controller.signal,
+            onProgress: (p) => {
+              setProgress(p)
+              report(p.phase === 'render' ? p.progress * 0.9 : 0.9 + p.progress * 0.1)
+            },
+          }),
+        {
+          cancel: () => controller.abort(),
+          errorText: (e) =>
+            e instanceof ExportCancelled ? t('editor.jobs.cancelled') : ipcErrorMessage(e),
+        },
+      )
       setResult(done)
+      useJobs.getState().toast(
+        {
+          kind: 'success',
+          text: t('editor.export.done', { file: done.fileName }),
+          action: {
+            label: t('editor.export.reveal'),
+            run: () => void lumora().revealFile(done.path),
+          },
+        },
+        8000,
+      )
     } catch (e) {
       if (!(e instanceof ExportCancelled)) {
         const message = ipcErrorMessage(e)

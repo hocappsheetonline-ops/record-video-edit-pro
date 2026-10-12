@@ -52,6 +52,8 @@ import { OverlayTrack } from './OverlayTrack'
 import { ClipWaveform } from './ClipWaveform'
 import { mediaUrl } from '../lib/media'
 import { openContextMenu } from './ContextMenu'
+import { HistoryButton, useUndoLabels } from './HistoryPanel'
+import { runJob } from './jobs'
 import { DRAG_TYPE, dropFiles, dropPayload, readPayload } from './library-drag'
 import { useEditorStore, type SelItem } from './store'
 import { clipMenu, emptyMenu } from './timeline-menus'
@@ -114,6 +116,7 @@ function TimelineToolbar({ zoom, setZoom }: { zoom: number; setZoom: (z: number)
   const selection = useEditorStore((s) => s.selection)
   const clips = useEditorStore((s) => s.edit?.clips.length ?? 0)
   const snapping = useEditorStore((s) => s.snapping)
+  const undoLabels = useUndoLabels()
   const selectedCount = useEditorStore((s) => s.selected.length)
   const s = useEditorStore.getState()
   const canDelete =
@@ -123,7 +126,7 @@ function TimelineToolbar({ zoom, setZoom }: { zoom: number; setZoom: (z: number)
     <div className="flex h-10 shrink-0 items-center gap-0.5 border-b border-border px-2">
       <ToolButton
         icon={Undo2}
-        label={t('editor.undo')}
+        label={undoLabels.undo ? `${t('editor.undo')}: ${undoLabels.undo}` : t('editor.undo')}
         shortcut="Ctrl+Z"
         onClick={() => s.undo()}
         disabled={past.length === 0}
@@ -131,12 +134,13 @@ function TimelineToolbar({ zoom, setZoom }: { zoom: number; setZoom: (z: number)
       />
       <ToolButton
         icon={Redo2}
-        label={t('editor.redo')}
+        label={undoLabels.redo ? `${t('editor.redo')}: ${undoLabels.redo}` : t('editor.redo')}
         shortcut="Ctrl+Y"
         onClick={() => s.redo()}
         disabled={future.length === 0}
         testId="redo"
       />
+      <HistoryButton className={toolButton} />
       <span className="mx-1.5 h-5 w-px bg-border" />
       <ToolButton
         icon={Scissors}
@@ -592,7 +596,7 @@ export function Timeline() {
               const task = payload
                 ? dropPayload(payload, at)
                 : files.length > 0
-                  ? dropFiles(files, at)
+                  ? runJob(t('editor.jobs.importFiles'), () => dropFiles(files, at))
                   : null
               if (!task) return
               setDropBusy(true)

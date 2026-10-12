@@ -25,6 +25,7 @@ import {
   newOverlayId,
   templateStyle,
   addMarker,
+  applyProjectTemplate,
   DEFAULT_CLIP_AUDIO,
   detachClipAudio,
   isClipboardEmpty,
@@ -76,6 +77,7 @@ import {
 } from '@lumora/core'
 import type { AudioAsset, MediaAsset } from '@shared/ipc'
 import { lumora } from '../api'
+import { useAppStore } from '../store/app'
 
 /** Mục chọn được nhiều cùng lúc (Ctrl+click, kéo khung chọn, Ctrl+A). */
 export type MultiKind = 'overlay' | 'effect' | 'audio'
@@ -136,6 +138,10 @@ interface EditorStore {
   selected: SelItem[]
   /** Nội dung đã sao chép (Ctrl+C / Ctrl+X). */
   clipboard: ClipboardData | null
+  /** Xem trước đang ở chất lượng nhẹ (540p) vì máy chậm hoặc do cài đặt. */
+  lowPreview: boolean
+  /** Đường gióng trên khung xem trước. */
+  guides: 'none' | 'thirds' | 'safe'
   /** Hít dính khi kéo trên timeline (phím N). */
   snapping: boolean
   /** Vạch hít dính đang hiện (ms), null nếu không hít. */
@@ -150,6 +156,8 @@ interface EditorStore {
   change(recipe: (edit: EditState) => EditState, coalesce?: string): void
   undo(): void
   redo(): void
+  /** Quay về một bước trong Lịch sử (vị trí trong [...past, edit, ...future]). */
+  jumpHistory(index: number): void
   setTime(ms: number): void
   setPlaying(playing: boolean): void
   select(selection: Selection): void
@@ -170,6 +178,7 @@ interface EditorStore {
   /** Shift+Delete: xóa rồi dồn các mục phía sau cùng hàng sang trái. */
   rippleDeleteSelection(): void
   setSnapping(on: boolean): void
+  setGuides(mode: EditorStore['guides']): void
   setSnapLine(t: number | null): void
   /** Đổi thứ tự vẽ của lớp phủ (lên / xuống một lớp, lên trên cùng, xuống dưới cùng). */
   reorderOverlay(id: string, to: 'up' | 'down' | 'top' | 'bottom'): void
@@ -302,6 +311,8 @@ const initial = {
   selection: null,
   selected: [] as SelItem[],
   clipboard: null as ClipboardData | null,
+  guides: 'none' as EditorStore['guides'],
+  lowPreview: false,
   snapping: true,
   snapLine: null as number | null,
   past: [],
@@ -454,9 +465,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const tracks = tracksFor(project, events, saved ?? createDefaultEdit(project))
     if (!edit) {
       // Lần đầu mở: tự tạo các đoạn zoom từ click chuột và lúc gõ phím.
-      edit = createDefaultEdit(
-        project,
-        generateAutoZooms(tracks.cursor, sourceDuration(project.segments)),
+      edit = applyProjectTemplate(
+        createDefaultEdit(
+          project,
+          generateAutoZooms(tracks.cursor, sourceDuration(project.segments)),
+        ),
+        useAppStore.getState().settings?.projectTemplate ?? 'tutorial',
       )
     }
     const rect = project.source.captureRect
@@ -523,6 +537,22 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       past: past.slice(0, -1),
       future: [edit, ...future],
       ...tracksFor(project, events, prev),
+    })
+  },
+
+  jumpHistory(index) {
+    // `index`: vị trí trong dòng thời gian [...past, edit, ...future] muốn quay về.
+    const { past, edit, future, project, events } = get()
+    if (!edit || !project) return
+    const all = [...past, edit, ...future]
+    const target = all[index]
+    if (!target || index === past.length) return
+    lastCoalesce = null
+    set({
+      edit: target,
+      past: all.slice(0, index),
+      future: all.slice(index + 1),
+      ...tracksFor(project, events, target),
     })
   },
 
@@ -640,6 +670,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       audioClips: rippleDeleteAudio(e.audioClips, ids('audio')),
     }))
     set({ selection: null, selected: [] })
+  },
+
+  setGuides(mode) {
+    set({ guides: mode })
   },
 
   setSnapping(on) {

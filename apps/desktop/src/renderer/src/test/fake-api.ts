@@ -324,6 +324,11 @@ export function createFakeApi(
       async (_folder, file) => `fx-${file.replace(/\.[^.]+$/, '')}-test.m4a`,
     ),
     importVideo: vi.fn<LumoraApi['importVideo']>(async () => null),
+    renameProject: vi.fn<LumoraApi['renameProject']>(async (_folder, name) => ({
+      ...sampleProject,
+      name,
+    })),
+    duplicateProject: vi.fn<LumoraApi['duplicateProject']>(async () => 'copy.lumora'),
     mergeProject: vi.fn<LumoraApi['mergeProject']>(async () => sampleProject),
     reverseClip: vi.fn<LumoraApi['reverseClip']>(async (_folder, start, end) => ({
       screen: `rev-s0-${Math.round(start)}-${Math.round(end)}-screen.mp4`,

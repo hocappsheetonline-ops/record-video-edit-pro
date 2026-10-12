@@ -1,6 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ArrowLeft, Clock, Download, FolderOpen, Share2, Trash2, Wand2 } from 'lucide-react'
+import {
+  ArrowLeft,
+  Clock,
+  Copy,
+  Download,
+  FolderOpen,
+  Pencil,
+  Share2,
+  Trash2,
+  Wand2,
+} from 'lucide-react'
 import { formatDuration, TRACK_KINDS, type Project } from '@lumora/core'
 import type { PackMode, ProjectSummary } from '@shared/ipc'
 import { lumora } from '../api'
@@ -88,6 +98,7 @@ function ProjectDetail({ folder, onDeleted }: { folder: string; onDeleted: () =>
   const [project, setProject] = useState<Project | null | undefined>(undefined)
   const [segmentIndex, setSegmentIndex] = useState(0)
   const [sharing, setSharing] = useState(false)
+  const [renaming, setRenaming] = useState(false)
 
   useEffect(() => {
     void lumora().getProject(folder).then(setProject)
@@ -127,9 +138,40 @@ function ProjectDetail({ folder, onDeleted }: { folder: string; onDeleted: () =>
       {back}
       <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight" data-testid="project-name">
-            {project.name}
-          </h1>
+          {renaming ? (
+            <input
+              autoFocus
+              defaultValue={project.name}
+              maxLength={120}
+              data-testid="project-rename"
+              aria-label={t('projects.rename')}
+              onBlur={async (e) => {
+                const name = e.target.value.trim()
+                setRenaming(false)
+                if (name && name !== project.name)
+                  setProject(await lumora().renameProject(folder, name))
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                if (e.key === 'Escape') setRenaming(false)
+              }}
+              className="w-full max-w-md rounded-md border border-accent bg-surface-2 px-2 py-1 text-xl font-semibold outline-none"
+            />
+          ) : (
+            <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight">
+              <span data-testid="project-name">{project.name}</span>
+              <button
+                type="button"
+                data-testid="project-rename-open"
+                aria-label={t('projects.rename')}
+                data-tooltip={t('projects.rename')}
+                onClick={() => setRenaming(true)}
+                className="rounded p-1 text-muted hover:bg-surface-2 hover:text-text"
+              >
+                <Pencil size={15} aria-hidden />
+              </button>
+            </h1>
+          )}
           <p className="mt-1 text-sm text-muted">
             {formatDate(project.createdAt, i18n.language)} · {formatDuration(project.durationMs)} ·{' '}
             {t(`projects.sources.${project.source.kind}`)} · {project.fps} fps
@@ -164,6 +206,17 @@ function ProjectDetail({ folder, onDeleted }: { folder: string; onDeleted: () =>
           >
             <Share2 size={16} aria-hidden />
             {t('projects.share.button')}
+          </button>
+          <button
+            type="button"
+            data-testid="project-duplicate"
+            className={actionButton}
+            onClick={async () =>
+              showProject(await lumora().duplicateProject(folder, t('projects.copySuffix')))
+            }
+          >
+            <Copy size={16} aria-hidden />
+            {t('projects.duplicate')}
           </button>
           <button
             type="button"
