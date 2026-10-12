@@ -7,6 +7,7 @@ Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; a
 - **Ổn định**: phát hiện app tắt đột ngột khi đang chỉnh sửa (file khóa phiên) và báo đã mở lại bản tự lưu; lỗi của giao diện được ghi vào `main.log`; kiểm tra tự động không rò rỉ bộ nhớ khi mở / đóng trình chỉnh sửa nhiều lần.
 - **Tỉ lệ xem trước** Vừa khung / 25–200 % (cuộn được khi phóng to).
 - **Trợ năng**: viền nổi bật khi điều hướng bằng phím Tab.
+- **Màn hình nhỏ** (1024×768): thanh điều khiển dưới khung xem trước tự xuống dòng thay vì bị bảng bên phải che, hai bảng bên hẹp lại.
 - Nhật ký thay đổi này và hướng dẫn sử dụng có ảnh trong README.
 
 ## 0.9.0

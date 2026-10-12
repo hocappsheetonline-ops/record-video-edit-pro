@@ -151,8 +151,11 @@ function PlayerBar({ onFullscreen }: { onFullscreen: () => void }) {
   const duration = outputDuration(edit.clips)
   const frame = 1000 / edit.export.fps
   return (
-    <div className="flex h-11 shrink-0 items-center gap-2 border-t border-border bg-surface px-3">
-      <span className="w-40 font-mono text-xs tabular-nums" data-testid="timecode">
+    <div
+      data-testid="player-bar"
+      className="flex min-h-11 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-t border-border bg-surface px-3 py-1"
+    >
+      <span className="shrink-0 font-mono text-xs tabular-nums" data-testid="timecode">
         <span className="text-text">{formatTimecode(time)}</span>
         <span className="text-muted"> / {formatTimecode(duration)}</span>
       </span>
@@ -219,7 +222,7 @@ function PlayerBar({ onFullscreen }: { onFullscreen: () => void }) {
           <SkipForward size={16} aria-hidden />
         </button>
       </div>
-      <div className="flex w-72 items-center justify-end gap-1">
+      <div className="ml-auto flex items-center justify-end gap-1">
         {lowPreview && (
           <span
             data-testid="preview-low"
@@ -465,7 +468,7 @@ export function EditorPage() {
       </header>
 
       <div className="flex min-h-0 flex-1">
-        <aside className="w-[360px] shrink-0 border-r border-border bg-surface">
+        <aside className="w-[300px] shrink-0 border-r border-border bg-surface xl:w-[360px]">
           <MediaBrowser />
         </aside>
         <section className="flex min-w-0 flex-1 flex-col" aria-label={t('editor.player.title')}>
@@ -482,7 +485,7 @@ export function EditorPage() {
           </div>
           <PlayerBar onFullscreen={() => void playerRef.current?.requestFullscreen?.()} />
         </section>
-        <aside className="w-[320px] shrink-0 border-l border-border bg-surface">
+        <aside className="w-[280px] shrink-0 border-l border-border bg-surface xl:w-[320px]">
           <PropertiesPanel />
         </aside>
       </div>
