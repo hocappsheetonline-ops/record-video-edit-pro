@@ -92,6 +92,12 @@ beforeEach(async () => {
         recentDownloads: vi.fn(async () => []),
         openYouTube: vi.fn(async () => {}),
       },
+      localAi: {
+        sendProgress: vi.fn(),
+        installOllama: vi.fn(async (onProgress: (c: number, t: number) => void) => {
+          onProgress(1, 2)
+        }),
+      },
       window: {
         minimize: vi.fn(),
         toggleMaximize: vi.fn(() => true),
@@ -118,6 +124,11 @@ beforeEach(async () => {
         suggestCuts: vi.fn(async () => []),
         plan: vi.fn(async () => [{ kind: 'captions' as const }]),
         listLocalModels: vi.fn(async (url: string) => [`${url}:llama3.2`]),
+        pullLocalModel: vi.fn(
+          async (_url: string, _model: string, onProgress: (p: unknown) => void) => {
+            onProgress({ status: 'pulling', completed: 5, total: 10 })
+          },
+        ),
         summarize: vi.fn(async () => ({ titles: [], description: '', hashtags: [], chapters: [] })),
         translate: vi.fn(async (lines: { id: string; text: string }[]) => lines),
         voices: vi.fn(async () => [{ id: 'v1', name: 'Anna' }]),
@@ -413,6 +424,12 @@ describe('registerIpc', () => {
       'http://localhost:11434:llama3.2',
     ])
     expect(await call(IPC.aiLocalModels, 'junk')).toEqual(['http://127.0.0.1:11434:llama3.2'])
+    // Tải model: tiến độ được chuyển xuống giao diện; tên model lạ bị từ chối.
+    await call(IPC.aiPullModel, 'http://127.0.0.1:11434', 'llama3.2')
+    await expect(call(IPC.aiPullModel, 'http://127.0.0.1:11434', 'bad model!')).rejects.toThrow(
+      'ollama_model',
+    )
+    await call(IPC.aiInstallOllama)
   })
 
   it('cửa sổ không viền: thu nhỏ, phóng to / thu về, đóng, hỏi trạng thái', async () => {

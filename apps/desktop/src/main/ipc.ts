@@ -30,6 +30,7 @@ import {
   type OnlineSource,
   type MusicTrack,
   type RecentDownload,
+  type LocalAiProgress,
 } from '@shared/ipc'
 import { validateKey, type Validators } from './key-validation'
 import { mkdir, writeFile } from 'node:fs/promises'
@@ -136,6 +137,7 @@ export interface IpcDeps {
     | 'summarize'
     | 'plan'
     | 'listLocalModels'
+    | 'pullLocalModel'
     | 'translate'
     | 'voices'
     | 'speak'
@@ -160,6 +162,11 @@ export interface IpcDeps {
   updates: Pick<UpdateService, 'state' | 'check' | 'install'>
   memes: MemesIpc
   music: MusicIpc
+  /** AI cục bộ: gửi tiến độ xuống giao diện, tải và mở bộ cài Ollama. */
+  localAi: {
+    sendProgress(p: LocalAiProgress): void
+    installOllama(onProgress: (completed: number, total: number) => void): Promise<void>
+  }
   /** Điều khiển cửa sổ chính (thanh tiêu đề tự vẽ của cửa sổ không viền). */
   window: {
     minimize(): void
@@ -529,6 +536,18 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
     const url = normalizeLocalAi({ baseUrl }).baseUrl
     return deps.ai.listLocalModels(url)
   })
+  ipcMain.handle(IPC.aiPullModel, (_event, baseUrl: unknown, model: unknown) => {
+    const local = normalizeLocalAi({ baseUrl, model })
+    if (typeof model !== 'string' || local.model !== model.trim()) throw new Error('ollama_model')
+    return deps.ai.pullLocalModel(local.baseUrl, local.model, (p) =>
+      deps.localAi.sendProgress({ kind: 'pull', ...p }),
+    )
+  })
+  ipcMain.handle(IPC.aiInstallOllama, () =>
+    deps.localAi.installOllama((completed, total) =>
+      deps.localAi.sendProgress({ kind: 'install', status: 'download', completed, total }),
+    ),
+  )
   ipcMain.handle(IPC.aiVoices, () => deps.ai.voices())
   ipcMain.handle(
     IPC.aiSpeak,

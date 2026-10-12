@@ -50,7 +50,7 @@ import {
   type SpeechOptions,
   type Voice,
 } from './elevenlabs'
-import { askJsonOllama, listOllamaModels } from './ollama'
+import { askJsonOllama, listOllamaModels, pullOllamaModel, type PullProgress } from './ollama'
 
 export const AI_FILE = 'ai.json'
 
@@ -194,6 +194,15 @@ export class AiService {
   /** Model đã tải trong Ollama (để chọn trong Cài đặt). */
   listLocalModels(baseUrl: string): Promise<string[]> {
     return listOllamaModels(baseUrl, this.deps.fetchImpl)
+  }
+
+  /** Tải model về Ollama ngay trong app (thay cho lệnh `ollama pull`). */
+  pullLocalModel(
+    baseUrl: string,
+    model: string,
+    onProgress: (p: PullProgress) => void,
+  ): Promise<void> {
+    return pullOllamaModel(baseUrl, model, onProgress, this.deps.fetchImpl)
   }
 
   /** Nhận dạng giọng nói của cả bản quay; thời gian từng từ tính theo thời gian nguồn. */

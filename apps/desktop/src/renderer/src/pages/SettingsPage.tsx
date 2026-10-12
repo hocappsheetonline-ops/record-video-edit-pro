@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ACCENT_PRESETS,
@@ -15,6 +15,7 @@ import {
 import { AboutCard } from '../components/AboutCard'
 import { ApiKeyCard } from '../components/ApiKeyCard'
 import { CacheCard } from '../components/CacheCard'
+import type { LocalAiProgress } from '@shared/ipc'
 import { PageHeader } from '../components/PageHeader'
 import { Toggle } from '../editor/ui'
 import { lumora } from '../api'
@@ -40,6 +41,8 @@ function LocalAiCard() {
   const [models, setModels] = useState<string[] | null>(null)
   const [status, setStatus] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
   const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState<LocalAiProgress | null>(null)
+  useEffect(() => lumora().onLocalAiProgress(setProgress), [])
   if (!settings) return null
   const local = settings.localAi
   const patch = (p: Partial<typeof local>) => void updateSettings({ localAi: { ...local, ...p } })
@@ -61,6 +64,49 @@ function LocalAiCard() {
       setBusy(false)
     }
   }
+  /** Tải model ngay trong app (thay cho lệnh `ollama pull`), rồi tải lại danh sách. */
+  const pull = async () => {
+    setBusy(true)
+    setStatus(null)
+    setProgress({ kind: 'pull', status: '', completed: 0, total: 0 })
+    try {
+      await lumora().pullLocalModel(local.baseUrl, local.model)
+      setStatus({ tone: 'ok', text: t('settings.localAi.pulled', { model: local.model }) })
+      setModels(
+        await lumora()
+          .listLocalModels(local.baseUrl)
+          .catch(() => null),
+      )
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String(e)
+      setStatus({
+        tone: 'error',
+        text: m.includes('ollama_model')
+          ? t('settings.localAi.pullNotFound', { model: local.model })
+          : t('settings.localAi.offline'),
+      })
+    } finally {
+      setBusy(false)
+      setProgress(null)
+    }
+  }
+  /** Tải bộ cài Ollama về máy rồi mở nó. */
+  const install = async () => {
+    setBusy(true)
+    setStatus(null)
+    setProgress({ kind: 'install', status: 'download', completed: 0, total: 0 })
+    try {
+      await lumora().installOllama()
+      setStatus({ tone: 'ok', text: t('settings.localAi.installerOpened') })
+    } catch {
+      setStatus({ tone: 'error', text: t('settings.localAi.installFailed') })
+    } finally {
+      setBusy(false)
+      setProgress(null)
+    }
+  }
+  const percent =
+    progress && progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : null
   return (
     <div className={group} data-testid="local-ai-card">
       <div className="sm:col-span-2">
@@ -119,6 +165,24 @@ function LocalAiCard() {
         >
           {busy ? t('settings.localAi.checking') : t('settings.localAi.check')}
         </button>
+        <button
+          type="button"
+          data-testid="local-ai-pull"
+          disabled={busy}
+          onClick={() => void pull()}
+          className="rounded-lg border border-border bg-surface-2/70 px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-surface-2 disabled:opacity-50"
+        >
+          {t('settings.localAi.pull', { model: local.model })}
+        </button>
+        <button
+          type="button"
+          data-testid="local-ai-install"
+          disabled={busy}
+          onClick={() => void install()}
+          className="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-accent-fg shadow-sm hover:brightness-110 disabled:opacity-50"
+        >
+          {t('settings.localAi.install')}
+        </button>
         {status && (
           <span
             role="status"
@@ -128,15 +192,26 @@ function LocalAiCard() {
             {status.text}
           </span>
         )}
-        <a
-          href="https://ollama.com/download"
-          target="_blank"
-          rel="noreferrer"
-          className="text-sm text-accent hover:underline"
-        >
-          {t('settings.localAi.install')}
-        </a>
       </div>
+      {progress && (
+        <div
+          className="flex flex-col gap-1 text-xs text-muted sm:col-span-2"
+          data-testid="local-ai-progress"
+        >
+          <span>
+            {progress.kind === 'pull'
+              ? t('settings.localAi.pulling', { status: progress.status })
+              : t('settings.localAi.downloading')}
+            {percent !== null && ` · ${percent}%`}
+          </span>
+          <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
+            <div
+              className={`h-full bg-accent ${percent === null ? 'w-1/3 animate-pulse' : ''}`}
+              style={percent !== null ? { width: `${percent}%` } : undefined}
+            />
+          </div>
+        </div>
+      )}
       <p className="text-xs text-muted sm:col-span-2">{t('settings.localAi.models')}</p>
     </div>
   )

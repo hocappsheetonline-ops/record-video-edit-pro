@@ -178,6 +178,17 @@ describe('AI cục bộ (Ollama)', () => {
     expect(api.listLocalModels).toHaveBeenCalledWith('http://127.0.0.1:11434')
     await userEvent.selectOptions(screen.getByTestId('local-ai-model'), 'llama3.2')
     await waitFor(() => expect(useAppStore.getState().settings?.localAi.model).toBe('llama3.2'))
+    // Tải model ngay trong app: tiến độ hiện rồi báo xong và tải lại danh sách.
+    await userEvent.click(screen.getByTestId('local-ai-pull'))
+    await waitFor(() =>
+      expect(screen.getByTestId('local-ai-status')).toHaveTextContent('Đã tải model llama3.2'),
+    )
+    expect(api.pullLocalModel).toHaveBeenCalledWith('http://127.0.0.1:11434', 'llama3.2')
+    await userEvent.click(screen.getByTestId('local-ai-install'))
+    await waitFor(() =>
+      expect(screen.getByTestId('local-ai-status')).toHaveTextContent('mở bộ cài Ollama'),
+    )
+    expect(api.installOllama).toHaveBeenCalled()
     api.listLocalModels.mockRejectedValueOnce(new Error('ollama_offline'))
     await userEvent.click(screen.getByTestId('local-ai-check'))
     await waitFor(() =>

@@ -1256,7 +1256,7 @@ export const vi = {
     localAi: {
       title: 'AI cục bộ (Ollama)',
       enable: 'Dùng AI chạy trên máy thay cho Claude',
-      hint: 'Trợ lý AI, cắt từ thừa, tóm tắt và dịch chạy bằng model mở trên máy bạn: miễn phí, không gửi dữ liệu ra ngoài. Cần cài Ollama và tải một model (ví dụ: ollama pull qwen2.5:7b).',
+      hint: 'Trợ lý AI, cắt từ thừa, tóm tắt và dịch chạy bằng model mở trên máy bạn: miễn phí, không gửi dữ liệu ra ngoài. Ba bước ngay tại đây: Cài Ollama → Kiểm tra kết nối → Tải model.',
       url: 'Địa chỉ Ollama',
       model: 'Model',
       check: 'Kiểm tra kết nối',
@@ -1264,7 +1264,15 @@ export const vi = {
       connected: 'Đã kết nối, {{count}} model sẵn sàng',
       noModels: 'Ollama chạy nhưng chưa có model nào. Chạy: ollama pull qwen2.5:7b',
       offline: 'Không kết nối được Ollama. Hãy mở Ollama rồi thử lại.',
-      install: 'Tải Ollama',
+      install: 'Cài Ollama',
+      installerOpened:
+        'Đã tải và mở bộ cài Ollama. Cài xong, bấm "Kiểm tra kết nối" rồi "Tải model".',
+      installFailed: 'Không tải được bộ cài Ollama. Hãy tải thủ công tại ollama.com/download.',
+      pull: 'Tải model {{model}}',
+      pulling: 'Đang tải model… {{status}}',
+      pulled: 'Đã tải model {{model}}, sẵn sàng dùng.',
+      pullNotFound: 'Không có model tên "{{model}}" trên ollama.com. Kiểm tra lại tên.',
+      downloading: 'Đang tải bộ cài Ollama…',
       models:
         'Gợi ý: qwen2.5:7b (tiếng Việt tốt, cần ~8 GB RAM), llama3.2 (nhẹ, ~3 GB), gemma3. Phụ đề vẫn cần key ElevenLabs.',
     },

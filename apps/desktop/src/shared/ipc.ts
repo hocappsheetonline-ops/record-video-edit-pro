@@ -89,6 +89,8 @@ export const IPC = {
   aiSummarize: 'ai:summarize',
   aiPlan: 'ai:plan',
   aiLocalModels: 'ai:local-models',
+  aiPullModel: 'ai:pull-model',
+  aiInstallOllama: 'ai:install-ollama',
   aiTranslate: 'ai:translate',
   aiVoices: 'ai:voices',
   aiSpeak: 'ai:speak',
@@ -130,7 +132,16 @@ export const EVENTS = {
   recordingFinished: 'recording:finished',
   recordingError: 'recording:error',
   windowMaximized: 'window:maximized',
+  localAiProgress: 'ai:local-progress',
 } as const
+
+/** Tiến độ tải model / tải bộ cài Ollama (gửi liên tục trong lúc chạy). */
+export interface LocalAiProgress {
+  kind: 'pull' | 'install'
+  status: string
+  completed: number
+  total: number
+}
 
 export interface AppInfo {
   name: string
@@ -469,6 +480,11 @@ export interface LumoraApi {
   planEdits(instruction: string, context: AssistantContext): Promise<AssistantCommand[]>
   /** Model đã tải trong Ollama tại địa chỉ đó (AI cục bộ). */
   listLocalModels(baseUrl: string): Promise<string[]>
+  /** Tải một model về Ollama (tiến độ qua `onLocalAiProgress`). */
+  pullLocalModel(baseUrl: string, model: string): Promise<void>
+  /** Tải bộ cài Ollama về máy rồi mở nó (Windows / macOS); nơi khác mở trang tải. */
+  installOllama(): Promise<void>
+  onLocalAiProgress(listener: (p: LocalAiProgress) => void): Unsubscribe
   /** Lưu bản lồng tiếng vừa ghi (WebM) vào dự án. */
   addVoiceover(folder: string, data: ArrayBuffer): Promise<AudioAsset>
   /** Lọc tạp âm / hiệu ứng giọng cho một file trong dự án; trả về tên file đã xử lý. */

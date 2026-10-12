@@ -1266,7 +1266,7 @@ export const en: Messages = {
     localAi: {
       title: 'Local AI (Ollama)',
       enable: 'Use AI running on this computer instead of Claude',
-      hint: 'The AI assistant, filler removal, summaries and translation run on an open model on your machine: free and nothing leaves your computer. Install Ollama and pull a model (e.g. ollama pull qwen2.5:7b).',
+      hint: 'The AI assistant, filler removal, summaries and translation run on an open model on your machine: free and nothing leaves your computer. Three steps right here: Install Ollama → Test connection → Pull model.',
       url: 'Ollama address',
       model: 'Model',
       check: 'Test connection',
@@ -1274,7 +1274,16 @@ export const en: Messages = {
       connected: 'Connected, {{count}} models ready',
       noModels: 'Ollama is running but has no models. Run: ollama pull qwen2.5:7b',
       offline: 'Could not reach Ollama. Start Ollama and try again.',
-      install: 'Get Ollama',
+      install: 'Install Ollama',
+      installerOpened:
+        'The Ollama installer was downloaded and opened. When done, click "Test connection" then "Pull model".',
+      installFailed:
+        'Could not download the Ollama installer. Get it manually at ollama.com/download.',
+      pull: 'Pull model {{model}}',
+      pulling: 'Pulling model… {{status}}',
+      pulled: 'Model {{model}} is ready.',
+      pullNotFound: 'No model named "{{model}}" on ollama.com. Check the name.',
+      downloading: 'Downloading the Ollama installer…',
       models:
         'Suggested: qwen2.5:7b (good Vietnamese, ~8 GB RAM), llama3.2 (light, ~3 GB), gemma3. Captions still need an ElevenLabs key.',
     },

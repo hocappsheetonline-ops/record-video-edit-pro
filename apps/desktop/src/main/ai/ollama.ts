@@ -35,6 +35,81 @@ export async function listOllamaModels(
     .sort()
 }
 
+export interface PullProgress {
+  status: string
+  completed: number
+  total: number
+}
+
+/**
+ * Tải một model về Ollama (POST /api/pull, trả về NDJSON từng dòng tiến độ). `onProgress` nhận
+ * trạng thái và số byte đã tải / tổng của phần đang tải.
+ */
+export async function pullOllamaModel(
+  baseUrl: string,
+  model: string,
+  onProgress: (p: PullProgress) => void,
+  fetchImpl: FetchLike = fetch,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (!/^[\w.:/-]+$/.test(model)) throw new OllamaError('ollama_model', model)
+  let response: Response
+  try {
+    response = await fetchImpl(`${baseUrl}/api/pull`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: model, stream: true }),
+      signal,
+    })
+  } catch (error) {
+    throw new OllamaError('ollama_offline', error instanceof Error ? error.message : String(error))
+  }
+  if (!response.ok || !response.body)
+    throw new OllamaError('ollama_http', `HTTP ${response.status}`)
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  const handle = (line: string) => {
+    if (!line.trim()) return
+    let data: { status?: unknown; completed?: unknown; total?: unknown; error?: unknown }
+    try {
+      data = JSON.parse(line)
+    } catch {
+      return
+    }
+    if (typeof data.error === 'string') {
+      if (/not found|manifest/i.test(data.error)) throw new OllamaError('ollama_model', data.error)
+      throw new OllamaError('ollama_http', data.error)
+    }
+    onProgress({
+      status: typeof data.status === 'string' ? data.status : '',
+      completed: typeof data.completed === 'number' ? data.completed : 0,
+      total: typeof data.total === 'number' ? data.total : 0,
+    })
+  }
+  for (;;) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+    for (const line of lines) handle(line)
+  }
+  handle(buffer)
+}
+
+/** Bộ cài Ollama cho hệ điều hành này (trang tải chính thức). */
+export function ollamaInstallerUrl(platform: NodeJS.Platform = process.platform): {
+  url: string
+  fileName: string
+} {
+  if (platform === 'win32')
+    return { url: 'https://ollama.com/download/OllamaSetup.exe', fileName: 'OllamaSetup.exe' }
+  if (platform === 'darwin')
+    return { url: 'https://ollama.com/download/Ollama-darwin.zip', fileName: 'Ollama-darwin.zip' }
+  return { url: 'https://ollama.com/download/linux', fileName: '' }
+}
+
 /** Hỏi model cục bộ và nhận JSON đúng schema (Ollama ép định dạng bằng `format`). */
 export async function askJsonOllama<T>(options: {
   baseUrl: string

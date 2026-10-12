@@ -411,3 +411,45 @@ describe('AI cục bộ (Ollama)', () => {
     ).rejects.toThrow('missing_key:anthropic')
   })
 })
+
+describe('pullOllamaModel', () => {
+  it('đọc tiến độ NDJSON từng dòng, báo lỗi model không có', async () => {
+    const { pullOllamaModel } = await import('./ollama')
+    const lines = [
+      JSON.stringify({ status: 'pulling manifest' }),
+      JSON.stringify({ status: 'pulling abc', total: 100, completed: 40 }),
+      JSON.stringify({ status: 'pulling abc', total: 100, completed: 100 }),
+      JSON.stringify({ status: 'success' }),
+    ]
+    const stream = new ReadableStream({
+      start(controller) {
+        const text = lines.join('\n')
+        controller.enqueue(new TextEncoder().encode(text.slice(0, 30)))
+        controller.enqueue(new TextEncoder().encode(text.slice(30)))
+        controller.close()
+      },
+    })
+    const fetchImpl: FetchLike = async (_input, init) => {
+      expect(JSON.parse(String(init!.body))).toEqual({ name: 'llama3.2', stream: true })
+      return new Response(stream, { status: 200 })
+    }
+    const seen: { status: string; completed: number; total: number }[] = []
+    await pullOllamaModel('http://127.0.0.1:11434', 'llama3.2', (p) => seen.push(p), fetchImpl)
+    expect(seen.map((p) => [p.status, p.completed, p.total])).toEqual([
+      ['pulling manifest', 0, 0],
+      ['pulling abc', 40, 100],
+      ['pulling abc', 100, 100],
+      ['success', 0, 0],
+    ])
+    const missing: FetchLike = async () =>
+      new Response(JSON.stringify({ error: 'pull model manifest: file does not exist' }), {
+        status: 200,
+      })
+    await expect(
+      pullOllamaModel('http://127.0.0.1:11434', 'nope', () => {}, missing),
+    ).rejects.toThrow('ollama_model')
+    await expect(
+      pullOllamaModel('http://127.0.0.1:11434', 'bad name!', () => {}, missing),
+    ).rejects.toThrow('ollama_model')
+  })
+})

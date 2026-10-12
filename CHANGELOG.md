@@ -2,6 +2,10 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.3.1
+
+- **Cài Ollama và tải model ngay trong app** (Cài đặt → AI cục bộ): nút **Cài Ollama** tự tải bộ cài chính thức rồi mở, nút **Tải model** tải model về Ollama với thanh tiến độ (không cần gõ lệnh). Ba bước ngay tại chỗ: Cài Ollama → Kiểm tra kết nối → Tải model.
+
 ## 1.3.0
 
 - **Bố cục giống CapCut**: thanh tiêu đề chứa tên dự án và nút **Xuất**, nút cửa sổ kiểu Windows (thu nhỏ, phóng to, đóng) ở góc phải (macOS dùng nút hệ thống); hàng mục thư viện ngang với biểu tượng kèm nhãn; cột mục con bên trái (Của tôi / Video / Ảnh; Hiệu ứng / Meme / Nhạc / YouTube / Lồng tiếng / Kịch bản); bảng thuộc tính tab chữ; thanh "Xem trước"; timeline có nút **+** (mở thư viện) và **micro** (lồng tiếng); bảng màu xám than và màu nhấn xanh ngọc kiểu CapCut (đổi được trong Cài đặt).

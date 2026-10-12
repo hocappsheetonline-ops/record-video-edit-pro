@@ -9,6 +9,7 @@ import {
   SECRET_KEYS,
 } from '@lumora/core'
 import type {
+  LocalAiProgress,
   MusicTrack,
   CaptureSources,
   LiveConfig,
@@ -110,6 +111,7 @@ export function createFakeApi(
 ) {
   let settings: AppSettings = { ...DEFAULT_SETTINGS }
   let maximized = false
+  const localAiListeners = new Set<(p: LocalAiProgress) => void>()
   let music: MusicTrack[] = []
   const secrets: Partial<Record<SecretKey, string>> = {}
   let projects = [sampleSummary]
@@ -351,6 +353,23 @@ export function createFakeApi(
     ]),
     planEdits: vi.fn<LumoraApi['planEdits']>(async () => []),
     listLocalModels: vi.fn<LumoraApi['listLocalModels']>(async () => ['llama3.2', 'qwen2.5:7b']),
+    pullLocalModel: vi.fn<LumoraApi['pullLocalModel']>(async (_url, model) => {
+      localAiListeners.forEach((l) =>
+        l({ kind: 'pull', status: `pulling ${model}`, completed: 50, total: 100 }),
+      )
+      localAiListeners.forEach((l) =>
+        l({ kind: 'pull', status: 'success', completed: 0, total: 0 }),
+      )
+    }),
+    installOllama: vi.fn<LumoraApi['installOllama']>(async () => {
+      localAiListeners.forEach((l) =>
+        l({ kind: 'install', status: 'download', completed: 10, total: 100 }),
+      )
+    }),
+    onLocalAiProgress: vi.fn<LumoraApi['onLocalAiProgress']>((l) => {
+      localAiListeners.add(l)
+      return () => localAiListeners.delete(l)
+    }),
     summarize: vi.fn<LumoraApi['summarize']>(async () => ({
       titles: ['Hướng dẫn Lumora', 'Lumora trong 5 phút', 'Quay màn hình đẹp'],
       description: 'Video hướng dẫn.',

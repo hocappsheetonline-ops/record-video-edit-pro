@@ -32,6 +32,11 @@ import { loadFilmstrip } from './projects/filmstrip'
 import { IMPORT_VIDEO_EXT, importVideoSegment, mergeProject } from './projects/import-video'
 import { importImageFile, MEDIA_EXTENSIONS, MemeLibrary } from './projects/images'
 import { MusicLibrary, recentDownloads } from './projects/music'
+import { ollamaInstallerUrl } from './ai/ollama'
+import { createWriteStream } from 'node:fs'
+import { mkdir } from 'node:fs/promises'
+import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import { clearDirs, dirSize } from './content/cache'
 import { RnnoiseDenoiser } from './audio/denoise'
 import { AudioProcessor } from './audio/process'
@@ -227,6 +232,32 @@ if (!app.requestSingleInstanceLock()) {
         add: (paths) => memes.add(paths),
         remove: (file) => memes.remove(file),
         useInProject: (file, dir) => memes.useInProject(file, dir),
+      },
+      localAi: {
+        sendProgress: (p) => mainWindow?.webContents.send(EVENTS.localAiProgress, p),
+        // Tải bộ cài Ollama về thư mục đệm rồi mở (người dùng bấm Next vài lần là xong).
+        installOllama: async (onProgress) => {
+          const { url, fileName } = ollamaInstallerUrl()
+          if (!fileName) {
+            await shell.openExternal(url)
+            return
+          }
+          const dir = join(userData, 'cache')
+          await mkdir(dir, { recursive: true })
+          const target = join(dir, fileName)
+          const response = await fetch(url, { signal: AbortSignal.timeout(30 * 60_000) })
+          if (!response.ok || !response.body) throw new Error(`ollama_download:${response.status}`)
+          const total = Number(response.headers.get('content-length') ?? 0)
+          let completed = 0
+          const body = Readable.fromWeb(response.body as never)
+          body.on('data', (chunk: Buffer) => {
+            completed += chunk.length
+            onProgress(completed, total)
+          })
+          await pipeline(body, createWriteStream(target))
+          const error = await shell.openPath(target)
+          if (error) throw new Error(`ollama_open:${error}`)
+        },
       },
       music: {
         list: () => music.list(),
