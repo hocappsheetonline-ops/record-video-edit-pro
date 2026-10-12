@@ -69,15 +69,16 @@ Mỗi nguồn được ghi thành **file riêng**. Nhờ vậy lúc chỉnh sử
 - Test tự động: unit test (Vitest), test giao diện (Testing Library), test E2E mở app Electron thật (Playwright).
 - CI trên GitHub Actions (`windows-latest`): chạy toàn bộ test, sau đó build bộ cài `.exe`.
 
-### Giai đoạn 1: Quay màn hình (~2–3 tuần)
+### Giai đoạn 1: Quay màn hình ✅ Đã xong
 
-- Chọn nguồn quay: toàn màn hình, một cửa sổ hoặc một vùng tùy chọn.
-- Webcam và micro (chọn thiết bị, xem trước), âm thanh hệ thống (WASAPI loopback của Windows).
-- Quay bằng FFmpeg `ddagrab` với `draw_mouse=0` để ẩn con trỏ hệ thống. Ghi tọa độ chuột, click và phím ra `events.jsonl`.
-- Hỗ trợ màn hình có độ phân giải cao (DPI scaling 125%, 150%) và nhiều màn hình.
-- Thanh điều khiển nổi (Bắt đầu, Tạm dừng, Dừng), đếm ngược, phím tắt toàn cục.
-- Hướng dẫn cấp quyền Camera/Micro trong Windows Settings → Privacy nếu bị chặn.
-- **Kết quả:** quay được, mở lại dự án và phát lại đồng bộ tất cả các track.
+- Chọn nguồn quay: toàn màn hình, một vùng (lớp phủ để kéo chọn) hoặc một cửa sổ. Hỗ trợ nhiều màn hình và DPI 125%/150%.
+- FFmpeg `ddagrab` với `draw_mouse=0` (dự phòng `gdigrab`). App tự dò NVENC, AMF, QSV, cuối cùng là x264, và tự ghép đúng màn hình DXGI.
+- Không dùng được FFmpeg thì chuyển sang bộ quay của Electron (con trỏ nằm sẵn trong video).
+- Webcam, micro và âm thanh hệ thống (loopback của Windows), mỗi nguồn một file riêng, ghi theo từng phần mỗi giây.
+- `events.jsonl`: chuột, click, cuộn và phím tắt, ghi bằng uiohook. Ký tự gõ thường không được lưu. Nếu không cài được hook thì chỉ ghi vị trí chuột.
+- Thanh điều khiển nổi (đếm ngược, đồng hồ, tạm dừng, dừng, hủy) không bị quay vào video. Phím tắt Ctrl+Shift+R và Ctrl+Shift+P.
+- Tạm dừng tạo đoạn (segment) mới. `project.json` được lưu sau mỗi đoạn để không mất dữ liệu nếu app bị tắt đột ngột.
+- Trang Dự án: danh sách kèm ảnh thu nhỏ, trình phát đồng bộ các track (tua được), mở thư mục, xóa (chuyển vào Thùng rác).
 
 ### Giai đoạn 2: Trình chỉnh sửa và auto-zoom (~4–6 tuần), phần cốt lõi giống Screen Studio
 
@@ -143,4 +144,4 @@ Cấu hình máy khuyến nghị để quay 1080p/60fps: CPU 4 nhân trở lên,
 
 ## 6. Bước tiếp theo
 
-Bắt đầu **Giai đoạn 1**: quay màn hình bằng FFmpeg `ddagrab`, webcam, micro và ghi lại sự kiện chuột/bàn phím.
+Bắt đầu **Giai đoạn 2**: trình chỉnh sửa với tự động zoom theo `events.jsonl`, con trỏ mượt vẽ lại, nền, khung, bong bóng webcam, timeline và xuất MP4/GIF.

@@ -61,3 +61,9 @@ body {
 input {
   user-select: text;
 }
+
+html.transparent-window,
+html.transparent-window body {
+  background: transparent;
+  overflow: hidden;
+}

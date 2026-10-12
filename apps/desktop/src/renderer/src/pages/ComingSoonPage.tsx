@@ -2,13 +2,7 @@ import { Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { PageHeader } from '../components/PageHeader'
 
-export function ComingSoonPage({
-  section,
-  phase,
-}: {
-  section: 'record' | 'editor' | 'live'
-  phase: string
-}) {
+export function ComingSoonPage({ section, phase }: { section: 'editor' | 'live'; phase: string }) {
   const { t } = useTranslation()
   return (
     <div className="p-8">

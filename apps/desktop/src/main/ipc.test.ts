@@ -21,13 +21,31 @@ const KEY = 'sk-ant-api03-abcdefghijklmnopqrstuvwxyz-1234'
 
 let dir: string
 let handlers: Map<string, Handler>
+let trashed: string[]
+const recording = {
+  capabilities: vi.fn(),
+  sources: vi.fn(),
+  pickRegion: vi.fn(),
+  submitRegion: vi.fn(),
+  start: vi.fn(async () => {}),
+  activeSession: vi.fn(() => null),
+  beginSegment: vi.fn(),
+  trackStarted: vi.fn(async () => {}),
+  writeChunk: vi.fn(async () => {}),
+  endSegment: vi.fn(),
+  finish: vi.fn(),
+  cancel: vi.fn(),
+}
 let validators: { [K in keyof Validators]: Mock<Validators[K]> }
 
-const call = (channel: string, ...args: unknown[]) => handlers.get(channel)!({}, ...args)
+// Electron biến lỗi ném ra trong handler (kể cả đồng bộ) thành promise bị từ chối.
+const call = async (channel: string, ...args: unknown[]) => handlers.get(channel)!({}, ...args)
 
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'lumora-ipc-'))
   handlers = new Map()
+  trashed = []
+  vi.clearAllMocks()
   validators = {
     elevenlabs: vi.fn<Validators['elevenlabs']>(async () => ({ ok: true })),
     anthropic: vi.fn<Validators['anthropic']>(async () => ({ ok: true })),
@@ -40,6 +58,14 @@ beforeEach(async () => {
       settings: new SettingsStore(join(dir, 'settings.json')),
       secrets: new SecretStore(join(dir, 'secrets.json'), cipher),
       validators,
+      recording,
+      projects: {
+        dir: async () => dir,
+        trash: async (path: string) => {
+          trashed.push(path)
+        },
+        reveal: () => {},
+      },
       appInfo: () => ({
         name: 'Lumora',
         version: '0.0.0',
@@ -102,5 +128,35 @@ describe('registerIpc', () => {
     expect(await call(IPC.secretsDelete, 'anthropic')).toMatchObject({
       anthropic: { state: 'missing' },
     })
+  })
+
+  it('kiểm tra tùy chọn quay trước khi bắt đầu', async () => {
+    await expect(call(IPC.startRecording, { source: { kind: 'tv' } })).rejects.toThrow(
+      /không hợp lệ/,
+    )
+    await call(IPC.startRecording, { source: { kind: 'display', displayId: '1' }, fps: 30 })
+    expect(recording.start).toHaveBeenCalledWith(expect.objectContaining({ fps: 30 }))
+  })
+
+  it('kiểm tra chỉ số đoạn, loại track và dữ liệu ghi', async () => {
+    await expect(call(IPC.writeChunk, -1, 'mic', new ArrayBuffer(1))).rejects.toThrow(/Chỉ số/)
+    await expect(call(IPC.writeChunk, 0, 'video', new ArrayBuffer(1))).rejects.toThrow(/Loại track/)
+    await expect(call(IPC.writeChunk, 0, 'mic', 'text')).rejects.toThrow(/Dữ liệu/)
+    await call(IPC.writeChunk, 0, 'mic', new Uint8Array([1, 2]).buffer)
+    expect(recording.writeChunk).toHaveBeenCalledWith(0, 'mic', new Uint8Array([1, 2]))
+    await expect(call(IPC.trackStarted, 0, 'mic', 'now')).rejects.toThrow(/Thời điểm/)
+  })
+
+  it('bỏ vùng chọn không hợp lệ', async () => {
+    await call(IPC.submitRegion, { x: 0, y: 0, width: -5, height: 10 })
+    expect(recording.submitRegion).toHaveBeenCalledWith(null)
+    await call(IPC.submitRegion, { x: 1, y: 2, width: 3, height: 4 })
+    expect(recording.submitRegion).toHaveBeenLastCalledWith({ x: 1, y: 2, width: 3, height: 4 })
+  })
+
+  it('xóa dự án chỉ trong thư mục dự án', async () => {
+    await expect(call(IPC.projectsDelete, '../evil.lumora')).rejects.toThrow(/không hợp lệ/)
+    await call(IPC.projectsDelete, 'a.lumora')
+    expect(trashed).toEqual([join(dir, 'a.lumora')])
   })
 })

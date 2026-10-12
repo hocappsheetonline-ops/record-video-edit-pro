@@ -5,6 +5,8 @@ packages:
 onlyBuiltDependencies:
   - electron
   - esbuild
+  - ffmpeg-static
+  - uiohook-napi
 
 # Dùng chung một phiên bản Vite cho electron-vite và Vitest.
 overrides:

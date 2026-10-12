@@ -16,7 +16,9 @@
     "package:win": "electron-vite build && electron-builder --win --publish never"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.133.0"
+    "@anthropic-ai/sdk": "^0.133.0",
+    "ffmpeg-static": "^5.3.0",
+    "uiohook-napi": "^1.5.5"
   },
   "devDependencies": {
     "@lumora/core": "workspace:*",

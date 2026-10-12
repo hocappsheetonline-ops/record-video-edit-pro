@@ -4,7 +4,9 @@ import type { Theme } from '@lumora/core'
 import { Sidebar } from './components/Sidebar'
 import { ComingSoonPage } from './pages/ComingSoonPage'
 import { ProjectsPage } from './pages/ProjectsPage'
+import { RecordPage } from './pages/RecordPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { lumora } from './api'
 import { useAppStore } from './store/app'
 
 function resolveTheme(theme: Theme): 'dark' | 'light' {
@@ -18,10 +20,14 @@ export function App() {
   const page = useAppStore((s) => s.page)
   const settings = useAppStore((s) => s.settings)
   const init = useAppStore((s) => s.init)
+  const showProject = useAppStore((s) => s.showProject)
 
   useEffect(() => {
     void init()
   }, [init])
+
+  // Quay xong: mở ngay dự án vừa lưu.
+  useEffect(() => lumora().onRecordingFinished((folder) => showProject(folder)), [showProject])
 
   useEffect(() => {
     if (!settings) return
@@ -36,7 +42,7 @@ export function App() {
     <div className="flex h-full bg-bg text-text">
       <Sidebar />
       <main className="flex-1 overflow-y-auto">
-        {page === 'record' && <ComingSoonPage section="record" phase="1" />}
+        {page === 'record' && <RecordPage />}
         {page === 'projects' && <ProjectsPage />}
         {page === 'editor' && <ComingSoonPage section="editor" phase="2" />}
         {page === 'live' && <ComingSoonPage section="live" phase="4" />}

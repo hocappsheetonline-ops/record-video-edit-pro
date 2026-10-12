@@ -19,7 +19,11 @@ export default defineConfig({
       },
       {
         extends: true,
-        test: { name: 'renderer', environment: 'jsdom', include: ['src/renderer/**/*.test.tsx'] },
+        test: {
+          name: 'renderer',
+          environment: 'jsdom',
+          include: ['src/renderer/**/*.test.{ts,tsx}'],
+        },
       },
     ],
   },

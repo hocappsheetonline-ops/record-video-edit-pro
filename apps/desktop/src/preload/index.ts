@@ -1,5 +1,11 @@
-import { contextBridge, ipcRenderer } from 'electron'
-import { IPC, type LumoraApi } from '@shared/ipc'
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
+import { EVENTS, IPC, type LumoraApi, type Unsubscribe } from '@shared/ipc'
+
+function subscribe<T>(channel: string, listener: (payload: T) => void): Unsubscribe {
+  const handler = (_event: IpcRendererEvent, payload: T) => listener(payload)
+  ipcRenderer.on(channel, handler)
+  return () => ipcRenderer.removeListener(channel, handler)
+}
 
 const api: LumoraApi = {
   getAppInfo: () => ipcRenderer.invoke(IPC.appInfo),
@@ -9,6 +15,29 @@ const api: LumoraApi = {
   saveSecret: (key, value) => ipcRenderer.invoke(IPC.secretsSave, key, value),
   deleteSecret: (key) => ipcRenderer.invoke(IPC.secretsDelete, key),
   testSecret: (key, value) => ipcRenderer.invoke(IPC.secretsTest, key, value),
+
+  getCaptureSources: () => ipcRenderer.invoke(IPC.captureSources),
+  getRecorderCapabilities: () => ipcRenderer.invoke(IPC.recorderCapabilities),
+  pickRegion: (displayId) => ipcRenderer.invoke(IPC.pickRegion, displayId),
+  submitRegion: (region) => ipcRenderer.invoke(IPC.submitRegion, region),
+  startRecording: (options) => ipcRenderer.invoke(IPC.startRecording, options),
+
+  getActiveSession: () => ipcRenderer.invoke(IPC.activeSession),
+  beginSegment: () => ipcRenderer.invoke(IPC.beginSegment),
+  trackStarted: (index, kind, startedAt) =>
+    ipcRenderer.invoke(IPC.trackStarted, index, kind, startedAt),
+  writeChunk: (index, kind, data) => ipcRenderer.invoke(IPC.writeChunk, index, kind, data),
+  endSegment: () => ipcRenderer.invoke(IPC.endSegment),
+  finishRecording: () => ipcRenderer.invoke(IPC.finishRecording),
+  cancelRecording: () => ipcRenderer.invoke(IPC.cancelRecording),
+  onRecordingCommand: (listener) => subscribe(EVENTS.recordingCommand, listener),
+  onRecordingFinished: (listener) => subscribe(EVENTS.recordingFinished, listener),
+  onRecordingError: (listener) => subscribe(EVENTS.recordingError, listener),
+
+  listProjects: () => ipcRenderer.invoke(IPC.projectsList),
+  getProject: (folder) => ipcRenderer.invoke(IPC.projectsGet, folder),
+  deleteProject: (folder) => ipcRenderer.invoke(IPC.projectsDelete, folder),
+  revealProject: (folder) => ipcRenderer.invoke(IPC.projectsReveal, folder),
 }
 
 contextBridge.exposeInMainWorld('lumora', api)

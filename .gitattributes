@@ -1,0 +1,5 @@
+# Luôn dùng xuống dòng LF, kể cả khi checkout trên Windows (Prettier kiểm tra điều này).
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary

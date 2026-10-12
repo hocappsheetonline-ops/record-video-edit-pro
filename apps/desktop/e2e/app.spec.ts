@@ -1,53 +1,21 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import {
-  _electron as electron,
-  expect,
-  test,
-  type ElectronApplication,
-  type Page,
-} from '@playwright/test'
+import { expect, test } from '@playwright/test'
+import { createTestDirs, launchApp, type TestDirs } from './helpers'
 
-// Chạy thư mục app (đọc package.json) giống bản cài thật, để tên và phiên bản app đúng.
-const APP_DIR = join(__dirname, '..')
 const CLAUDE_KEY = 'sk-ant-api03-e2e-test-key-abcdefghijklmnop-9876'
 
+let dirs: TestDirs
 let userDataDir: string
 
-async function launch(): Promise<{ app: ElectronApplication; page: Page; errors: string[] }> {
-  const args = [APP_DIR]
-  if (process.platform === 'linux') {
-    // Container Linux không có keyring; Electron chạy bằng root cần tắt sandbox của Chromium.
-    args.push('--password-store=basic')
-    if (process.getuid?.() === 0) args.push('--no-sandbox')
-  }
-  const app = await electron.launch({
-    args,
-    env: {
-      ...process.env,
-      LUMORA_USER_DATA_DIR: userDataDir,
-      LUMORA_E2E_PLAINTEXT_SECRETS: '1',
-      ELECTRON_RENDERER_URL: '',
-    },
-  })
-  const page = await app.firstWindow()
-  const errors: string[] = []
-  page.on('pageerror', (error) => errors.push(error.message))
-  page.on('console', (msg) => {
-    if (msg.type() === 'error') errors.push(msg.text())
-  })
-  await page.getByTestId('nav-record').waitFor()
-  return { app, page, errors }
-}
+const launch = () => launchApp(userDataDir)
 
-test.beforeEach(async () => {
-  userDataDir = await mkdtemp(join(tmpdir(), 'lumora-e2e-'))
+test.beforeEach(() => {
+  dirs = createTestDirs()
+  userDataDir = dirs.userData
 })
 
-test.afterEach(async () => {
-  await rm(userDataDir, { recursive: true, force: true })
-})
+test.afterEach(() => dirs.cleanup())
 
 test('mở app, hiện cửa sổ Lumora với giao diện tiếng Việt', async () => {
   const { app, page, errors } = await launch()

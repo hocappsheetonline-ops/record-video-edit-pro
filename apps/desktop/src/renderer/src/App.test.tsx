@@ -1,48 +1,16 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_SETTINGS, maskSecret, type AppSettings, type SecretKey } from '@lumora/core'
-import type { LumoraApi, SecretsStatus } from '@shared/ipc'
+import type { SecretKey } from '@lumora/core'
+import type { LumoraApi } from '@shared/ipc'
 import { App } from './App'
 import i18n from './i18n'
 import { useAppStore } from './store/app'
+import { createFakeApi as makeFakeApi } from './test/fake-api'
 
 const CLAUDE_KEY = 'sk-ant-api03-abcdefghijklmnopqrstuvwxyz-1234'
 
-/** API giả thay cho main process, giữ trạng thái trong bộ nhớ. */
-function createFakeApi(options: { encryptionAvailable?: boolean } = {}) {
-  let settings: AppSettings = { ...DEFAULT_SETTINGS }
-  const secrets: Partial<Record<SecretKey, string>> = {}
-  const status = (): SecretsStatus => ({
-    elevenlabs: secrets.elevenlabs
-      ? { state: 'saved', masked: maskSecret(secrets.elevenlabs) }
-      : { state: 'missing' },
-    anthropic: secrets.anthropic
-      ? { state: 'saved', masked: maskSecret(secrets.anthropic) }
-      : { state: 'missing' },
-  })
-  const api: LumoraApi = {
-    getAppInfo: async () => ({
-      name: 'Lumora',
-      version: '0.1.0',
-      platform: 'win32',
-      encryptionAvailable: options.encryptionAvailable ?? true,
-    }),
-    getSettings: async () => settings,
-    updateSettings: async (patch) => (settings = { ...settings, ...patch }),
-    getSecretsStatus: async () => status(),
-    saveSecret: async (key, value) => {
-      secrets[key] = value
-      return status()
-    },
-    deleteSecret: async (key) => {
-      delete secrets[key]
-      return status()
-    },
-    testSecret: vi.fn(async () => ({ ok: true as const })),
-  }
-  return api
-}
+const createFakeApi = (options?: Parameters<typeof makeFakeApi>[0]) => makeFakeApi(options).api
 
 const card = (key: SecretKey) => within(screen.getByTestId(`key-card-${key}`))
 const clickInCard = (key: SecretKey, name: string) =>

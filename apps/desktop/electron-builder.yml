@@ -9,8 +9,11 @@ files:
   - out/**/*
   - package.json
   - '!**/*.{map,md,ts,tsx}'
+# File thực thi và thư viện native không chạy được từ bên trong gói asar.
 asarUnpack:
   - resources/**
+  - node_modules/ffmpeg-static/**
+  - node_modules/uiohook-napi/**
 win:
   target:
     - target: nsis
