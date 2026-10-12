@@ -9,6 +9,13 @@ import {
   parseOverlays,
   type Overlay,
 } from './overlays'
+import { DEFAULT_ANIM, NO_ANIM, parseAnim, STILL_MOTION } from './overlay-fx'
+
+/** Lớp có hoạt ảnh kiểu cũ (`animation`), đổi sang dạng mới như khi mở dự án cũ. */
+const legacy = (o: Overlay, animation: string): Overlay => ({
+  ...o,
+  anim: parseAnim(undefined, animation),
+})
 
 const base: Overlay = {
   id: 'o',
@@ -19,7 +26,7 @@ const base: Overlay = {
   y: 0.2,
   size: 0.1,
   rotation: 0,
-  animation: 'pop',
+  anim: DEFAULT_ANIM,
   text: 'Hết cứu',
   style: 'meme',
   color: '#ffffff',
@@ -46,7 +53,7 @@ const meme: Overlay = {
   sourceDuration: 4000,
   hasAudio: true,
   volume: 0.8,
-  animation: 'none',
+  anim: NO_ANIM,
 }
 
 describe('overlays', () => {
@@ -67,25 +74,19 @@ describe('overlays', () => {
   })
 
   it('fade: hiện dần, mờ dần lúc cuối; slide: trượt từ trái vào', () => {
-    const fade = { ...base, animation: 'fade' as const }
+    const fade = legacy(base, 'fade')
     expect(overlayMotion(fade, 1150).opacity).toBeCloseTo(0.5)
     expect(overlayMotion(fade, 2000).opacity).toBe(1)
     expect(overlayMotion(fade, 3850).opacity).toBeCloseTo(0.5)
-    const slide = { ...base, animation: 'slide' as const }
+    const slide = legacy(base, 'slide')
     expect(overlayMotion(slide, 1000).dx).toBeCloseTo(-0.6)
     expect(overlayMotion(slide, 1400).dx).toBeCloseTo(0)
   })
 
   it('bounce / shake chuyển động lặp lại; none đứng yên', () => {
-    expect(overlayMotion({ ...base, animation: 'bounce' }, 1250).dy).toBeCloseTo(-0.03)
-    expect(Math.abs(overlayMotion({ ...base, animation: 'shake' }, 1035).rotate)).toBeGreaterThan(3)
-    expect(overlayMotion({ ...base, animation: 'none' }, 1000)).toEqual({
-      scale: 1,
-      opacity: 1,
-      dx: 0,
-      dy: 0,
-      rotate: 0,
-    })
+    expect(overlayMotion(legacy(base, 'bounce'), 1250).dy).toBeCloseTo(-0.03)
+    expect(Math.abs(overlayMotion(legacy(base, 'shake'), 1035).rotate)).toBeGreaterThan(3)
+    expect(overlayMotion(legacy(base, 'none'), 1000)).toEqual(STILL_MOTION)
   })
 
   it('đọc file: ảnh phải có tên file an toàn; giá trị sai về mặc định', () => {
@@ -93,9 +94,13 @@ describe('overlays', () => {
     expect(parseOverlays([{ ...base, kind: 'image', file: '../x.png' }])).toEqual([])
     expect(parseOverlays([{ ...base, kind: 'gif' }])).toEqual([])
     const fixed = parseOverlays([
-      { ...base, size: 9, animation: 'spin', color: 'red', style: 'x' },
+      { ...base, anim: undefined, size: 9, animation: 'spin', color: 'red', style: 'x' },
     ])[0]!
-    expect(fixed).toMatchObject({ size: 4, animation: 'pop', color: '#ffffff', style: 'meme' })
+    expect(fixed).toMatchObject({ size: 4, color: '#ffffff', style: 'meme' })
+    expect(fixed.anim.in).toBe('pop')
+    // Dự án cũ: "fade" thành vào + ra mờ dần; "shake" thành lặp.
+    const old = parseOverlays([{ ...base, anim: undefined, animation: 'fade' }])[0]!
+    expect(old.anim).toMatchObject({ in: 'fade', out: 'fade', loop: 'none' })
   })
 
   it('video meme: đọc file kiểm tra độ dài, màu phông hợp lệ', () => {

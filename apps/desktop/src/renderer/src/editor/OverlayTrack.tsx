@@ -42,7 +42,12 @@ export function OverlayTrack({
     const next = dragOverlay(drag.origin, drag.mode, (e.clientX - drag.originX) / pxPerMs, duration)
     store().updateOverlay(
       drag.id,
-      { start: next.start, end: next.end, mediaOffset: next.mediaOffset },
+      {
+        start: next.start,
+        end: next.end,
+        mediaOffset: next.mediaOffset,
+        keyframes: next.keyframes,
+      },
       `ov-drag-${drag.id}`,
     )
   }
@@ -80,6 +85,20 @@ export function OverlayTrack({
             <span className="truncate px-2">
               {KIND_ICON[fx.kind]} {fx.text || t(`editor.props.${fx.kind}`)}
             </span>
+            {/* Hình thoi ◇ tại mỗi keyframe: bấm để nhảy tới. */}
+            {fx.keyframes?.map((k) => (
+              <span
+                key={k.id}
+                data-testid="keyframe-mark"
+                onPointerDown={(e) => {
+                  e.stopPropagation()
+                  store().select({ kind: 'overlay', id: fx.id })
+                  store().setTime(fx.start + k.t)
+                }}
+                className="absolute bottom-0.5 size-2 -translate-x-1/2 rotate-45 cursor-pointer border border-black/50 bg-white"
+                style={{ left: `${(k.t / Math.max(1, end - fx.start)) * 100}%` }}
+              />
+            ))}
             <span
               className="absolute inset-y-0 left-0 w-1.5 cursor-ew-resize bg-white/30"
               onPointerDown={(e) => down(e, fx, 'start')}

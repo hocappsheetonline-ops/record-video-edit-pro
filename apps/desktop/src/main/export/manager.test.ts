@@ -2,7 +2,7 @@ import { readdir, readFile, rm, mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { createDefaultEdit, type Project } from '@lumora/core'
+import { createDefaultEdit, NO_ANIM, type Project } from '@lumora/core'
 import { parseDurationMs } from '../ffmpeg/parse'
 import { runFfmpeg } from '../ffmpeg/runner'
 import { ExportManager, safeFileName } from './manager'
@@ -228,7 +228,7 @@ describe('ExportManager', () => {
         y: 0.5,
         size: 0.4,
         rotation: 0,
-        animation: 'none',
+        anim: NO_ANIM,
         text: 'Bruh',
         style: 'meme',
         color: '#ffffff',

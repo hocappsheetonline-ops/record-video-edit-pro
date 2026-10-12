@@ -564,7 +564,7 @@ test('chữ meme + GIF meme từ thư viện: kéo đặt vị trí trên khung 
   await expect(page.getByTestId('meme-item')).toHaveCount(1)
   await page.getByTestId('meme-item').click()
   await expect(page.getByTestId('timeline-overlay')).toHaveCount(1)
-  await page.getByTestId('anim-none').click()
+  await page.getByTestId('anim-in-none').click()
 
   // Kéo ảnh từ giữa khung tới vị trí (80%, 70%).
   const box = (await page.getByTestId('editor-canvas').boundingBox())!
@@ -581,7 +581,7 @@ test('chữ meme + GIF meme từ thư viện: kéo đặt vị trí trên khung 
   await page.getByTestId('lib-text').click()
   await page.getByTestId('text-add-meme').click()
   await page.getByTestId('overlay-edit-text').fill('HẾT CỨU')
-  await page.getByTestId('anim-none').click()
+  await page.getByTestId('anim-in-none').click()
   await expect(page.getByTestId('timeline-overlay')).toHaveCount(2)
   await expect.poll(() => saved().overlays?.length).toBe(2)
 
@@ -944,6 +944,106 @@ test('bộ lọc màu, lật clip và đóng băng khung hình: video xuất đ�
   expect(statsDiff(areaStats(plain, 1.3, centre), areaStats(plain, 2.7, centre))).toBeGreaterThan(2)
   // Sau khi hết đứng yên, video chạy tiếp từ đúng chỗ (giây 3.5 của bản mới = giây 1.5 bản gốc).
   expect(statsDiff(areaStats(frozen, 3.5, centre), areaStats(plain, 1.5, centre))).toBeLessThan(4)
+
+  expect(errors).toEqual([])
+  await app.close()
+})
+
+test('lớp phủ: keyframe kéo trên khung xem trước, mặt nạ tròn, hòa trộn Screen — video xuất đúng', async () => {
+  const red = join(dirs.userData, 'green.png')
+  execFileSync(ffmpegPath as unknown as string, [
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+    '-f',
+    'lavfi',
+    '-i',
+    'color=c=0x00ff00:s=200x200:d=1',
+    '-frames:v',
+    '1',
+    red,
+  ])
+  const { app, page, errors } = await launchApp(dirs.userData)
+  await app.evaluate(({ dialog }, path) => {
+    dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [path] })) as never
+  }, red)
+  await openEditor(page)
+  const exportNew = async () => {
+    await openExport(page)
+    await page.getByTestId('resolution-720').click()
+    await page.waitForTimeout(1100)
+    const old = new Set(exported('.mp4'))
+    await page.getByTestId('export-start').click()
+    await expect(page.getByTestId('export-result')).toBeVisible({ timeout: 150_000 })
+    await expect.poll(() => exported('.mp4').filter((f) => !old.has(f)).length).toBe(1)
+    await closeExport(page)
+    return join(
+      projectDir,
+      'exports',
+      exported('.mp4').find((f) => !old.has(f))!,
+    )
+  }
+  const saved = () => JSON.parse(readFileSync(join(projectDir, 'edit.json'), 'utf8'))
+  const plain = await exportNew()
+
+  await page.getByTestId('lib-media').click()
+  await page.getByTestId('meme-import').click()
+  await page.getByTestId('meme-item').click()
+  await expect(page.getByTestId('timeline-overlay')).toHaveCount(1)
+  await page.getByTestId('anim-in-none').click()
+
+  const box = (await page.getByTestId('editor-canvas').boundingBox())!
+  const drag = async (fromX: number, toX: number) => {
+    await page.mouse.move(box.x + box.width * fromX, box.y + box.height * 0.5)
+    await page.mouse.down()
+    await page.mouse.move(box.x + box.width * ((fromX + toX) / 2), box.y + box.height * 0.5, {
+      steps: 5,
+    })
+    await page.mouse.move(box.x + box.width * toX, box.y + box.height * 0.5, { steps: 5 })
+    await page.mouse.up()
+  }
+  // Keyframe ở 0s, kéo ảnh sang trái; sang 2s kéo sang phải → tự thêm keyframe thứ hai.
+  await page.getByTestId('overlay-keyframe').click()
+  await drag(0.5, 0.25)
+  await page.keyboard.press('ArrowRight')
+  await page.keyboard.press('ArrowRight')
+  await expect(page.getByTestId('timecode')).toContainText('0:02.0 /')
+  await drag(0.25, 0.75)
+  await expect.poll(() => saved().overlays?.[0]?.keyframes?.length).toBe(2)
+  await expect(page.getByTestId('keyframe-mark')).toHaveCount(2)
+  const [k0, k1] = saved().overlays[0].keyframes
+  expect(k0.x).toBeLessThan(0.3)
+  expect(k1.x).toBeGreaterThan(0.7)
+
+  const moving = await exportNew()
+  // Giây 0.1: ảnh xanh lá ở chỗ keyframe đầu (lấy làm mẫu màu). Giây 1: ảnh ở giữa hai keyframe,
+  // chỗ ban đầu không còn ảnh.
+  const xAt = (x: number) => `40:40:${Math.round(x * 1280) - 20}:340`
+  const middle = (k0.x + k1.x) / 2
+  const green = areaStats(moving, 0.1, xAt(k0.x))
+  expect(green[2]).toBeLessThan(60)
+  expect(statsDiff(areaStats(moving, 1, xAt(middle)), green)).toBeLessThan(12)
+  expect(statsDiff(areaStats(moving, 1, xAt(k0.x)), green)).toBeGreaterThan(40)
+
+  // Bỏ keyframe (ảnh đứng ở vị trí hiện tại), mặt nạ tròn + hòa trộn Screen.
+  await page.getByTestId('overlay-kf-clear').click()
+  await page.getByTestId('mask-circle').click()
+  await page.getByTestId('overlay-blend').selectOption('screen')
+  await expect.poll(() => saved().overlays?.[0]?.blend).toBe('screen')
+  expect(saved().overlays[0].mask.shape).toBe('circle')
+  const masked = await exportNew()
+  const cx = Math.round(saved().overlays[0].x * 1280)
+  const half = Math.round((saved().overlays[0].size * 720) / 2)
+  // Góc của ảnh nằm ngoài hình tròn: giống video gốc.
+  const corner = `20:20:${cx - half + 4}:${360 - half + 4}`
+  expect(statsDiff(areaStats(masked, 1, corner), areaStats(plain, 1, corner))).toBeLessThan(8)
+  // Tâm: Screen (xanh lá trên nền tím) sáng hơn hẳn cả video gốc lẫn ảnh xanh vẽ thường.
+  const centre = `30:30:${cx - 15}:345`
+  const yPlain = areaStats(plain, 1, centre)[0]!
+  const yMasked = areaStats(masked, 1, centre)[0]!
+  expect(yMasked).toBeGreaterThan(yPlain + 30)
+  expect(yMasked).toBeGreaterThan(green[0]! + 10)
 
   expect(errors).toEqual([])
   await app.close()

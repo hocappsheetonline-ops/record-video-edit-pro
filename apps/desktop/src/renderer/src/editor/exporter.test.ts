@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createDefaultEdit, type Overlay } from '@lumora/core'
+import { createDefaultEdit, NO_ANIM, type Overlay } from '@lumora/core'
 import { sampleProject } from '../test/fake-api'
 import { planFrames } from './exporter'
 
@@ -12,7 +12,7 @@ const meme: Overlay = {
   y: 0.5,
   size: 0.4,
   rotation: 0,
-  animation: 'none',
+  anim: NO_ANIM,
   text: 'Bruh',
   style: 'meme',
   color: '#ffffff',

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import {
   cameraRect,
   overlaysAt,
+  posedOverlay,
   placementAt,
   placementCorner,
   type EditState,
@@ -65,8 +66,9 @@ function selectedBox(canvas: HTMLCanvasElement, project: Project): Box | null {
       : null
   }
   if (selection.kind !== 'overlay') return null
-  const o = overlaysAt(edit.overlays, time).find((x) => x.id === selection.id)
-  if (!o) return null
+  const found = overlaysAt(edit.overlays, time).find((x) => x.id === selection.id)
+  if (!found) return null
+  const o = posedOverlay(found, time)
   const b = overlayBox(ctx, o, canvas.width, canvas.height)
   return { ...b, rotation: o.rotation, target: 'overlay', id: o.id }
 }
@@ -138,7 +140,9 @@ export function PreviewCanvas({ project, folder }: { project: Project; folder: s
     const { edit, time } = useEditorStore.getState()
     const ctx = canvas?.getContext('2d')
     if (!canvas || !edit || !ctx) return null
-    for (const o of [...overlaysAt(edit.overlays, time)].reverse()) {
+    for (const o of [...overlaysAt(edit.overlays, time)]
+      .reverse()
+      .map((x) => posedOverlay(x, time))) {
       const b = overlayBox(ctx, o, canvas.width, canvas.height)
       const angle = (-o.rotation * Math.PI) / 180
       const dx = p.x - b.cx
@@ -192,11 +196,14 @@ export function PreviewCanvas({ project, folder }: { project: Project; folder: s
       return
     }
     const p = toFrame(e)
-    const { edit } = useEditorStore.getState()
+    const { edit, time } = useEditorStore.getState()
+    const target = edit?.overlays.find((o) => o.id === box.id)
     const size0 =
       box.target === 'camera'
         ? (edit?.camera.size ?? 0.2)
-        : (edit?.overlays.find((o) => o.id === box.id)?.size ?? 0.1)
+        : target
+          ? posedOverlay(target, time).size
+          : 0.1
     drag.current = {
       kind: 'resize',
       target: box.target,
@@ -219,7 +226,7 @@ export function PreviewCanvas({ project, folder }: { project: Project; folder: s
     const store = useEditorStore.getState()
     const output = { width: canvas.width, height: canvas.height }
     if (d.kind === 'overlay') {
-      store.updateOverlay(
+      store.updateOverlayPose(
         d.id,
         {
           x: Math.min(1, Math.max(0, (p.x - d.offX) / canvas.width)),
@@ -242,7 +249,7 @@ export function PreviewCanvas({ project, folder }: { project: Project; folder: s
       const ratio = Math.hypot(p.x - d.center.x, p.y - d.center.y) / d.d0
       if (d.target === 'overlay') {
         const size = Math.min(4, Math.max(0.03, d.size0 * ratio))
-        store.updateOverlay(d.id, { size }, `ov-size-${d.id}`)
+        store.updateOverlayPose(d.id, { size }, `ov-size-${d.id}`)
       } else {
         const size = Math.min(0.6, Math.max(0.08, d.size0 * ratio))
         // Giữ nguyên tâm bong bóng khi đổi cỡ.
@@ -257,7 +264,7 @@ export function PreviewCanvas({ project, folder }: { project: Project; folder: s
       let rotation = ((angle + 540) % 360) - 180
       // Hít vào các góc thẳng cho dễ đặt.
       for (const snap of [-180, -90, 0, 90, 180]) if (Math.abs(rotation - snap) < 4) rotation = snap
-      store.updateOverlay(d.id, { rotation: Math.round(rotation) }, `ov-rot-${d.id}`)
+      store.updateOverlayPose(d.id, { rotation: Math.round(rotation) }, `ov-rot-${d.id}`)
     }
   }
 

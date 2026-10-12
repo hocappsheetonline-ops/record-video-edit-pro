@@ -1,6 +1,21 @@
 import { dragRegion } from './effects'
 import type { AudioClip } from './audio-clips'
 import { isDefaultLook, parseLook, type Look } from './look'
+import {
+  animMotion,
+  BLEND_MODES,
+  parseAnim,
+  parseKeyframes,
+  parseMask,
+  poseAt,
+  shiftKeyframes,
+  type BlendMode,
+  type Keyframe,
+  type OverlayAnim,
+  type OverlayMask,
+  type OverlayMotion,
+  type Pose,
+} from './overlay-fx'
 
 /**
  * Lớp nổi trên video (kiểu CapCut "Văn bản" / "Nhãn dán" / "Lớp phủ"): chữ, emoji, ảnh/GIF và
@@ -11,9 +26,6 @@ export type OverlayKind = (typeof OVERLAY_KINDS)[number]
 
 export const TEXT_STYLES = ['meme', 'title', 'bubble', 'neon'] as const
 export type TextStyle = (typeof TEXT_STYLES)[number]
-
-export const OVERLAY_ANIMATIONS = ['none', 'pop', 'bounce', 'shake', 'fade', 'slide'] as const
-export type OverlayAnimation = (typeof OVERLAY_ANIMATIONS)[number]
 
 export interface Overlay {
   id: string
@@ -28,7 +40,8 @@ export interface Overlay {
   size: number
   /** Góc xoay (độ). */
   rotation: number
-  animation: OverlayAnimation
+  /** Hoạt ảnh vào / ra / lặp. */
+  anim: OverlayAnim
   /** Chữ (kind = text) hoặc emoji (kind = emoji). */
   text: string
   style: TextStyle
@@ -47,6 +60,16 @@ export interface Overlay {
   keyStrength: number
   /** Bộ lọc màu / điều chỉnh của ảnh / video (không có = giữ nguyên). */
   look?: Look
+  /** Độ mờ 0..1 (không có = 1). */
+  opacity?: number
+  /** Chế độ hòa trộn với video bên dưới (không có = bình thường). */
+  blend?: BlendMode
+  flipH?: boolean
+  flipV?: boolean
+  /** Mặt nạ hình (chỉ ảnh / video). */
+  mask?: OverlayMask
+  /** Keyframe vị trí / cỡ / góc / độ mờ (có thì ghi đè giá trị gốc). */
+  keyframes?: Keyframe[]
 }
 
 /** Màu phông có sẵn để xóa: xanh lá (phổ biến nhất ở video meme), xanh dương, đen, trắng. */
@@ -60,48 +83,33 @@ export function newOverlayId(): string {
   return `o${Date.now().toString(36)}${counter}`
 }
 
-/** Biến đổi do hiệu ứng xuất hiện / chuyển động tại thời điểm `local` (ms từ lúc hiện). */
-export interface OverlayMotion {
-  scale: number
-  opacity: number
-  /** Dịch chuyển, tỉ lệ theo chiều cao khung. */
-  dx: number
-  dy: number
-  /** Góc xoay thêm (độ). */
-  rotate: number
-}
+export type { OverlayMotion }
 
-const easeOutBack = (t: number) => {
-  const c1 = 1.70158
-  const c3 = c1 + 1
-  return 1 + c3 * (t - 1) ** 3 + c1 * (t - 1) ** 2
-}
-
+/** Biến đổi do hoạt ảnh vào / ra / lặp tại thời điểm `t` (ms trên video xuất). */
 export function overlayMotion(
-  o: Pick<Overlay, 'animation' | 'start' | 'end'>,
+  o: Pick<Overlay, 'anim' | 'start' | 'end'>,
   t: number,
 ): OverlayMotion {
-  const local = t - o.start
-  const remaining = o.end - t
-  const base: OverlayMotion = { scale: 1, opacity: 1, dx: 0, dy: 0, rotate: 0 }
-  switch (o.animation) {
-    case 'pop': {
-      const p = Math.min(1, local / 350)
-      return { ...base, scale: Math.max(0, easeOutBack(p)) }
-    }
-    case 'bounce':
-      return { ...base, dy: -Math.abs(Math.sin((local / 1000) * Math.PI * 2)) * 0.03 }
-    case 'shake':
-      return { ...base, rotate: Math.sin((local / 1000) * Math.PI * 14) * 6 }
-    case 'fade':
-      return { ...base, opacity: Math.max(0, Math.min(1, local / 300, remaining / 300)) }
-    case 'slide': {
-      const p = Math.min(1, local / 400)
-      return { ...base, dx: -(1 - easeOutBack(p)) * 0.6, opacity: Math.min(1, p * 2) }
-    }
-    default:
-      return base
-  }
+  return animMotion(o, t)
+}
+
+/** Vị trí, cỡ, góc, độ mờ của lớp tại thời điểm `t` (theo keyframe nếu có). */
+export function overlayPose(
+  o: Pick<Overlay, 'x' | 'y' | 'size' | 'rotation' | 'opacity' | 'keyframes' | 'start'>,
+  t: number,
+): Pose {
+  return poseAt(
+    { x: o.x, y: o.y, size: o.size, rotation: o.rotation, opacity: o.opacity ?? 1 },
+    o.keyframes,
+    t - o.start,
+  )
+}
+
+/** Lớp với tư thế tại thời điểm `t` (để vẽ, bấm chọn, kéo trên khung xem trước). */
+export function posedOverlay(o: Overlay, t: number): Overlay {
+  if (!o.keyframes?.length) return o
+  const pose = overlayPose(o, t)
+  return { ...o, ...pose }
 }
 
 /** Vị trí cần phát trong file video (ms) tại thời điểm xuất `t`; giữ khung cuối khi hết file. */
@@ -123,6 +131,24 @@ export function overlayMaxDuration(o: Pick<Overlay, 'kind' | 'mediaOffset' | 'so
  * phần còn lại của file.
  */
 export function dragOverlay(
+  origin: Overlay,
+  mode: 'move' | 'start' | 'end',
+  delta: number,
+  total: number,
+): Overlay {
+  const next = dragMedia(origin, mode, delta, total)
+  if (mode !== 'start' || !origin.keyframes) return next
+  // Cắt / kéo dài phía trước: keyframe đứng yên trên video xuất.
+  const keyframes = shiftKeyframes(
+    overlayPose({ ...origin, keyframes: undefined }, origin.start),
+    origin.keyframes,
+    next.start - origin.start,
+    next.end - next.start,
+  )
+  return { ...next, keyframes: keyframes?.length ? keyframes : undefined }
+}
+
+function dragMedia(
   origin: Overlay,
   mode: 'move' | 'start' | 'end',
   delta: number,
@@ -186,8 +212,10 @@ export function parseOverlays(value: unknown): Overlay[] {
     if ((kind === 'image' || kind === 'video') && !file) return []
     const sourceDuration = num(o.sourceDuration, 0, 0, 24 * 3600_000)
     if (kind === 'video' && sourceDuration <= 0) return []
-    const look =
-      (kind === 'image' || kind === 'video') && o.look !== undefined ? parseLook(o.look) : undefined
+    const media = kind === 'image' || kind === 'video'
+    const look = media && o.look !== undefined ? parseLook(o.look) : undefined
+    const mask = media ? parseMask(o.mask) : undefined
+    const keyframes = parseKeyframes(o.keyframes)
     return [
       {
         id: o.id,
@@ -198,9 +226,7 @@ export function parseOverlays(value: unknown): Overlay[] {
         y: num(o.y, 0.5, 0, 1),
         size: num(o.size, 0.12, 0.03, 4),
         rotation: num(o.rotation, 0, -180, 180),
-        animation: OVERLAY_ANIMATIONS.includes(o.animation as OverlayAnimation)
-          ? (o.animation as OverlayAnimation)
-          : 'pop',
+        anim: parseAnim(o.anim, o.animation),
         text: typeof o.text === 'string' ? o.text.slice(0, 200) : '',
         style: TEXT_STYLES.includes(o.style as TextStyle) ? (o.style as TextStyle) : 'meme',
         color: typeof o.color === 'string' && /^#[0-9a-f]{6}$/i.test(o.color) ? o.color : '#ffffff',
@@ -216,6 +242,16 @@ export function parseOverlays(value: unknown): Overlay[] {
             : '',
         keyStrength: num(o.keyStrength, 0.4, 0, 1),
         ...(look && !isDefaultLook(look) ? { look } : {}),
+        ...(typeof o.opacity === 'number' && o.opacity < 1
+          ? { opacity: num(o.opacity, 1, 0, 1) }
+          : {}),
+        ...(BLEND_MODES.includes(o.blend as BlendMode) && o.blend !== 'normal'
+          ? { blend: o.blend as BlendMode }
+          : {}),
+        ...(o.flipH === true ? { flipH: true } : {}),
+        ...(o.flipV === true ? { flipV: true } : {}),
+        ...(mask ? { mask } : {}),
+        ...(keyframes ? { keyframes } : {}),
       },
     ]
   })

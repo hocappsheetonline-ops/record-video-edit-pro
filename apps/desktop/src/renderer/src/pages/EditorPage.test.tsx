@@ -219,10 +219,11 @@ describe('EditorPage', () => {
     await userEvent.type(screen.getByTestId('overlay-edit-text'), 'Đỉnh')
     await userEvent.click(screen.getByTestId('overlay-style-meme'))
     fireEvent.change(screen.getByTestId('overlay-size'), { target: { value: '0.2' } })
-    await userEvent.click(screen.getByTestId('anim-shake'))
+    await userEvent.click(screen.getByTestId('anim-loop-shake'))
     await userEvent.click(screen.getByTestId('pos-bottom'))
     o = useEditorStore.getState().edit!.overlays[0]!
-    expect(o).toMatchObject({ text: 'Đỉnh', style: 'meme', size: 0.2, animation: 'shake', y: 0.85 })
+    expect(o).toMatchObject({ text: 'Đỉnh', style: 'meme', size: 0.2, y: 0.85 })
+    expect(o.anim).toMatchObject({ in: 'pop', loop: 'shake' })
     // Chữ không có phần xóa phông / âm lượng của video.
     expect(screen.queryByTestId('key-00ff00')).not.toBeInTheDocument()
 
@@ -261,7 +262,7 @@ describe('EditorPage', () => {
       end: 3500,
       sourceDuration: 2500,
       hasAudio: true,
-      animation: 'none',
+      anim: expect.objectContaining({ in: 'none', out: 'none', loop: 'none' }),
       keyColor: '',
     })
     expect(o.aspect).toBeCloseTo(16 / 9)
@@ -747,5 +748,74 @@ describe('EditorPage', () => {
     expect(screen.getByTestId('timecode')).toHaveTextContent('/ 0:10.5')
     await userEvent.click(screen.getByTestId('delete'))
     expect(useEditorStore.getState().edit!.clips).toHaveLength(3)
+  })
+  it('keyframe: thêm ở hai thời điểm, kéo thanh trượt sửa keyframe tại đầu phát, hình thoi trên timeline', async () => {
+    setup()
+    await screen.findByTestId('editor-title')
+    const ov = () => useEditorStore.getState().edit!.overlays[0]!
+    await userEvent.click(screen.getByTestId('lib-text'))
+    await userEvent.click(screen.getByTestId('text-add-meme'))
+    expect(screen.getByTestId('keyframe-count')).toHaveTextContent('Thêm keyframe ở hai thời điểm')
+    // Chưa có keyframe: kéo cỡ là sửa giá trị gốc.
+    fireEvent.change(screen.getByTestId('overlay-size'), { target: { value: '0.1' } })
+    expect(ov().size).toBe(0.1)
+    expect(ov()).not.toHaveProperty('keyframes')
+    // Keyframe tại 0s, rồi tại 2s đổi cỡ → lớp tự to dần.
+    await userEvent.click(screen.getByTestId('overlay-keyframe'))
+    act(() => useEditorStore.getState().setTime(2000))
+    fireEvent.change(screen.getByTestId('overlay-size'), { target: { value: '0.3' } })
+    expect(ov().keyframes!.map((k) => [k.t, k.size])).toEqual([
+      [0, 0.1],
+      [2000, 0.3],
+    ])
+    expect(screen.getAllByTestId('keyframe-mark')).toHaveLength(2)
+    expect(screen.getByTestId('overlay-keyframe')).toHaveAttribute('aria-pressed', 'true')
+    // Giữa hai keyframe: thanh trượt hiện giá trị nội suy.
+    act(() => useEditorStore.getState().setTime(1000))
+    expect(screen.getByTestId('overlay-size-input')).toHaveValue('20%')
+    expect(screen.getByTestId('overlay-keyframe')).toHaveAttribute('aria-pressed', 'false')
+    // Kiểu chuyển, nhảy tới keyframe trước.
+    await userEvent.click(screen.getByTestId('overlay-kf-prev'))
+    expect(useEditorStore.getState().time).toBe(0)
+    await userEvent.click(screen.getByTestId('kf-ease-easeOut'))
+    expect(ov().keyframes![0]!.ease).toBe('easeOut')
+    // Bỏ keyframe đầu, rồi xóa hết: lớp đứng yên ở tư thế hiện tại.
+    await userEvent.click(screen.getByTestId('overlay-keyframe'))
+    expect(ov().keyframes).toHaveLength(1)
+    await userEvent.click(screen.getByTestId('overlay-kf-clear'))
+    expect(ov()).not.toHaveProperty('keyframes')
+    expect(ov().size).toBe(0.3)
+  })
+
+  it('lớp phủ: hoạt ảnh vào / ra / lặp, độ mờ, hòa trộn, lật; mặt nạ cho ảnh', async () => {
+    setup()
+    await screen.findByTestId('editor-title')
+    const ov = () => useEditorStore.getState().edit!.overlays.at(-1)!
+    await userEvent.click(screen.getByTestId('lib-text'))
+    await userEvent.click(screen.getByTestId('text-add-title'))
+    await userEvent.click(screen.getByTestId('anim-in-typewriter'))
+    await userEvent.click(screen.getByTestId('anim-out-zoomOut'))
+    const inMs = screen.getByTestId('anim-in-ms-input')
+    await userEvent.clear(inMs)
+    await userEvent.type(inMs, '1.2{Enter}')
+    expect(ov().anim).toMatchObject({ in: 'typewriter', inMs: 1200, out: 'zoomOut' })
+    fireEvent.change(screen.getByTestId('overlay-opacity'), { target: { value: '0.4' } })
+    expect(ov().opacity).toBe(0.4)
+    fireEvent.change(screen.getByTestId('overlay-blend'), { target: { value: 'screen' } })
+    await userEvent.click(screen.getByTestId('overlay-flip-h'))
+    expect(ov()).toMatchObject({ blend: 'screen', flipH: true })
+    // Chữ không có mặt nạ; ảnh thì có, kiểu đánh chữ chỉ dành cho chữ.
+    expect(screen.queryByTestId('mask-panel')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByTestId('lib-media'))
+    const items = await screen.findAllByTestId('meme-item')
+    await userEvent.click(items[0]!)
+    await waitFor(() => expect(ov().kind).toBe('image'))
+    expect(screen.queryByTestId('anim-in-typewriter')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByTestId('mask-heart'))
+    fireEvent.change(screen.getByTestId('mask-feather'), { target: { value: '0.3' } })
+    await userEvent.click(screen.getByTestId('mask-invert'))
+    expect(ov().mask).toMatchObject({ shape: 'heart', feather: 0.3, invert: true })
+    await userEvent.click(screen.getByTestId('mask-none'))
+    expect(ov().mask).toBeUndefined()
   })
 })

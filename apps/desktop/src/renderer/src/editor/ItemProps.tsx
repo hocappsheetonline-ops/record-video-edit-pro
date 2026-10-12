@@ -19,7 +19,7 @@ import {
   DEFAULT_TRANSITION_MS,
   EFFECT_KINDS,
   KEY_COLORS,
-  OVERLAY_ANIMATIONS,
+  overlayPose,
   SPEEDS,
   TEXT_STYLES,
   TRANSITION_KINDS,
@@ -33,6 +33,7 @@ import {
 } from '@lumora/core'
 import { AudioFxPanel } from './AudioFxPanel'
 import { AdjustPanel, FreezePanel, TransformPanel } from './LookPanels'
+import { AnimSection, BlendSection, KeyframeSection, MaskSection } from './OverlayFxPanels'
 import { useEditorStore } from './store'
 import { ghostButton, pct, secs, Section, Segmented, SliderRow, Toggle } from './ui'
 
@@ -440,11 +441,16 @@ export function EffectProps({ effect }: { effect: EffectRegion }) {
 
 export function OverlayProps({ overlay }: { overlay: Overlay }) {
   const { t } = useTranslation()
-  const { updateOverlay } = useEditorStore.getState()
+  const { updateOverlay, updateOverlayPose } = useEditorStore.getState()
   const edit = useEditorStore((s) => s.edit)
   const videoSize = useEditorStore((s) => s.videoSize)
+  const time = useEditorStore((s) => s.time)
   const update = (patch: Partial<Overlay>, coalesce?: string) =>
     updateOverlay(overlay.id, patch, coalesce && `${coalesce}-${overlay.id}`)
+  // Vị trí / cỡ / góc / độ mờ: theo keyframe tại đầu phát (nếu có), sửa thì ghi vào keyframe.
+  const pose = overlayPose(overlay, Math.min(overlay.end, Math.max(overlay.start, time)))
+  const updatePose = (patch: Parameters<typeof updateOverlayPose>[1], coalesce?: string) =>
+    updateOverlayPose(overlay.id, patch, coalesce && `${coalesce}-${overlay.id}`)
   const media = overlay.kind === 'image' || overlay.kind === 'video'
   const frameRatio = edit ? aspectRatio(edit.frame.aspect, videoSize) : 16 / 9
   return (
@@ -490,7 +496,7 @@ export function OverlayProps({ overlay }: { overlay: Overlay }) {
               data-testid="overlay-fill"
               className={ghostButton}
               onClick={() =>
-                update({
+                updatePose({
                   x: 0.5,
                   y: 0.5,
                   rotation: 0,
@@ -506,7 +512,7 @@ export function OverlayProps({ overlay }: { overlay: Overlay }) {
               data-testid="overlay-fit"
               className={ghostButton}
               onClick={() =>
-                update({
+                updatePose({
                   x: 0.5,
                   y: 0.5,
                   rotation: 0,
@@ -521,24 +527,24 @@ export function OverlayProps({ overlay }: { overlay: Overlay }) {
         )}
         <SliderRow
           label={t('editor.stickers.size')}
-          value={overlay.size}
+          value={pose.size}
           min={0.03}
           max={media ? 2 : 0.8}
           step={0.01}
           format={pct}
           testId="overlay-size"
-          onChange={(v) => update({ size: v }, 'ov-size')}
+          onChange={(v) => updatePose({ size: v }, 'ov-size')}
         />
         <SliderRow
           defaultValue={0}
           label={t('editor.stickers.rotation')}
-          value={overlay.rotation}
+          value={pose.rotation}
           min={-180}
           max={180}
           step={1}
           format={(v) => `${Math.round(v)}°`}
           testId="overlay-rotation"
-          onChange={(v) => update({ rotation: v }, 'ov-rot')}
+          onChange={(v) => updatePose({ rotation: v }, 'ov-rot')}
         />
         <Segmented
           label={t('editor.stickers.place')}
@@ -547,11 +553,16 @@ export function OverlayProps({ overlay }: { overlay: Overlay }) {
             label: t(`editor.stickers.positions.${p}`),
           }))}
           value={null}
-          onChange={(p) => update({ x: 0.5, y: p === 'top' ? 0.15 : p === 'center' ? 0.5 : 0.85 })}
+          onChange={(p) =>
+            updatePose({ x: 0.5, y: p === 'top' ? 0.15 : p === 'center' ? 0.5 : 0.85 })
+          }
           testIdPrefix="pos-"
         />
         <p className="text-xs text-muted">{t('editor.stickers.dragHint')}</p>
       </Section>
+
+      <KeyframeSection overlay={overlay} />
+      <BlendSection overlay={overlay} opacity={pose.opacity} />
 
       {overlay.kind === 'video' && overlay.hasAudio && (
         <Section
@@ -620,27 +631,11 @@ export function OverlayProps({ overlay }: { overlay: Overlay }) {
         </Section>
       )}
 
+      {media && <MaskSection overlay={overlay} />}
       {media && <AdjustPanel />}
 
-      <Section title={t('editor.props.animation')}>
-        <div className="grid grid-cols-3 gap-1.5">
-          {OVERLAY_ANIMATIONS.map((a) => (
-            <button
-              key={a}
-              type="button"
-              data-testid={`anim-${a}`}
-              aria-pressed={overlay.animation === a}
-              onClick={() => update({ animation: a })}
-              className={`rounded-md border px-2 py-1.5 text-xs ${
-                overlay.animation === a
-                  ? 'border-accent bg-accent/10 text-text'
-                  : 'border-border text-muted hover:text-text'
-              }`}
-            >
-              {t(`editor.stickers.animations.${a}`)}
-            </button>
-          ))}
-        </div>
+      <AnimSection overlay={overlay} />
+      <Section>
         <p className="text-xs text-muted">
           {secs(overlay.end - overlay.start)}
           {overlay.kind === 'video' &&

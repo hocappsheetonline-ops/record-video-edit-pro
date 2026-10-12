@@ -48,6 +48,14 @@ import {
   DEFAULT_LOOK,
   type Clip,
   type Look,
+  DEFAULT_ANIM,
+  NO_ANIM,
+  editPose,
+  overlayPose,
+  keyframeAt,
+  removeKeyframe,
+  setKeyframe,
+  type Pose,
 } from '@lumora/core'
 import type { AudioAsset, MediaAsset } from '@shared/ipc'
 import { lumora } from '../api'
@@ -133,6 +141,14 @@ interface EditorStore {
   /** Thêm chữ / emoji / ảnh tại đầu phát (3 giây) và chọn nó. */
   addOverlay(init: Partial<Overlay> & Pick<Overlay, 'kind'>): void
   updateOverlay(id: string, patch: Partial<Overlay>, coalesce?: string): void
+  /**
+   * Sửa vị trí / cỡ / góc / độ mờ của lớp tại đầu phát: có keyframe thì sửa (hoặc thêm) keyframe ở
+   * đó, chưa có thì sửa giá trị gốc.
+   */
+  updateOverlayPose(id: string, patch: Partial<Pose>, coalesce?: string): void
+  /** Bật / tắt keyframe của lớp tại đầu phát. */
+  toggleKeyframe(id: string): void
+  clearKeyframes(id: string): void
   /** Thêm ảnh / GIF / video meme (đã chép vào dự án) tại đầu phát. */
   addMediaOverlay(asset: MediaAsset): void
   deleteSelection(): void
@@ -515,7 +531,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             ? 0.18
             : 0.09,
       rotation: 0,
-      animation: video ? 'none' : 'pop',
+      anim: video ? { ...NO_ANIM } : { ...DEFAULT_ANIM },
       text: '',
       style: 'meme',
       color: '#ffffff',
@@ -538,6 +554,49 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       (e) => ({ ...e, overlays: e.overlays.map((o) => (o.id === id ? { ...o, ...patch } : o)) }),
       coalesce,
     )
+  },
+
+  updateOverlayPose(id, patch, coalesce) {
+    const { time } = get()
+    get().change(
+      (e) => ({
+        ...e,
+        overlays: e.overlays.map((o) => {
+          if (o.id !== id) return o
+          const r = editPose(basePose(o), o.keyframes, time - o.start, patch)
+          return withPose(o, r.base, r.keyframes ?? o.keyframes)
+        }),
+      }),
+      coalesce,
+    )
+  },
+
+  toggleKeyframe(id) {
+    const { time } = get()
+    get().change((e) => ({
+      ...e,
+      overlays: e.overlays.map((o) => {
+        if (o.id !== id) return o
+        const local = time - o.start
+        const hit = keyframeAt(o.keyframes, local)
+        const keyframes = hit
+          ? removeKeyframe(o.keyframes, hit.id)
+          : setKeyframe(basePose(o), o.keyframes, local)
+        // Bỏ keyframe cuối cùng: lớp đứng yên ở tư thế của keyframe đó.
+        if (keyframes.length === 0 && hit) return withPose(o, hit, undefined)
+        return { ...o, keyframes }
+      }),
+    }))
+  },
+
+  clearKeyframes(id) {
+    const { time } = get()
+    get().change((e) => ({
+      ...e,
+      overlays: e.overlays.map((o) =>
+        o.id === id ? withPose(o, posedOverlayPose(o, time), undefined) : o,
+      ),
+    }))
   },
 
   addMediaOverlay(asset) {
@@ -701,3 +760,29 @@ export function currentLook(edit: EditState, target: LookTarget): Look {
     return edit.overlays.find((o) => o.id === target.id)?.look ?? DEFAULT_LOOK
   return edit.look ?? DEFAULT_LOOK
 }
+
+const basePose = (o: Overlay): Pose => ({
+  x: o.x,
+  y: o.y,
+  size: o.size,
+  rotation: o.rotation,
+  opacity: o.opacity ?? 1,
+})
+
+/** Ghi tư thế gốc + danh sách keyframe vào lớp (độ mờ 1 thì bỏ trường cho gọn). */
+function withPose(o: Overlay, pose: Pose, keyframes: Overlay['keyframes']): Overlay {
+  const next: Overlay = {
+    ...o,
+    x: pose.x,
+    y: pose.y,
+    size: pose.size,
+    rotation: pose.rotation,
+    opacity: pose.opacity,
+    keyframes: keyframes?.length ? keyframes : undefined,
+  }
+  if (next.opacity === 1) delete next.opacity
+  if (!next.keyframes) delete next.keyframes
+  return next
+}
+
+const posedOverlayPose = (o: Overlay, time: number): Pose => overlayPose(o, time)
