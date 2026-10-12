@@ -47,8 +47,8 @@ const TAB_ICONS: Record<LibraryTab, LucideIcon> = {
 }
 
 /**
- * Thư viện bên trái (kiểu CapCut): cột biểu tượng chọn mục (chú thích khi rê chuột) và nội dung
- * của mục — meme, âm thanh, chữ, nhãn dán, hiệu ứng, chuyển cảnh, phụ đề, AI.
+ * Thư viện bên trái (kiểu CapCut): cột mục có biểu tượng và nhãn (Phương tiện, Âm thanh, Văn
+ * bản, Nhãn dán, Hiệu ứng, Bộ lọc, Chuyển cảnh, Phụ đề, AI) và nội dung của mục đang chọn.
  */
 export function MediaBrowser() {
   const { t } = useTranslation()
@@ -64,7 +64,7 @@ export function MediaBrowser() {
   return (
     <div className="flex h-full" data-testid="library">
       <div
-        className="flex w-12 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-border py-2"
+        className="flex w-16 shrink-0 flex-col items-center gap-0.5 overflow-y-auto border-r border-border bg-bg py-1.5"
         role="tablist"
         aria-orientation="vertical"
         aria-label={t('editor.library.title')}
@@ -82,13 +82,14 @@ export function MediaBrowser() {
               data-tooltip={t(`editor.library.tabs.${name}`)}
               data-testid={`lib-${name}`}
               onClick={() => setTab(name)}
-              className={`flex size-9 items-center justify-center rounded-lg transition-colors ${
-                active
-                  ? 'bg-accent/15 text-accent'
-                  : 'text-muted hover:bg-surface-2 hover:text-text'
+              className={`flex min-h-[46px] w-[58px] flex-col items-center gap-1 rounded-lg px-0.5 py-1.5 text-[9.5px] leading-[1.15] transition-colors ${
+                active ? 'bg-surface-2 text-text' : 'text-muted hover:text-text'
               }`}
             >
-              <Icon size={19} strokeWidth={1.75} aria-hidden />
+              <Icon size={18} strokeWidth={active ? 2 : 1.75} aria-hidden />
+              <span className="line-clamp-2 w-full break-words text-center">
+                {t(`editor.library.tabs.${name}`)}
+              </span>
             </button>
           )
         })}

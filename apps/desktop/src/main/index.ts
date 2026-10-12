@@ -31,6 +31,7 @@ import {
 import { loadFilmstrip } from './projects/filmstrip'
 import { IMPORT_VIDEO_EXT, importVideoSegment, mergeProject } from './projects/import-video'
 import { importImageFile, MEDIA_EXTENSIONS, MemeLibrary } from './projects/images'
+import { MusicLibrary, recentDownloads } from './projects/music'
 import { clearDirs, dirSize } from './content/cache'
 import { RnnoiseDenoiser } from './audio/denoise'
 import { AudioProcessor } from './audio/process'
@@ -197,6 +198,7 @@ if (!app.requestSingleInstanceLock()) {
       return r.canceled ? [] : r.filePaths
     }
     const memes = new MemeLibrary(join(userData, 'memes'), runFfmpeg)
+    const music = new MusicLibrary(join(userData, 'music'), runFfmpeg)
     // Lọc tạp âm AI bằng RNNoise (WebAssembly, chạy ở luồng phụ) — cùng kết quả trên mọi máy.
     const audioProcessor = new AudioProcessor(
       runFfmpeg,
@@ -225,6 +227,19 @@ if (!app.requestSingleInstanceLock()) {
         add: (paths) => memes.add(paths),
         remove: (file) => memes.remove(file),
         useInProject: (file, dir) => memes.useInProject(file, dir),
+      },
+      music: {
+        list: () => music.list(),
+        pickAndAdd: async () => {
+          const files = await pickFiles(AUDIO_EXTENSIONS, true)
+          return files.length > 0 ? music.add(files, 'file') : music.list()
+        },
+        add: (paths, source) => music.add(paths, source),
+        remove: (file) => music.remove(file),
+        useInProject: (file, dir) => music.useInProject(file, dir),
+        recentDownloads: () => recentDownloads(app.getPath('downloads')),
+        // Thư viện âm thanh YouTube (YouTube Studio): nhạc miễn phí bản quyền, tải về bằng trình duyệt.
+        openYouTube: () => shell.openExternal('https://www.youtube.com/audiolibrary'),
       },
       updates,
       logRendererError: (message: string) => logger.error('renderer', message),
@@ -299,10 +314,26 @@ if (!app.requestSingleInstanceLock()) {
         version: app.getVersion(),
         platform: process.platform,
         encryptionAvailable: safeStorage.isEncryptionAvailable(),
+        frameless: process.platform !== 'darwin',
       }),
+      window: {
+        minimize: () => mainWindow?.minimize(),
+        toggleMaximize: () => {
+          if (!mainWindow) return false
+          if (mainWindow.isMaximized()) mainWindow.unmaximize()
+          else mainWindow.maximize()
+          return mainWindow.isMaximized()
+        },
+        close: () => mainWindow?.close(),
+        isMaximized: () => mainWindow?.isMaximized() ?? false,
+      },
     })
 
     mainWindow = createMainWindow()
+    const sendMaximized = () =>
+      mainWindow?.webContents.send(EVENTS.windowMaximized, mainWindow.isMaximized())
+    mainWindow.on('maximize', sendMaximized)
+    mainWindow.on('unmaximize', sendMaximized)
     mainWindow.on('closed', () => {
       mainWindow = null
       // Đóng cửa sổ chính khi đang quay: lưu lại phần đã quay.

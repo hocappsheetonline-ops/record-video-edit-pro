@@ -27,6 +27,8 @@ import {
   type SegmentStart,
   ONLINE_SOURCES,
   type OnlineSource,
+  type MusicTrack,
+  type RecentDownload,
 } from '@shared/ipc'
 import { validateKey, type Validators } from './key-validation'
 import { mkdir, writeFile } from 'node:fs/promises'
@@ -107,6 +109,16 @@ export interface MemesIpc {
   useInProject(file: string, projectDir: string): Promise<MediaAsset>
 }
 
+export interface MusicIpc {
+  list(): Promise<MusicTrack[]>
+  pickAndAdd(): Promise<MusicTrack[]>
+  add(paths: string[], source: MusicTrack['source']): Promise<MusicTrack[]>
+  remove(file: string): Promise<MusicTrack[]>
+  useInProject(file: string, projectDir: string): Promise<AudioAsset>
+  recentDownloads(): Promise<RecentDownload[]>
+  openYouTube(): Promise<void>
+}
+
 export interface IpcDeps {
   settings: SettingsStore
   secrets: SecretStore
@@ -138,6 +150,14 @@ export interface IpcDeps {
   >
   updates: Pick<UpdateService, 'state' | 'check' | 'install'>
   memes: MemesIpc
+  music: MusicIpc
+  /** Điều khiển cửa sổ chính (thanh tiêu đề tự vẽ của cửa sổ không viền). */
+  window: {
+    minimize(): void
+    toggleMaximize(): boolean
+    close(): void
+    isMaximized(): boolean
+  }
   openLogs(): Promise<void>
   /** Ghi lỗi của giao diện (renderer) vào main.log. */
   logRendererError?(message: string): void
@@ -192,6 +212,10 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
   const { settings, secrets, recording, projects } = deps
 
   ipcMain.handle(IPC.appInfo, () => deps.appInfo())
+  ipcMain.handle(IPC.windowMinimize, () => deps.window.minimize())
+  ipcMain.handle(IPC.windowToggleMaximize, () => deps.window.toggleMaximize())
+  ipcMain.handle(IPC.windowClose, () => deps.window.close())
+  ipcMain.handle(IPC.windowIsMaximized, () => deps.window.isMaximized())
   ipcMain.handle(IPC.updateState, () => deps.updates.state)
   ipcMain.handle(IPC.updateCheck, () => deps.updates.check())
   ipcMain.handle(IPC.updateInstall, () => deps.updates.install())
@@ -358,6 +382,23 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
     if (typeof file !== 'string') throw new Error('Tên file không hợp lệ')
     return deps.memes.useInProject(file, await projectDir(folder))
   })
+  ipcMain.handle(IPC.musicList, () => deps.music.list())
+  ipcMain.handle(IPC.musicImport, () => deps.music.pickAndAdd())
+  ipcMain.handle(IPC.musicAddPaths, (_event, paths: unknown, source: unknown) => {
+    if (!Array.isArray(paths) || paths.length > 50 || !paths.every((p) => typeof p === 'string'))
+      throw new Error('audio_unsupported')
+    return deps.music.add(paths as string[], source === 'youtube' ? 'youtube' : 'file')
+  })
+  ipcMain.handle(IPC.musicRemove, (_event, file: unknown) => {
+    if (typeof file !== 'string') throw new Error('Tên file không hợp lệ')
+    return deps.music.remove(file)
+  })
+  ipcMain.handle(IPC.musicUse, async (_event, folder: unknown, file: unknown) => {
+    if (typeof file !== 'string') throw new Error('Tên file không hợp lệ')
+    return deps.music.useInProject(file, await projectDir(folder))
+  })
+  ipcMain.handle(IPC.musicRecentDownloads, () => deps.music.recentDownloads())
+  ipcMain.handle(IPC.musicOpenYouTube, () => deps.music.openYouTube())
   ipcMain.handle(IPC.assetsPeaks, async (_event, folder: unknown, file: unknown) => {
     if (typeof file !== 'string') throw new Error('Tên file không hợp lệ')
     return projects.assetPeaks(await projectDir(folder), file)
@@ -486,7 +527,7 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
     return deps.online.search(source as OnlineSource, q, next)
   })
   ipcMain.handle(IPC.onlineDownload, (_event, source: unknown, id: unknown) => {
-    if ((source !== 'tenor' && source !== 'pixabay') || typeof id !== 'string' || id.length > 100)
+    if (source !== 'pixabay' || typeof id !== 'string' || id.length > 100)
       throw new Error('online_unknown')
     return deps.online.download(source, id)
   })

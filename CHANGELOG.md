@@ -2,6 +2,25 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.2.0
+
+- **Cửa sổ không viền kiểu macOS**: thanh tiêu đề tự vẽ với nút đèn giao thông (đóng / thu nhỏ / phóng to), kéo để dời, bấm đúp để phóng to; trên macOS dùng nút hệ thống.
+- **AI tự biên tập** (Thư viện → AI): một bấm cắt khoảng lặng (theo lời thoại, hoặc theo dạng sóng khi không có key nhận dạng), bỏ từ thừa / câu lặp (Claude, hoặc danh sách từ đệm có sẵn), tự zoom theo chuột, thêm phụ đề, làm sạch âm thanh (lọc tạp âm, tăng cường giọng, chuẩn hóa) và tiêu đề mở đầu; chọn từng bước, xem kết quả từng bước; hoàn tác một lần để quay lại.
+- **Nhạc nền từ Thư viện âm thanh YouTube** (Thư viện → Âm thanh → YouTube): mở Thư viện âm thanh (YouTube Studio, nhạc miễn phí bản quyền), bài vừa tải về tự hiện trong app, một bấm để đưa vào **kho nhạc của tôi** và đặt lên timeline; kho nhạc dùng lại ở mọi dự án, nhận cả file nhạc trên máy (chọn hoặc kéo thả), có tìm kiếm.
+
+## 1.1.0
+
+- **Giao diện phong cách Apple** (macOS / Liquid Glass): chữ hệ thống, xám trung tính và màu hệ thống của Apple cho cả giao diện tối lẫn sáng; bo góc đồng tâm lớn; nút viên thuốc, segmented control, công tắc và thanh trượt kiểu macOS; sidebar, thanh công cụ, thanh phát, menu chuột phải, chú thích, thông báo và hộp thoại là **kính mờ** (blur + bán trong suốt); thanh cuộn mảnh; tiêu đề trang cỡ lớn.
+- **Màu chủ đạo** đổi sang bộ màu hệ thống macOS (xanh dương, tím, hồng, đỏ, cam, vàng, xanh lá, than chì); mặc định xanh dương Apple.
+- Cài đặt mới **Giảm trong suốt**: thanh công cụ, menu và hộp thoại dùng màu đặc thay vì kính mờ (nhẹ hơn cho máy yếu).
+
+## 1.0.1
+
+- **Bỏ kho meme Tenor**: Google đã khai tử Tenor API ngày 30/6/2026 nên app không còn ô key Tenor, nguồn Meme và Sticker động; kho **Pixabay** (video, ảnh miễn phí) giữ nguyên. Meme đã tải trước đó vẫn nằm trong thư viện của bạn.
+- Mục **Meme** đổi thành **Phương tiện** như CapCut: nút **Nhập video** (chọn video trên máy để chỉnh sửa, nối vào hàng Video làm clip chính) và **Nhập ảnh** (ảnh / GIF vào thư viện của tôi).
+- **Dạng sóng âm thanh giống CapCut**: vùng tô liền, đối xứng qua trục giữa và được làm mượt thay vì các cột rời; dải sóng trong clip video nền tối với sóng xanh nhạt; đoạn âm thanh là khối màu đặc với sóng trắng.
+- **Giao diện giống CapCut hơn**: cột mục thư viện có biểu tượng kèm nhãn; bảng màu tối chuyển sang xám than trung tính (không ám xanh).
+
 ## 1.0.0
 
 - Hoàn tất lộ trình kiểu CapCut (ROADMAP Bước 1–6): giao diện biểu tượng, kho meme, âm thanh và lọc tạp âm, bộ lọc / keyframe / mặt nạ / xóa phông AI, chữ / phụ đề / giọng AI, timeline chuyên nghiệp, nhập video ngoài, việc nền, lịch sử, ổn định.

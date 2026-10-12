@@ -15,12 +15,17 @@ import { AboutCard } from '../components/AboutCard'
 import { ApiKeyCard } from '../components/ApiKeyCard'
 import { CacheCard } from '../components/CacheCard'
 import { PageHeader } from '../components/PageHeader'
+import { Toggle } from '../editor/ui'
 import { useAppStore } from '../store/app'
 
 const LANGUAGE_NAMES: Record<Language, string> = { vi: 'Tiếng Việt', en: 'English' }
 
 const selectClass =
-  'rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent'
+  'rounded-lg border border-border bg-surface-2 py-2 pl-3 text-sm shadow-sm outline-none focus:border-accent'
+/** Tiêu đề nhóm (kiểu Cài đặt hệ thống macOS: chữ nhỏ đậm, không in hoa). */
+const groupTitle = 'mb-2 text-[13px] font-semibold text-text'
+/** Khối nhóm: thẻ bo góc lớn, viền hairline. */
+const group = 'mb-8 grid gap-4 rounded-2xl border border-border bg-surface p-5 sm:grid-cols-2'
 
 export function SettingsPage() {
   const { t } = useTranslation()
@@ -34,10 +39,8 @@ export function SettingsPage() {
     <div className="max-w-3xl p-8">
       <PageHeader title={t('settings.title')} />
 
-      <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-muted">
-        {t('settings.general')}
-      </h2>
-      <div className="mb-8 grid gap-4 rounded-xl border border-border bg-surface p-5 sm:grid-cols-2">
+      <h2 className={groupTitle}>{t('settings.general')}</h2>
+      <div className={group}>
         <label className="flex flex-col gap-1.5 text-sm">
           {t('settings.language')}
           <select
@@ -77,7 +80,11 @@ export function SettingsPage() {
                 aria-label={color}
                 aria-pressed={settings.accent === color}
                 onClick={() => void updateSettings({ accent: color })}
-                className={`size-7 rounded-full border-2 ${settings.accent === color ? 'border-text' : 'border-transparent'}`}
+                className={`size-6 rounded-full shadow-[inset_0_1px_1px_rgba(255,255,255,0.35),0_1px_2px_rgba(0,0,0,0.25)] transition-transform hover:scale-110 ${
+                  settings.accent === color
+                    ? 'ring-2 ring-text ring-offset-2 ring-offset-surface'
+                    : ''
+                }`}
                 style={{ background: color }}
               />
             ))}
@@ -88,16 +95,24 @@ export function SettingsPage() {
                 data-testid="accent-custom"
                 value={settings.accent}
                 onChange={(e) => void updateSettings({ accent: e.target.value })}
+                className="size-6 cursor-pointer rounded-full border-0 bg-transparent p-0"
               />
             </label>
           </div>
         </div>
+        <div className="sm:col-span-2">
+          <Toggle
+            label={t('settings.reduceTransparency')}
+            hint={t('settings.reduceTransparencyHint')}
+            checked={settings.reduceTransparency}
+            testId="settings-reduce-transparency"
+            onChange={(v) => void updateSettings({ reduceTransparency: v })}
+          />
+        </div>
       </div>
 
-      <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-muted">
-        {t('settings.editor')}
-      </h2>
-      <div className="mb-8 grid gap-4 rounded-xl border border-border bg-surface p-5 sm:grid-cols-2">
+      <h2 className={groupTitle}>{t('settings.editor')}</h2>
+      <div className={group}>
         <label className="flex flex-col gap-1.5 text-sm">
           {t('settings.previewQuality')}
           <select
@@ -139,16 +154,14 @@ export function SettingsPage() {
             data-testid="settings-onboarding"
             disabled={!settings.onboardingDone}
             onClick={() => void updateSettings({ onboardingDone: false })}
-            className="shrink-0 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-2 disabled:opacity-50"
+            className="shrink-0 rounded-lg border border-border bg-surface-2/70 px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-surface-2 disabled:opacity-50 disabled:shadow-none"
           >
             {t('settings.onboardingReplay')}
           </button>
         </div>
       </div>
 
-      <h2 className="mb-1 text-sm font-medium uppercase tracking-wide text-muted">
-        {t('settings.apiKeys')}
-      </h2>
+      <h2 className={groupTitle.replace('mb-2', 'mb-1')}>{t('settings.apiKeys')}</h2>
       <p className="mb-3 text-sm text-muted">{t('settings.apiKeysHint')}</p>
       {!encryptionAvailable && (
         <p role="alert" className="mb-3 rounded-lg bg-danger/10 p-3 text-sm text-danger">
@@ -161,18 +174,14 @@ export function SettingsPage() {
         ))}
       </div>
 
-      <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-muted">
-        {t('settings.storage')}
-      </h2>
+      <h2 className={groupTitle}>{t('settings.storage')}</h2>
       <div className="mb-8">
         <CacheCard />
       </div>
 
       {appInfo && (
         <>
-          <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-muted">
-            {t('settings.about')}
-          </h2>
+          <h2 className={groupTitle}>{t('settings.about')}</h2>
           <AboutCard appInfo={appInfo} />
         </>
       )}

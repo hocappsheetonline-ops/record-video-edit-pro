@@ -1,8 +1,8 @@
-import { useState, type ReactNode } from 'react'
+import { useState, type CSSProperties, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { RotateCcw } from 'lucide-react'
 
-/** Bộ điều khiển dùng chung cho các bảng của trình chỉnh sửa (kiểu phần mềm dựng phim). */
+/** Bộ điều khiển dùng chung cho các bảng của trình chỉnh sửa (phong cách macOS / Final Cut). */
 
 export function Section({
   title,
@@ -19,11 +19,7 @@ export function Section({
     <section className="flex flex-col gap-3 border-b border-border px-4 py-4" data-testid={testId}>
       {(title || action) && (
         <header className="flex items-center justify-between gap-2">
-          {title && (
-            <h3 className="text-[11px] font-semibold uppercase tracking-wider text-muted">
-              {title}
-            </h3>
-          )}
+          {title && <h3 className="text-[12px] font-semibold text-text">{title}</h3>}
           {action}
         </header>
       )}
@@ -65,7 +61,7 @@ function NumberField({
   }
   if (scale === null)
     return (
-      <span className="rounded bg-surface-2 px-1.5 py-0.5 font-mono tabular-nums text-text">
+      <span className="rounded-md bg-surface-2 px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-text">
         {display}
       </span>
     )
@@ -105,7 +101,7 @@ function NumberField({
           setDraft(String(Number((next * scale).toFixed(3))))
         }
       }}
-      className="w-16 rounded bg-surface-2 px-1.5 py-0.5 text-right font-mono tabular-nums text-text outline-none focus:ring-1 focus:ring-accent"
+      className="w-16 rounded-md bg-surface-2 px-1.5 py-0.5 text-right font-mono text-[11px] tabular-nums text-text outline-none ring-1 ring-transparent focus:ring-accent"
     />
   )
 }
@@ -118,6 +114,12 @@ function displayScale(value: number, display: string): number | null {
   if (Math.abs(n - value * 100) < 0.6) return 100
   if (Math.abs(n - value / 1000) < 0.06) return 0.001
   return null
+}
+
+/** Phần đã kéo của thanh trượt (0–100 %) để tô màu nhấn như thanh trượt macOS. */
+function rangeFill(value: number, min: number, max: number): number {
+  if (max <= min) return 0
+  return Math.round(Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100)) * 10) / 10
 }
 
 export function SliderRow(props: {
@@ -150,7 +152,7 @@ export function SliderRow(props: {
               data-tooltip={t('editor.props.reset')}
               data-testid={props.testId ? `${props.testId}-reset` : undefined}
               onClick={() => props.onChange(props.defaultValue!)}
-              className="rounded p-0.5 text-muted hover:bg-surface-2 hover:text-text"
+              className="rounded-md p-0.5 text-muted hover:bg-surface-2 hover:text-text"
             >
               <RotateCcw size={12} aria-hidden />
             </button>
@@ -177,7 +179,10 @@ export function SliderRow(props: {
         aria-label={props.label}
         data-testid={props.testId}
         onChange={(e) => props.onChange(Number(e.target.value))}
-        className="h-1.5 w-full cursor-pointer accent-accent"
+        className="w-full cursor-pointer"
+        style={
+          { '--lm-range-fill': `${rangeFill(props.value, props.min, props.max)}%` } as CSSProperties
+        }
       />
       {props.ends && (
         <span className="flex justify-between text-[11px] text-muted">
@@ -208,7 +213,7 @@ export function Toggle({
         <span>{label}</span>
         {hint && <span className="text-xs text-muted">{hint}</span>}
       </span>
-      <span className="relative mt-0.5 inline-flex h-5 w-9 shrink-0">
+      <span className="relative mt-0.5 inline-flex h-[22px] w-[38px] shrink-0">
         {/* Ô chọn thật phủ trong suốt lên công tắc: bấm được, đọc được bằng trình đọc màn hình. */}
         <input
           type="checkbox"
@@ -220,14 +225,14 @@ export function Toggle({
         />
         <span
           aria-hidden
-          className={`h-5 w-9 rounded-full transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-accent ${
+          className={`h-[22px] w-[38px] rounded-full transition-colors duration-200 peer-focus-visible:ring-2 peer-focus-visible:ring-accent ${
             checked ? 'bg-accent' : 'bg-surface-2 ring-1 ring-border'
           }`}
         />
         <span
           aria-hidden
-          className={`absolute top-0.5 size-4 rounded-full bg-white shadow transition-transform ${
-            checked ? 'translate-x-4' : 'translate-x-0.5'
+          className={`absolute top-[2px] size-[18px] rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.35)] transition-transform duration-200 ${
+            checked ? 'translate-x-[18px]' : 'translate-x-[2px]'
           }`}
         />
       </span>
@@ -235,7 +240,7 @@ export function Toggle({
   )
 }
 
-/** Nhóm nút chọn một (segmented control). */
+/** Nhóm nút chọn một (segmented control kiểu macOS: ô đang chọn là viên nổi màu trung tính). */
 export function Segmented<T extends string | number>({
   options,
   value,
@@ -258,7 +263,7 @@ export function Segmented<T extends string | number>({
       <div
         role="radiogroup"
         aria-label={label}
-        className="grid gap-0.5 rounded-lg bg-surface-2 p-0.5"
+        className="grid gap-0.5 rounded-lg bg-surface-2 p-[3px]"
         style={{ gridTemplateColumns: `repeat(${columns ?? options.length}, minmax(0, 1fr))` }}
       >
         {options.map((o) => (
@@ -271,10 +276,10 @@ export function Segmented<T extends string | number>({
             aria-label={o.title}
             data-testid={testIdPrefix ? `${testIdPrefix}${o.value}` : undefined}
             onClick={() => onChange(o.value)}
-            className={`flex min-w-0 items-center justify-center gap-1 truncate rounded-md px-2 py-1.5 transition-colors ${
+            className={`flex min-w-0 items-center justify-center gap-1 truncate rounded-[7px] px-2 py-1 font-medium transition-colors ${
               value === o.value
-                ? 'bg-accent text-accent-fg shadow-sm'
-                : 'text-muted hover:bg-white/5 hover:text-text'
+                ? 'bg-surface text-text shadow-[0_1px_3px_rgba(0,0,0,0.25),0_0_0_0.5px_rgba(0,0,0,0.08)]'
+                : 'text-muted hover:text-text'
             }`}
           >
             {o.label}
@@ -288,9 +293,9 @@ export function Segmented<T extends string | number>({
 export const pct = (v: number) => `${Math.round(v * 100)}%`
 export const secs = (ms: number) => `${(ms / 1000).toFixed(1)}s`
 
-/** Nút phụ nhỏ (viền mảnh). */
+/** Nút phụ (nền nổi nhẹ, viền hairline — như nút "bezel" của macOS). */
 export const ghostButton =
-  'inline-flex items-center justify-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs text-text hover:bg-surface-2 disabled:opacity-40'
-/** Nút chính (màu nhấn). */
+  'inline-flex items-center justify-center gap-1.5 rounded-lg border border-border bg-surface-2/70 px-2.5 py-1.5 text-xs font-medium text-text shadow-sm transition-colors hover:bg-surface-2 active:brightness-95 disabled:opacity-40 disabled:shadow-none'
+/** Nút chính (màu nhấn, viên bo tròn). */
 export const primaryButton =
-  'inline-flex items-center justify-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg hover:brightness-110 disabled:opacity-40'
+  'inline-flex items-center justify-center gap-1.5 rounded-lg bg-accent px-3.5 py-1.5 text-sm font-semibold text-accent-fg shadow-sm transition-[filter,transform] hover:brightness-110 active:scale-[0.98] disabled:opacity-40'

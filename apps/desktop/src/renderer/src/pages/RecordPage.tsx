@@ -44,7 +44,7 @@ const KNOWN_ERRORS = ['region_requires_ffmpeg', 'region_outside_display', 'displ
 const card = 'rounded-xl border border-border bg-surface p-5'
 const select =
   'w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm outline-none focus:border-accent'
-const heading = 'mb-3 text-sm font-medium uppercase tracking-wide text-muted'
+const heading = 'mb-3 text-[13px] font-semibold text-text'
 
 function loadSources(): Promise<[CaptureSources, MediaDeviceInfo[]]> {
   return Promise.all([
@@ -412,7 +412,7 @@ export function RecordPage() {
             onClick={() => void start()}
             disabled={starting || !caps || !sources}
             data-testid="start-recording"
-            className="flex items-center gap-2 rounded-xl bg-accent px-6 py-3 font-medium text-accent-fg hover:opacity-90 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-full bg-accent px-6 py-3 font-semibold text-accent-fg shadow-lg shadow-accent/25 transition-[filter,transform] hover:brightness-110 active:scale-[0.98] disabled:opacity-50 disabled:shadow-none"
           >
             <Video size={18} aria-hidden />
             {starting ? t('record.starting') : t('record.start')}

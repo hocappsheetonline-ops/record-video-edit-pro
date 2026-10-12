@@ -67,6 +67,13 @@ export const IPC = {
   memesRemove: 'memes:remove',
   memesUse: 'memes:use',
   memesAddPaths: 'memes:add-paths',
+  musicList: 'music:list',
+  musicImport: 'music:import',
+  musicAddPaths: 'music:add-paths',
+  musicRemove: 'music:remove',
+  musicUse: 'music:use',
+  musicRecentDownloads: 'music:recent-downloads',
+  musicOpenYouTube: 'music:open-youtube',
   exportStart: 'export:start',
   exportWrite: 'export:write',
   exportFinish: 'export:finish',
@@ -102,6 +109,10 @@ export const IPC = {
   updateCheck: 'update:check',
   updateInstall: 'update:install',
   openLogs: 'app:open-logs',
+  windowMinimize: 'window:minimize',
+  windowToggleMaximize: 'window:toggle-maximize',
+  windowClose: 'window:close',
+  windowIsMaximized: 'window:is-maximized',
 } as const
 
 /** Sự kiện main process gửi xuống giao diện. */
@@ -114,6 +125,7 @@ export const EVENTS = {
   recordingCommand: 'recording:command',
   recordingFinished: 'recording:finished',
   recordingError: 'recording:error',
+  windowMaximized: 'window:maximized',
 } as const
 
 export interface AppInfo {
@@ -122,6 +134,8 @@ export interface AppInfo {
   platform: string
   /** false khi hệ điều hành không hỗ trợ mã hóa (khi đó không cho lưu API key). */
   encryptionAvailable: boolean
+  /** Cửa sổ không viền: giao diện tự vẽ nút đóng / thu nhỏ / phóng to (macOS dùng nút hệ thống). */
+  frameless: boolean
 }
 
 /** Trạng thái tự cập nhật (GitHub Releases). */
@@ -266,14 +280,31 @@ export interface AudioAsset {
   durationMs: number
 }
 
-/** Nguồn tìm trên kho online: meme Tenor, sticker Tenor, video / ảnh Pixabay. */
-export const ONLINE_SOURCES = ['tenor', 'tenorSticker', 'pixabayVideo', 'pixabayImage'] as const
+/** Một bài trong kho nhạc của người dùng (tải từ Thư viện âm thanh YouTube hoặc file trên máy). */
+export interface MusicTrack {
+  file: string
+  name: string
+  durationMs: number
+  addedAt: number
+  source: 'youtube' | 'file'
+}
+
+/** File nhạc vừa xuất hiện trong thư mục Tải về (sau khi tải từ Thư viện âm thanh YouTube). */
+export interface RecentDownload {
+  path: string
+  name: string
+  modifiedAt: number
+  bytes: number
+}
+
+/** Nguồn tìm trên kho online: video / ảnh Pixabay. */
+export const ONLINE_SOURCES = ['pixabayVideo', 'pixabayImage'] as const
 export type OnlineSource = (typeof ONLINE_SOURCES)[number]
 
 /** Một kết quả tìm kiếm trên kho online (URL đều là của máy chủ kho, không chứa key). */
 export interface OnlineItem {
   id: string
-  source: 'tenor' | 'pixabay'
+  source: 'pixabay'
   kind: 'gif' | 'video' | 'image' | 'sticker'
   title: string
   thumbUrl: string
@@ -305,7 +336,10 @@ export interface MediaAsset {
   hasAudio: boolean
 }
 
-/** Nguồn gốc của meme tải từ kho online (để không tải lại và ghi nguồn). */
+/**
+ * Nguồn gốc của mục tải từ kho online (để không tải lại và ghi nguồn). `tenor` chỉ còn ở các
+ * file đã tải trước khi Tenor ngừng hoạt động; không tải thêm được nữa.
+ */
 export interface MemeOrigin {
   source: 'tenor' | 'pixabay'
   id: string
@@ -328,6 +362,13 @@ export interface LumoraApi {
   onUpdateState(listener: (state: UpdateState) => void): Unsubscribe
   /** Mở thư mục nhật ký lỗi (gửi kèm khi báo lỗi). */
   openLogs(): Promise<void>
+  /** Cửa sổ không viền: điều khiển cửa sổ từ thanh tiêu đề tự vẽ. */
+  minimizeWindow(): Promise<void>
+  /** Phóng to / thu về; trả về trạng thái sau khi đổi. */
+  toggleMaximizeWindow(): Promise<boolean>
+  closeWindow(): Promise<void>
+  isWindowMaximized(): Promise<boolean>
+  onWindowMaximized(listener: (maximized: boolean) => void): Unsubscribe
   getSettings(): Promise<AppSettings>
   updateSettings(patch: Partial<AppSettings>): Promise<AppSettings>
   getSecretsStatus(): Promise<SecretsStatus>
@@ -397,6 +438,17 @@ export interface LumoraApi {
   pathForFile(file: File): string
   removeMeme(file: string): Promise<MemeItem[]>
   useMeme(folder: string, file: string): Promise<MediaAsset>
+  /** Kho nhạc: liệt kê, chọn file nhạc trên máy, thêm file kéo thả / vừa tải về, xóa. */
+  listMusic(): Promise<MusicTrack[]>
+  importMusic(): Promise<MusicTrack[]>
+  addMusicPaths(paths: string[], source: MusicTrack['source']): Promise<MusicTrack[]>
+  removeMusic(file: string): Promise<MusicTrack[]>
+  /** Chép một bài trong kho vào dự án. */
+  useMusic(folder: string, file: string): Promise<AudioAsset>
+  /** File nhạc mới trong thư mục Tải về (để thêm bài vừa tải từ Thư viện âm thanh YouTube). */
+  recentAudioDownloads(): Promise<RecentDownload[]>
+  /** Mở Thư viện âm thanh YouTube (YouTube Studio) trong trình duyệt. */
+  openYouTubeAudioLibrary(): Promise<void>
   startExport(folder: string): Promise<string>
   writeExport(id: string, position: number, data: ArrayBuffer): Promise<void>
   finishExport(id: string, folder: string, edit: EditState): Promise<ExportResult>
@@ -435,10 +487,10 @@ export interface LumoraApi {
     voiceId: string,
     options?: { speed?: number; stability?: number },
   ): Promise<AudioAsset>
-  /** Tìm trên kho online (Tenor, Pixabay). */
+  /** Tìm trên kho online (Pixabay). */
   onlineSearch(source: OnlineSource, q: string, next: string | null): Promise<OnlineSearch>
   /** Tải một kết quả vừa tìm được vào thư viện meme. */
-  onlineDownload(source: 'tenor' | 'pixabay', id: string): Promise<MemeItem>
+  onlineDownload(source: 'pixabay', id: string): Promise<MemeItem>
   /** Dung lượng bộ nhớ đệm (byte). */
   cacheInfo(): Promise<number>
   cacheClear(): Promise<number>

@@ -92,22 +92,21 @@ function loudness(file: string, from: number, len: number) {
   return Number(/mean_volume: (-?[\d.]+) dB/.exec(stderr)?.[1] ?? -100)
 }
 
-test('kho meme online + giọng đọc AI: nhập key, tìm, tải meme Tenor và video Pixabay, đọc câu meme, xuất có hình và tiếng', async () => {
+test('kho video online + giọng đọc AI: nhập key, tìm, tải video Pixabay, đọc câu meme, xuất có hình và tiếng', async () => {
   const { app, page, errors } = await launchApp(dirs.userData, {
     env: {
-      LUMORA_TENOR_BASE_URL: content.url,
       LUMORA_PIXABAY_BASE_URL: content.url,
       LUMORA_ELEVENLABS_BASE_URL: ai.url,
     },
   })
 
-  // Key sai bị báo ngay khi kiểm tra; key đúng thì lưu được.
+  // Key sai bị báo ngay khi kiểm tra; key đúng thì lưu được. Tenor đã ngừng: không còn thẻ key.
   await page.getByTestId('nav-settings').click()
-  const tenorCard = page.getByTestId('key-card-tenor')
-  await tenorCard.getByLabel('Tenor (Google)').fill('AIzaWrongKey0123456789abcd')
-  await tenorCard.getByRole('button', { name: 'Kiểm tra' }).click()
-  await expect(page.getByTestId('key-feedback-tenor')).not.toHaveText('Key hợp lệ')
-  await saveKey(page, 'tenor', 'Tenor (Google)', 'AIzaMockTenorKey0123456789')
+  await expect(page.getByTestId('key-card-tenor')).toHaveCount(0)
+  const pixabayCard = page.getByTestId('key-card-pixabay')
+  await pixabayCard.getByLabel('Pixabay').fill('wrong-pixabay-key-0123456789')
+  await pixabayCard.getByRole('button', { name: 'Kiểm tra' }).click()
+  await expect(page.getByTestId('key-feedback-pixabay')).not.toHaveText('Key hợp lệ')
   await saveKey(page, 'pixabay', 'Pixabay', 'mock-pixabay-key-0123456789')
   await saveKey(page, 'elevenlabs', 'ElevenLabs', 'el_test_key_0123456789abcdef')
   await expect(page.getByTestId('cache-card')).toBeVisible()
@@ -117,10 +116,11 @@ test('kho meme online + giọng đọc AI: nhập key, tìm, tải meme Tenor v�
   await page.getByTestId('open-editor').click()
   await expect(page.getByTestId('editor')).toBeVisible()
 
-  // Meme Tenor: danh sách nổi bật hiện ngay, ảnh thu nhỏ tải được (CSP cho phép), tìm từ khóa.
-  await page.getByTestId('media-source-tenor').click()
-  await expect(page.getByTestId('online-item')).toHaveCount(3)
-  await expect(page.getByTestId('online-attribution')).toHaveText('Powered by Tenor')
+  // Video Pixabay: danh sách hiện ngay, ảnh thu nhỏ tải được (CSP cho phép), tìm từ khóa.
+  await expect(page.getByTestId('media-source-tenor')).toHaveCount(0)
+  await page.getByTestId('media-source-pixabayVideo').click()
+  await expect(page.getByTestId('online-item')).toHaveCount(2)
+  await expect(page.getByTestId('online-attribution')).toHaveText('Video từ Pixabay')
   await expect
     .poll(() =>
       page
@@ -134,9 +134,9 @@ test('kho meme online + giọng đọc AI: nhập key, tìm, tải meme Tenor v�
   await page.getByTestId('online-search').press('Enter')
   await expect(page.getByTestId('online-item').first()).toHaveAttribute('aria-label', 'bruh 1')
   await page.getByTestId('online-more').click()
-  await expect(page.getByTestId('online-item')).toHaveCount(6)
+  await expect(page.getByTestId('online-item')).toHaveCount(4)
 
-  // Tải meme tại giây 1 → lớp video có tiếng, phủ kín khung.
+  // Tải video tại giây 1 → lớp video có tiếng, phủ kín khung.
   await page.getByTestId('editor-canvas').click({ position: { x: 10, y: 10 } })
   await page.keyboard.press('ArrowRight')
   await page.getByTestId('online-item').first().click()
@@ -148,9 +148,9 @@ test('kho meme online + giọng đọc AI: nhập key, tìm, tải meme Tenor v�
   await expect(page.getByTestId('meme-item')).toHaveCount(1)
   await expect(page.getByTestId('meme-item')).toContainText('bruh 1')
 
-  // Video Pixabay: tải được (vào thư viện), chưa thêm vào video.
-  await page.getByTestId('media-source-pixabayVideo').click()
-  await expect(page.getByTestId('online-attribution')).toHaveText('Video từ Pixabay')
+  // Ảnh Pixabay: tìm được, chưa thêm vào video.
+  await page.getByTestId('media-source-pixabayImage').click()
+  await expect(page.getByTestId('online-attribution')).toHaveText('Ảnh từ Pixabay')
   await expect(page.getByTestId('online-item')).toHaveCount(2)
 
   // Âm thanh meme: tắt micro, đọc "Bruh" bằng giọng AI tại giây 3.

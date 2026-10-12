@@ -147,17 +147,40 @@ describe('Thông báo cập nhật', () => {
   })
 })
 
+describe('Thanh tiêu đề cửa sổ không viền', () => {
+  it('nút đèn giao thông gọi đúng lệnh cửa sổ; bấm đúp để phóng to', async () => {
+    const api = createFakeApi()
+    await renderApp(api)
+    const bar = await screen.findByTestId('title-bar')
+    await userEvent.click(screen.getByTestId('window-minimize'))
+    expect(api.minimizeWindow).toHaveBeenCalled()
+    await userEvent.click(screen.getByTestId('window-maximize'))
+    expect(api.toggleMaximizeWindow).toHaveBeenCalledTimes(1)
+    await waitFor(() =>
+      expect(screen.getByTestId('window-maximize')).toHaveAttribute('aria-label', 'Thu về'),
+    )
+    await userEvent.dblClick(bar)
+    expect(api.toggleMaximizeWindow).toHaveBeenCalledTimes(2)
+    await userEvent.click(screen.getByTestId('window-close'))
+    expect(api.closeWindow).toHaveBeenCalled()
+  })
+})
+
 describe('Màu chủ đạo', () => {
   it('mặc định xanh dương; chọn màu khác thì cả app đổi theo', async () => {
     await renderApp(createFakeApi())
     await waitFor(() =>
-      expect(document.documentElement.style.getPropertyValue('--lm-accent')).toBe('#2563eb'),
+      expect(document.documentElement.style.getPropertyValue('--lm-accent')).toBe('#0a84ff'),
     )
     await userEvent.click(screen.getByTestId('nav-settings'))
-    await userEvent.click(screen.getByTestId('accent-#14b8a6'))
+    await userEvent.click(screen.getByTestId('accent-#30d158'))
     await waitFor(() =>
-      expect(document.documentElement.style.getPropertyValue('--lm-accent')).toBe('#14b8a6'),
+      expect(document.documentElement.style.getPropertyValue('--lm-accent')).toBe('#30d158'),
     )
-    expect(screen.getByTestId('accent-#14b8a6')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('accent-#30d158')).toHaveAttribute('aria-pressed', 'true')
+    // Giảm trong suốt: tắt kính mờ trên toàn app.
+    expect(document.documentElement.dataset.glass).toBe('on')
+    await userEvent.click(screen.getByTestId('settings-reduce-transparency'))
+    await waitFor(() => expect(document.documentElement.dataset.glass).toBe('off'))
   })
 })

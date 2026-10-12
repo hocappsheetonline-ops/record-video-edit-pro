@@ -30,7 +30,7 @@ export function JobsButton() {
         data-tooltip={t('editor.jobs.title')}
         aria-expanded={open}
         onClick={() => setOpen(!open)}
-        className="flex h-8 items-center gap-1.5 rounded-md px-2 text-xs text-muted hover:bg-surface-2 hover:text-text"
+        className="flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs text-muted transition-colors hover:bg-text/8 hover:text-text"
       >
         {running.length > 0 ? (
           <Loader2 size={15} className="animate-spin text-accent" aria-hidden />
@@ -48,12 +48,10 @@ export function JobsButton() {
           role="dialog"
           aria-label={t('editor.jobs.title')}
           data-testid="jobs-panel"
-          className="absolute right-0 top-full z-50 mt-1 flex w-80 flex-col overflow-hidden rounded-lg border border-border bg-surface shadow-2xl"
+          className="glass-strong absolute right-0 top-full z-50 mt-1.5 flex w-80 flex-col overflow-hidden rounded-xl border shadow-2xl"
         >
           <div className="flex items-center justify-between border-b border-border px-3 py-2">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted">
-              {t('editor.jobs.title')}
-            </span>
+            <span className="text-[11px] font-semibold text-muted">{t('editor.jobs.title')}</span>
             {jobs.some((j) => j.status !== 'running') && (
               <button
                 type="button"
@@ -133,7 +131,7 @@ export function ToastLayer() {
             role={toast.kind === 'error' ? 'alert' : 'status'}
             data-testid="toast"
             data-kind={toast.kind}
-            className="pointer-events-auto flex items-start gap-2 rounded-lg border border-border bg-surface px-3 py-2.5 text-sm shadow-2xl"
+            className="glass-strong pointer-events-auto flex items-start gap-2 rounded-xl border px-3.5 py-3 text-sm shadow-2xl"
           >
             <Icon
               size={16}

@@ -50,11 +50,10 @@ describe('isSecretKey', () => {
 })
 
 describe('key kho nội dung', () => {
-  it('Tenor là key Google Cloud (AIza…), Pixabay chỉ kiểm tra độ dài', () => {
-    expect(isSecretKey('tenor')).toBe(true)
+  it('Pixabay chỉ kiểm tra độ dài; Tenor đã ngừng hoạt động nên không còn là key', () => {
     expect(isSecretKey('pixabay')).toBe(true)
-    expect(checkKeyFormat('tenor', 'x'.repeat(39))).toBe('wrong_prefix')
-    expect(checkKeyFormat('tenor', `AIza${'x'.repeat(35)}`)).toBeNull()
+    expect(isSecretKey('tenor')).toBe(false)
     expect(checkKeyFormat('pixabay', '12345678-abcdef0123456789abcdef01')).toBeNull()
+    expect(checkKeyFormat('pixabay', 'short')).toBe('too_short')
   })
 })

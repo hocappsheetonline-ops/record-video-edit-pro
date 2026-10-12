@@ -1,4 +1,10 @@
 export const vi = {
+  window: {
+    close: 'Đóng',
+    minimize: 'Thu nhỏ',
+    maximize: 'Phóng to',
+    restore: 'Thu về',
+  },
   nav: {
     record: 'Quay',
     projects: 'Dự án',
@@ -145,7 +151,9 @@ export const vi = {
       merging: 'Đang ghép…',
       mergeEmpty: 'Chưa có bản quay nào khác.',
       mergeFailed: 'Không ghép được bản quay này.',
-      importVideo: 'Nhập video làm clip chính',
+      importVideo: 'Nhập video',
+      importVideoHint:
+        'Chọn video trên máy để chỉnh sửa: video được nối vào hàng Video làm clip chính',
       importingVideo: 'Đang nhập video…',
       importNoVideo: 'File này không có hình video.',
       importTooLong: 'Video dài quá 2 giờ.',
@@ -154,19 +162,15 @@ export const vi = {
       clear: 'Xóa',
       sources: {
         mine: 'Của tôi',
-        tenor: 'Meme',
         pixabayVideo: 'Video',
         pixabayImage: 'Ảnh',
         emoji: 'Emoji',
         shapes: 'Hình vẽ',
-        tenorSticker: 'Sticker động',
       },
-      noKey: { tenor: 'Cần key Tenor để tìm meme', pixabay: 'Cần key Pixabay để tìm video, ảnh' },
+      noKey: { pixabay: 'Cần key Pixabay để tìm video, ảnh' },
       noKeyText: 'Key miễn phí, nhập một lần trong Cài đặt → API key.',
       openSettings: 'Mở Cài đặt',
       searchPlaceholder: {
-        tenor: 'Tìm meme (bruh, mèo, green screen…)',
-        tenorSticker: 'Tìm sticker động',
         pixabayVideo: 'Tìm video miễn phí',
         pixabayImage: 'Tìm ảnh miễn phí',
       },
@@ -180,6 +184,7 @@ export const vi = {
         sfx: 'Hiệu ứng',
         meme: 'Meme',
         music: 'Nhạc',
+        youtube: 'YouTube',
         voice: 'Lồng tiếng',
         script: 'Kịch bản',
       },
@@ -209,7 +214,7 @@ export const vi = {
       scriptHint:
         'Các câu được đặt nối tiếp nhau từ đầu phát trên hàng Âm thanh. Bấm Hoàn tác để bỏ cả kịch bản.',
       tabs: {
-        media: 'Meme',
+        media: 'Phương tiện',
         audio: 'Âm thanh',
         text: 'Văn bản',
         stickers: 'Nhãn dán',
@@ -219,17 +224,18 @@ export const vi = {
         captions: 'Phụ đề',
         ai: 'AI',
       },
-      import: 'Nhập video / ảnh meme',
+      import: 'Nhập ảnh',
+      importHint: 'Thêm ảnh, GIF (hoặc video ngắn làm lớp phủ) vào thư viện của tôi',
       processing: 'Đang xử lý…',
-      addToProject: 'Thêm video / ảnh từ máy vào riêng dự án này',
+      addToProject: 'Thêm ảnh / video từ máy vào riêng dự án này (không lưu vào thư viện)',
       filters: { all: 'Tất cả', video: 'Video', image: 'Ảnh & GIF' },
-      emptyTitle: 'Thư viện meme của bạn',
+      emptyTitle: 'Thư viện của bạn',
       empty:
-        'Kéo thả video meme (MP4, MOV, WEBM…) hoặc ảnh / GIF vào đây. Thêm một lần, dùng lại ở mọi dự án.',
+        'Kéo thả ảnh / GIF hoặc video ngắn (MP4, MOV, WEBM…) vào đây. Thêm một lần, dùng lại ở mọi dự án. Bấm một mục để đặt lên video tại đầu phát.',
       clickToAdd: 'Bấm để thêm vào đầu phát',
       remove: 'Xóa khỏi thư viện',
-      tips: 'Mẹo: video meme phông xanh → chọn "Xóa phông" ở bảng bên phải. Lumora không kèm sẵn meme có bản quyền; hãy dùng video bạn có quyền sử dụng.',
-      drop: 'Thả để thêm vào thư viện meme',
+      tips: 'Mẹo: video phông xanh → chọn "Xóa phông" ở bảng bên phải. Lumora không kèm sẵn nội dung có bản quyền; hãy dùng ảnh / video bạn có quyền sử dụng.',
+      drop: 'Thả để thêm vào thư viện',
       defaultText: 'Nhập chữ',
       addText: 'Thêm chữ',
       sample: 'Chữ mẫu',
@@ -447,6 +453,29 @@ export const vi = {
       layouts: { bubble: 'Bong bóng nổi', stack: 'Chia đôi khung' },
       split: 'Chiều cao dải webcam',
       stackPosition: { top: 'Ở trên', bottom: 'Ở dưới' },
+    },
+    youtube: {
+      open: 'Mở Thư viện âm thanh YouTube',
+      step1:
+        '1. Trang Thư viện âm thanh (YouTube Studio) mở trong trình duyệt: tìm bài theo thể loại, tâm trạng.',
+      step2: '2. Bấm Tải về ở bài muốn dùng. File vào thư mục Tải về của máy.',
+      step3:
+        '3. Bài vừa tải hiện ở mục bên dưới: bấm Thêm để đưa vào kho nhạc và đặt lên timeline tại đầu phát.',
+      recent: 'Vừa tải về',
+      recentEmpty: 'Chưa thấy file nhạc mới trong thư mục Tải về. Tải một bài rồi quay lại đây.',
+      add: 'Thêm',
+      added: 'Đã thêm',
+      library: 'Kho nhạc của tôi',
+      import: 'Thêm file',
+      importHint: 'Chọn file nhạc trên máy (MP3, WAV, M4A…) để đưa vào kho nhạc',
+      search: 'Tìm trong kho nhạc',
+      libraryEmptyTitle: 'Kho nhạc trống',
+      libraryEmpty:
+        'Nhạc tải từ Thư viện âm thanh YouTube hoặc file trên máy sẽ nằm ở đây, dùng lại ở mọi dự án. Bấm một bài để đặt làm nhạc nền.',
+      remove: 'Xóa khỏi kho nhạc',
+      drop: 'Thả file nhạc để thêm vào kho',
+      attribution:
+        'Nhạc trong Thư viện âm thanh YouTube miễn phí bản quyền cho video của bạn; một số bài yêu cầu ghi công tác giả trong mô tả (xem ở trang bài hát).',
     },
     music: {
       add: 'Thêm nhạc từ máy',
@@ -766,7 +795,7 @@ export const vi = {
       done: 'Bắt đầu',
       library: {
         title: 'Thư viện',
-        text: 'Meme, âm thanh, chữ, nhãn dán, hiệu ứng, bộ lọc, phụ đề và AI. Bấm để thêm tại đầu phát, hoặc kéo thả vào timeline.',
+        text: 'Phương tiện (nhập video, ảnh), âm thanh, chữ, nhãn dán, hiệu ứng, bộ lọc, phụ đề và AI. Bấm để thêm tại đầu phát, hoặc kéo thả vào timeline.',
       },
       preview: {
         title: 'Khung xem trước',
@@ -992,6 +1021,34 @@ export const vi = {
   },
   ai: {
     working: 'Đang xử lý…',
+    auto: {
+      title: 'AI tự biên tập',
+      intro:
+        'Một bấm: AI cắt khoảng lặng và từ thừa, tự zoom theo chuột, thêm phụ đề, làm sạch âm thanh và tiêu đề mở đầu. Hoàn tác một lần để quay lại.',
+      run: 'Tự biên tập ({{count}} bước)',
+      job: 'AI tự biên tập',
+      done: 'AI đã biên tập xong. Hoàn tác (Ctrl+Z) để quay lại bản trước.',
+      steps: {
+        silences: 'Cắt khoảng lặng',
+        fillers: 'Bỏ từ thừa, câu lặp',
+        zooms: 'Tự zoom theo chuột',
+        captions: 'Thêm phụ đề',
+        audio: 'Làm sạch âm thanh',
+        title: 'Tiêu đề mở đầu',
+      },
+      status: {
+        done: 'xong ({{n}})',
+        skipped: 'bỏ qua: {{reason}}',
+        error: 'lỗi: {{message}}',
+      },
+      reasons: {
+        no_transcript: 'chưa có lời thoại',
+        missing_key: 'thiếu API key (Cài đặt)',
+        no_audio: 'bản quay không có âm thanh',
+        no_cursor: 'không có dữ liệu chuột',
+        no_title: 'AI không đề xuất tiêu đề',
+      },
+    },
     kinds: { filler: 'Từ đệm', repeat: 'Nói lặp', silence: 'Khoảng lặng', other: 'Khác' },
     cuts: {
       title: 'Cắt từ thừa và khoảng lặng',
@@ -1144,6 +1201,9 @@ export const vi = {
     },
     onboardingHint: 'Xem lại phần giới thiệu nhanh lần sau khi mở trình chỉnh sửa.',
     onboardingReplay: 'Xem lại hướng dẫn',
+    reduceTransparency: 'Giảm trong suốt',
+    reduceTransparencyHint:
+      'Thanh công cụ, menu và hộp thoại dùng màu đặc thay vì kính mờ (nhẹ hơn cho máy yếu).',
     title: 'Cài đặt',
     general: 'Chung',
     language: 'Ngôn ngữ',
@@ -1153,10 +1213,11 @@ export const vi = {
     themes: { system: 'Theo hệ thống', dark: 'Tối', light: 'Sáng' },
     apiKeys: 'API key',
     apiKeysHint:
-      'Key được mã hóa và chỉ lưu trên máy này. Lumora dùng key để tạo phụ đề, giọng đọc AI, tự biên tập video và tìm meme / video miễn phí.',
+      'Key được mã hóa và chỉ lưu trên máy này. Lumora dùng key để tạo phụ đề, giọng đọc AI, tự biên tập video và tìm video / ảnh miễn phí.',
     storage: 'Bộ nhớ',
     cache: 'Bộ nhớ đệm',
-    cacheHint: 'File tải tạm và giọng đọc AI đã lưu. Xóa không ảnh hưởng dự án và thư viện meme.',
+    cacheHint:
+      'File tải tạm và giọng đọc AI đã lưu. Xóa không ảnh hưởng dự án và thư viện của bạn.',
     cacheClear: 'Xóa',
     encryptionUnavailable: 'Máy này không hỗ trợ mã hóa nên không thể lưu API key an toàn.',
     about: 'Thông tin',
@@ -1177,10 +1238,6 @@ export const vi = {
   keys: {
     elevenlabs: { name: 'ElevenLabs', purpose: 'Chuyển giọng nói thành phụ đề' },
     anthropic: { name: 'Claude (Anthropic)', purpose: 'AI tự biên tập, tạo tiêu đề và chương' },
-    tenor: {
-      name: 'Tenor (Google)',
-      purpose: 'Tìm meme GIF / video và sticker ngay trong thư viện. Key miễn phí từ Google Cloud.',
-    },
     pixabay: {
       name: 'Pixabay',
       purpose: 'Video và ảnh miễn phí (không cần ghi nguồn). Key miễn phí khi đăng ký tài khoản.',

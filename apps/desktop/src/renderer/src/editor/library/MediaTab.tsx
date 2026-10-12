@@ -4,10 +4,10 @@ import {
   Clapperboard,
   Combine,
   Film,
+  FolderPlus,
   ImagePlus,
   Loader2,
   Plus,
-  Upload,
   Volume2,
   X,
 } from 'lucide-react'
@@ -20,7 +20,7 @@ import { ghostButton, primaryButton, Segmented } from '../ui'
 import { EmptyState, ErrorNote, formatDuration, useErrorText } from './common'
 import { OnlineGrid } from './OnlineGrid'
 
-/** Thư viện video / ảnh / GIF meme của riêng bạn (kéo thả để thêm). */
+/** Thư viện ảnh / GIF / video ngắn của riêng bạn (kéo thả để thêm), dùng làm lớp phủ. */
 function MyLibrary() {
   const { t } = useTranslation()
   const folder = useEditorStore((s) => s.folder)
@@ -87,13 +87,14 @@ function MyLibrary() {
           type="button"
           data-testid="meme-import"
           disabled={busy}
-          className={`${primaryButton} flex-1`}
+          data-tooltip={t('editor.library.importHint')}
+          className={`${ghostButton} flex-1`}
           onClick={() => void run(async () => setMemes(await lumora().importMemes()))}
         >
           {busy ? (
             <Loader2 size={15} className="animate-spin" aria-hidden />
           ) : (
-            <Upload size={15} aria-hidden />
+            <ImagePlus size={15} aria-hidden />
           )}
           {busy ? t('editor.library.processing') : t('editor.library.import')}
         </button>
@@ -112,7 +113,7 @@ function MyLibrary() {
             })
           }
         >
-          <ImagePlus size={15} aria-hidden />
+          <FolderPlus size={15} aria-hidden />
         </button>
       </div>
       <Segmented
@@ -191,16 +192,19 @@ function MyLibrary() {
   )
 }
 
-type MediaSource = 'mine' | Extract<OnlineSource, 'tenor' | 'pixabayVideo' | 'pixabayImage'>
+type MediaSource = 'mine' | OnlineSource
 
-/** Thêm meme đã có trong thư viện của tôi vào video tại đầu phát. */
+/** Thêm mục đã có trong thư viện của tôi vào video tại đầu phát. */
 export async function addLibraryItem(meme: MemeItem) {
   const folder = useEditorStore.getState().folder
   if (!folder) return
   useEditorStore.getState().addMediaOverlay(await lumora().useMeme(folder, meme.file))
 }
 
-/** Nhập video từ máy làm clip chính (nối vào cuối video, như ghép clip trong CapCut). */
+/**
+ * Nhập video từ máy để chỉnh sửa (như nút Nhập của CapCut): video được chuẩn hóa rồi nối vào
+ * hàng Video làm clip chính — cắt, tách, đổi tốc độ, lọc màu như bản quay.
+ */
 function ImportVideoButton() {
   const { t } = useTranslation()
   const [busy, setBusy] = useState(false)
@@ -232,13 +236,14 @@ function ImportVideoButton() {
         type="button"
         data-testid="import-video"
         disabled={busy}
+        data-tooltip={t('editor.library.importVideoHint')}
         onClick={() => void run()}
-        className={ghostButton}
+        className={`${primaryButton} w-full`}
       >
         {busy ? (
-          <Loader2 size={14} className="animate-spin" aria-hidden />
+          <Loader2 size={15} className="animate-spin" aria-hidden />
         ) : (
-          <Film size={14} aria-hidden />
+          <Film size={15} aria-hidden />
         )}
         {busy ? t('editor.library.importingVideo') : t('editor.library.importVideo')}
       </button>
@@ -326,7 +331,10 @@ function MergeProjectButton() {
   )
 }
 
-/** Mục Meme: thư viện của tôi, kho meme Tenor, video / ảnh miễn phí Pixabay. */
+/**
+ * Mục Phương tiện (kiểu CapCut): nhập video để chỉnh sửa, ghép bản quay khác, thư viện ảnh /
+ * video ngắn của tôi, và video / ảnh miễn phí Pixabay.
+ */
 export function MediaTab() {
   const { t } = useTranslation()
   const [source, setSource] = useState<MediaSource>('mine')
@@ -337,7 +345,7 @@ export function MediaTab() {
         <MergeProjectButton />
       </div>
       <Segmented
-        options={(['mine', 'tenor', 'pixabayVideo', 'pixabayImage'] as const).map((s) => ({
+        options={(['mine', 'pixabayVideo', 'pixabayImage'] as const).map((s) => ({
           value: s,
           label: t(`editor.library.sources.${s}`),
         }))}

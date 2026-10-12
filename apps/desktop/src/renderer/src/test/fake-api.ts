@@ -9,6 +9,7 @@ import {
   SECRET_KEYS,
 } from '@lumora/core'
 import type {
+  MusicTrack,
   CaptureSources,
   LiveConfig,
   LiveEnded,
@@ -108,6 +109,8 @@ export function createFakeApi(
   options: { encryptionAvailable?: boolean; screenEngine?: 'ffmpeg' | 'browser' } = {},
 ) {
   let settings: AppSettings = { ...DEFAULT_SETTINGS }
+  let maximized = false
+  let music: MusicTrack[] = []
   const secrets: Partial<Record<SecretKey, string>> = {}
   let projects = [sampleSummary]
   const commandListeners = new Set<(c: RecordingCommand) => void>()
@@ -146,7 +149,16 @@ export function createFakeApi(
       version: '0.1.0',
       platform: 'win32',
       encryptionAvailable: options.encryptionAvailable ?? true,
+      frameless: true,
     }),
+    minimizeWindow: vi.fn<LumoraApi['minimizeWindow']>(async () => {}),
+    toggleMaximizeWindow: vi.fn<LumoraApi['toggleMaximizeWindow']>(async () => {
+      maximized = !maximized
+      return maximized
+    }),
+    closeWindow: vi.fn<LumoraApi['closeWindow']>(async () => {}),
+    isWindowMaximized: vi.fn<LumoraApi['isWindowMaximized']>(async () => maximized),
+    onWindowMaximized: vi.fn<LumoraApi['onWindowMaximized']>(() => () => {}),
     getUpdateState: vi.fn<LumoraApi['getUpdateState']>(async () => ({ state: 'idle' })),
     checkForUpdates: vi.fn<LumoraApi['checkForUpdates']>(async () => ({ state: 'none' })),
     installUpdate: vi.fn<LumoraApi['installUpdate']>(async () => {}),
@@ -263,6 +275,37 @@ export function createFakeApi(
       },
     ]),
     importMemes: vi.fn<LumoraApi['importMemes']>(async () => []),
+    listMusic: vi.fn<LumoraApi['listMusic']>(async () => music),
+    importMusic: vi.fn<LumoraApi['importMusic']>(async () => music),
+    addMusicPaths: vi.fn<LumoraApi['addMusicPaths']>(async (paths, source) => {
+      for (const p of paths)
+        music.unshift({
+          file: `music-${music.length + 1}.mp3`,
+          name: p.replace(/^.*[\\/]/, '').replace(/\.[^.]+$/, ''),
+          durationMs: 30_000,
+          addedAt: music.length + 1,
+          source,
+        })
+      return [...music]
+    }),
+    removeMusic: vi.fn<LumoraApi['removeMusic']>(async (file) => {
+      music = music.filter((m) => m.file !== file)
+      return [...music]
+    }),
+    useMusic: vi.fn<LumoraApi['useMusic']>(async (_folder, file) => {
+      const track = music.find((m) => m.file === file)
+      if (!track) throw new Error('music_missing')
+      return { file: `asset-${file}`, name: track.name, durationMs: track.durationMs }
+    }),
+    recentAudioDownloads: vi.fn<LumoraApi['recentAudioDownloads']>(async () => [
+      {
+        path: 'C:\\Users\\me\\Downloads\\Sunny Day.mp3',
+        name: 'Sunny Day',
+        modifiedAt: 1,
+        bytes: 3_000_000,
+      },
+    ]),
+    openYouTubeAudioLibrary: vi.fn<LumoraApi['openYouTubeAudioLibrary']>(async () => {}),
     addMemePaths: vi.fn<LumoraApi['addMemePaths']>(async () => []),
     pathForFile: vi.fn<LumoraApi['pathForFile']>((file) => `C:/drop/${file.name}`),
     removeMeme: vi.fn<LumoraApi['removeMeme']>(async () => []),
@@ -349,13 +392,8 @@ export function createFakeApi(
     onlineSearch: vi.fn<LumoraApi['onlineSearch']>(async (source, q, next) => ({
       items: Array.from({ length: next ? 1 : 2 }, (_, i) => ({
         id: `${next ? 'p2-' : ''}${i}`,
-        source: source.startsWith('tenor') ? ('tenor' as const) : ('pixabay' as const),
-        kind:
-          source === 'tenorSticker'
-            ? ('sticker' as const)
-            : source === 'pixabayImage'
-              ? ('image' as const)
-              : ('video' as const),
+        source: 'pixabay' as const,
+        kind: source === 'pixabayImage' ? ('image' as const) : ('video' as const),
         title: `${q || 'hot'} ${i + 1}`,
         thumbUrl: `https://media.example/${i}.gif`,
         previewUrl: `https://media.example/${i}.mp4`,
@@ -365,7 +403,7 @@ export function createFakeApi(
         durationMs: 2000,
       })),
       next: next ? null : '2',
-      attribution: source.startsWith('tenor') ? 'Powered by Tenor' : 'Video từ Pixabay',
+      attribution: source === 'pixabayImage' ? 'Ảnh từ Pixabay' : 'Video từ Pixabay',
     })),
     onlineDownload: vi.fn<LumoraApi['onlineDownload']>(async (source, id) => ({
       file: `meme-dl-${id}.mp4`,

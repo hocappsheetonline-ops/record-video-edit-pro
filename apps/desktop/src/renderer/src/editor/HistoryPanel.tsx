@@ -72,7 +72,7 @@ export function HistoryButton({ className }: { className: string }) {
           data-testid="history-panel"
           className="absolute left-0 top-full z-50 mt-1 flex max-h-80 w-64 flex-col overflow-hidden rounded-lg border border-border bg-surface shadow-2xl"
         >
-          <div className="border-b border-border px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted">
+          <div className="border-b border-border px-3 py-2 text-[11px] font-semibold text-muted">
             {t('editor.history.title')}
           </div>
           <ol className="min-h-0 flex-1 overflow-y-auto py-1">

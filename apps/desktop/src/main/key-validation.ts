@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { anthropicBaseUrl, elevenLabsBaseUrl } from './ai/endpoints'
-import { pixabayBaseUrl, tenorBaseUrl } from './content/endpoints'
+import { pixabayBaseUrl } from './content/endpoints'
 import { checkKeyFormat, type KeyValidationResult, type SecretKey } from '@lumora/core'
 
 const TIMEOUT_MS = 15_000
@@ -67,12 +67,6 @@ async function probe(url: string, fetchImpl: FetchLike): Promise<KeyValidationRe
   return { ok: false, reason: 'unknown', message: `HTTP ${response.status}` }
 }
 
-/** Kiểm tra key Tenor (Google Cloud) bằng một lần lấy danh sách nổi bật, 1 kết quả. */
-export function validateTenorKey(apiKey: string, fetchImpl: FetchLike = fetch) {
-  const params = new URLSearchParams({ key: apiKey, client_key: 'lumora', limit: '1' })
-  return probe(`${tenorBaseUrl()}/v2/featured?${params}`, fetchImpl)
-}
-
 /** Kiểm tra key Pixabay bằng một lần tìm ảnh, 3 kết quả (mức tối thiểu của API). */
 export function validatePixabayKey(apiKey: string, fetchImpl: FetchLike = fetch) {
   const params = new URLSearchParams({ key: apiKey, q: 'meme', per_page: '3' })
@@ -84,7 +78,6 @@ export type Validators = Record<SecretKey, (apiKey: string) => Promise<KeyValida
 export const defaultValidators: Validators = {
   elevenlabs: (apiKey) => validateElevenLabsKey(apiKey),
   anthropic: (apiKey) => validateAnthropicKey(apiKey),
-  tenor: (apiKey) => validateTenorKey(apiKey),
   pixabay: (apiKey) => validatePixabayKey(apiKey),
 }
 

@@ -221,14 +221,17 @@ test('timeline hiện dạng sóng âm thanh của bản quay trong clip video',
   await openEditor(page)
   const wave = page.getByTestId('clip-waveform')
   await expect(wave).toHaveCount(1, { timeout: 30_000 })
-  // Bản mẫu có micro (sine 440 Hz) suốt 4 giây: mọi cột đều có độ cao đáng kể.
-  const heights = await wave
-    .locator('path')
-    .evaluate((p) =>
-      [...(p.getAttribute('d') ?? '').matchAll(/v([\d.]+)/g)].map((m) => Number(m[1])),
+  // Bản mẫu có micro (sine 440 Hz) suốt 4 giây: mọi điểm trên đường bao đều cao đáng kể.
+  // Sóng kiểu CapCut là một vùng tô liền: đường bao trên đi từ y = 50 lên (nửa đầu các điểm).
+  const heights = await wave.locator('path').evaluate((p) => {
+    const ys = [...(p.getAttribute('d') ?? '').matchAll(/L[\d.]+ ([\d.]+)/g)].map((m) =>
+      Number(m[1]),
     )
+    const n = Number(p.parentElement?.getAttribute('data-bars') ?? 0)
+    return ys.slice(0, n).map((y) => 50 - y)
+  })
   expect(heights.length).toBeGreaterThan(50)
-  expect(heights.filter((h) => h > 35).length / heights.length).toBeGreaterThan(0.8)
+  expect(heights.filter((h) => h > 17).length / heights.length).toBeGreaterThan(0.8)
   expect(JSON.parse(readFileSync(join(projectDir, 'waveform.json'), 'utf8')).bucketMs).toBe(20)
   // Dải ảnh thu nhỏ kiểu CapCut ở trên, sóng âm ở dưới.
   await expect(page.getByTestId('filmstrip-tile').first()).toBeVisible({ timeout: 30_000 })

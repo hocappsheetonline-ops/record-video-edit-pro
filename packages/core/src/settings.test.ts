@@ -26,6 +26,7 @@ describe('normalizeSettings', () => {
       onboardingDone: true,
       previewQuality: 'low',
       projectTemplate: 'tiktok',
+      reduceTransparency: false,
     })
   })
 
@@ -53,10 +54,12 @@ describe('mergeSettings', () => {
 
 describe('màu nhấn', () => {
   it('mặc định là xanh dương; nhận mã hex hợp lệ, bỏ giá trị sai', () => {
-    expect(DEFAULT_SETTINGS.accent).toBe('#2563eb')
+    expect(DEFAULT_SETTINGS.accent).toBe('#0a84ff')
     expect(normalizeSettings({ accent: ' #1A73E8 ' }).accent).toBe('#1a73e8')
-    expect(normalizeSettings({ accent: 'blue' }).accent).toBe('#2563eb')
-    expect(normalizeSettings({ accent: '#12345' }).accent).toBe('#2563eb')
+    expect(normalizeSettings({ accent: 'blue' }).accent).toBe('#0a84ff')
+    expect(normalizeSettings({ accent: '#12345' }).accent).toBe('#0a84ff')
+    expect(normalizeSettings({ reduceTransparency: true }).reduceTransparency).toBe(true)
+    expect(normalizeSettings({ reduceTransparency: 'yes' }).reduceTransparency).toBe(false)
   })
 
   it('chữ trên nền màu nhấn đủ tương phản', () => {

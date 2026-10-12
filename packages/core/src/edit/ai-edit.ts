@@ -1,5 +1,6 @@
 import type { TranscriptWord } from './captions'
 import type { SourceRange } from './timeline'
+import type { Waveform } from './waveform'
 
 export interface CutSuggestion {
   id: string
@@ -72,6 +73,45 @@ export function findSilences(
     const end = words[i]!.start - keepMs / 2
     if (end > start) ranges.push({ start: Math.round(start), end: Math.round(end) })
   }
+  return ranges
+}
+
+export interface QuietOptions {
+  /** Ngưỡng "im lặng": phần của mức to nhất (0–1). */
+  threshold?: number
+  /** Khoảng im lặng ngắn hơn thì bỏ qua (ms). */
+  minMs?: number
+  /** Chừa lại khoảng này (chia đều hai đầu) cho tự nhiên (ms). */
+  keepMs?: number
+}
+
+/**
+ * Khoảng lặng dài tìm từ dạng sóng (không cần lời thoại / API key): các ô liên tiếp nhỏ hơn ngưỡng
+ * so với mức to nhất, dài hơn `minMs`, chừa lại `keepMs`.
+ */
+export function findQuietRanges(wave: Waveform, options: QuietOptions = {}): SourceRange[] {
+  const threshold = options.threshold ?? 0.08
+  const minMs = options.minMs ?? 1200
+  const keepMs = options.keepMs ?? 350
+  if (wave.peaks.length === 0 || wave.bucketMs <= 0) return []
+  const loudest = Math.max(24, ...wave.peaks)
+  const limit = loudest * threshold
+  const ranges: SourceRange[] = []
+  let runStart = -1
+  const flush = (endIndex: number) => {
+    if (runStart < 0) return
+    const start = runStart * wave.bucketMs
+    const end = endIndex * wave.bucketMs
+    if (end - start >= minMs && end - keepMs > start + keepMs / 2)
+      ranges.push({ start: Math.round(start + keepMs / 2), end: Math.round(end - keepMs / 2) })
+    runStart = -1
+  }
+  wave.peaks.forEach((p, i) => {
+    if (p <= limit) {
+      if (runStart < 0) runStart = i
+    } else flush(i)
+  })
+  flush(wave.peaks.length)
   return ranges
 }
 

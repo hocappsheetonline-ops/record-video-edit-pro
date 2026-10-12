@@ -479,13 +479,13 @@ Luôn thêm `-hide_banner -loglevel error -y`, ghi ra file `.part` rồi `rename
 
 ### 4.2 Dịch vụ online
 
-| Dịch vụ                       | Dùng cho                     | Key                            | Ghi chú                                                                 |
-| ----------------------------- | ---------------------------- | ------------------------------ | ----------------------------------------------------------------------- |
-| Tenor v2                      | meme GIF/MP4, sticker        | Google Cloud API key, miễn phí | Phải hiện "Powered by Tenor". `contentfilter=medium`.                   |
-| Pixabay                       | video/ảnh stock              | miễn phí                       | Không cần ghi nguồn; không được tải hàng loạt; cache ≤ 24h.             |
-| ElevenLabs                    | STT (đã có), TTS, giọng      | key người dùng                 | `eleven_multilingual_v2` cho tiếng Việt.                                |
-| Anthropic                     | AI cắt, tóm tắt, dịch phụ đề | key người dùng                 | Model mặc định trong `ai/service.ts`.                                   |
-| Freesound (tùy chọn, Bước 2+) | SFX CC0                      | key                            | Chỉ lọc `license:"Creative Commons 0"`, dùng `previews.preview-hq-mp3`. |
+| Dịch vụ                       | Dùng cho                     | Key                            | Ghi chú                                                                  |
+| ----------------------------- | ---------------------------- | ------------------------------ | ------------------------------------------------------------------------ |
+| ~~Tenor v2~~ (đã bỏ ở 1.0.1)  | meme GIF/MP4, sticker        | Google Cloud API key, miễn phí | Google khai tử Tenor API ngày 30/6/2026; phần Tenor đã được gỡ khỏi app. |
+| Pixabay                       | video/ảnh stock              | miễn phí                       | Không cần ghi nguồn; không được tải hàng loạt; cache ≤ 24h.              |
+| ElevenLabs                    | STT (đã có), TTS, giọng      | key người dùng                 | `eleven_multilingual_v2` cho tiếng Việt.                                 |
+| Anthropic                     | AI cắt, tóm tắt, dịch phụ đề | key người dùng                 | Model mặc định trong `ai/service.ts`.                                    |
+| Freesound (tùy chọn, Bước 2+) | SFX CC0                      | key                            | Chỉ lọc `license:"Creative Commons 0"`, dùng `previews.preview-hq-mp3`.  |
 
 Mọi lời gọi mạng đi qua main process, có timeout, mã lỗi chuẩn, và **mock bằng HTTP server cục bộ** trong E2E (đặt URL gốc qua biến môi trường `LUMORA_TENOR_URL`, `LUMORA_PIXABAY_URL`, `LUMORA_ELEVENLABS_URL`, `LUMORA_ANTHROPIC_URL` như cách `mock-ai.ts` đang làm).
 

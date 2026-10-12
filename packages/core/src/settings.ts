@@ -4,14 +4,19 @@ export type Language = (typeof LANGUAGES)[number]
 export const THEMES = ['system', 'dark', 'light'] as const
 export type Theme = (typeof THEMES)[number]
 
-/** Màu nhấn có sẵn; người dùng cũng có thể chọn màu bất kỳ (mã hex). */
+/**
+ * Màu nhấn có sẵn (bộ màu hệ thống của macOS: xanh dương, tím, hồng, đỏ, cam, vàng, xanh lá,
+ * than chì); người dùng cũng có thể chọn màu bất kỳ (mã hex).
+ */
 export const ACCENT_PRESETS = [
-  '#2563eb',
-  '#0ea5e9',
-  '#14b8a6',
-  '#8b5cf6',
-  '#ec4899',
-  '#f97316',
+  '#0a84ff',
+  '#bf5af2',
+  '#ff375f',
+  '#ff453a',
+  '#ff9f0a',
+  '#ffd60a',
+  '#30d158',
+  '#8e8e93',
 ] as const
 
 export interface AppSettings {
@@ -27,6 +32,8 @@ export interface AppSettings {
   previewQuality: PreviewQuality
   /** Mẫu cho bản quay mới mở lần đầu: tỉ lệ khung hình mặc định. */
   projectTemplate: ProjectTemplate
+  /** Giảm trong suốt: bề mặt kính mờ thành màu đặc (máy yếu hoặc muốn tương phản cao). */
+  reduceTransparency: boolean
 }
 
 export const PREVIEW_QUALITIES = ['auto', 'high', 'low'] as const
@@ -43,6 +50,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   onboardingDone: false,
   previewQuality: 'auto',
   projectTemplate: 'tutorial',
+  reduceTransparency: false,
 }
 
 function pick<T extends string>(allowed: readonly T[], value: unknown, fallback: T): T {
@@ -67,6 +75,7 @@ export function normalizeSettings(input: unknown): AppSettings {
     onboardingDone: raw.onboardingDone === true,
     previewQuality: pick(PREVIEW_QUALITIES, raw.previewQuality, DEFAULT_SETTINGS.previewQuality),
     projectTemplate: pick(PROJECT_TEMPLATES, raw.projectTemplate, DEFAULT_SETTINGS.projectTemplate),
+    reduceTransparency: raw.reduceTransparency === true,
   }
 }
 

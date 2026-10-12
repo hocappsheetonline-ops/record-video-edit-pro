@@ -74,6 +74,13 @@ import {
   type Pose,
   canReverse,
   type SpeedCurve,
+  buildCaptionLines,
+  findFillerWords,
+  findQuietRanges,
+  findSilences,
+  removeSourceRanges,
+  wordsToRanges,
+  type SourceRange,
 } from '@lumora/core'
 import type { AudioAsset, MediaAsset } from '@shared/ipc'
 import { lumora } from '../api'
@@ -216,6 +223,8 @@ interface EditorStore {
   addMusic(): Promise<boolean>
   /** Thêm hiệu ứng âm thanh có sẵn tại đầu phát. */
   addSoundEffect(id: SoundEffectId): Promise<void>
+  /** Thêm một bài trong kho nhạc (Thư viện âm thanh YouTube / file) làm nhạc nền tại đầu phát. */
+  addMusicFromLibrary(file: string): Promise<void>
   /** Đọc câu bằng giọng AI rồi thêm tại `at` (mặc định: đầu phát) như một hiệu ứng âm thanh. */
   addSpeech(text: string, voiceId: string, at?: number): Promise<void>
   /**
@@ -277,6 +286,48 @@ interface EditorStore {
   setLook(look: Look, coalesce?: string): void
   addZoomAtPlayhead(): void
   regenerateZooms(): void
+  /**
+   * AI tự biên tập: cắt khoảng lặng và từ thừa, tự zoom theo chuột, thêm phụ đề, làm sạch
+   * âm thanh, thêm tiêu đề mở đầu — tất cả là một bước hoàn tác. Trả về kết quả từng bước.
+   */
+  autoEdit(
+    options: AutoEditOptions,
+    onProgress?: (done: number, total: number, step: AutoEditStep) => void,
+  ): Promise<AutoEditReport[]>
+}
+
+export interface AutoEditOptions {
+  silences: boolean
+  fillers: boolean
+  zooms: boolean
+  captions: boolean
+  audio: boolean
+  title: boolean
+}
+export type AutoEditStep = keyof AutoEditOptions
+export const AUTO_EDIT_STEPS: readonly AutoEditStep[] = [
+  'silences',
+  'fillers',
+  'zooms',
+  'captions',
+  'audio',
+  'title',
+]
+export interface AutoEditReport {
+  step: AutoEditStep
+  status: 'done' | 'skipped' | 'error'
+  /** Số đoạn / mục đã thêm (done), hoặc mã lý do (skipped / error). */
+  detail: number | string
+}
+
+/** Thời lượng tiêu đề mở đầu do AI thêm (ms). */
+const AUTO_TITLE_MS = 3500
+
+/** Mã lỗi ngắn từ lỗi IPC ("missing_key:elevenlabs" → "missing_key"). */
+function errorCode(e: unknown): string {
+  const m = e instanceof Error ? e.message : String(e)
+  const code = /(?:Error: )?([a-z_]+(?::[a-z_]+)?)\s*$/.exec(m)?.[1] ?? m
+  return code.split(':')[0] || 'error'
 }
 
 const HISTORY_LIMIT = 100
@@ -873,6 +924,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     insertAudio(await lumora().addSoundEffect(folder, id), 'sfx')
   },
 
+  async addMusicFromLibrary(file) {
+    const { folder } = get()
+    if (!folder) return
+    const asset = await lumora().useMusic(folder, file)
+    if (get().folder !== folder) return
+    insertAudio(asset, 'music')
+  },
+
   async ensureReversed(clip) {
     const { folder } = get()
     if (!folder) return null
@@ -1306,6 +1365,150 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       ...e,
       zooms: generateAutoZooms(cursor, sourceDuration(project.segments)),
     }))
+  },
+
+  async autoEdit(options, onProgress) {
+    const { folder, edit: before, project, waveform, cursor, events } = get()
+    if (!folder || !before || !project) return []
+    const hasCursor = cursor !== null && events.length > 0
+    const steps = AUTO_EDIT_STEPS.filter((s) => options[s])
+    const pastBefore = get().past
+    const report: AutoEditReport[] = []
+    let done = 0
+    const tick = (step: AutoEditStep) => onProgress?.(++done, steps.length, step)
+
+    // Lời thoại: cần cho từ thừa, phụ đề và tiêu đề. Thiếu key thì các bước đó bị bỏ qua.
+    let transcript = get().transcript
+    let transcriptIssue: string | null = null
+    if ((options.fillers || options.captions || options.title) && !transcript) {
+      try {
+        transcript = await lumora().transcribe(folder, before.captions.language || '')
+        if (get().folder !== folder) return []
+        get().setTranscript(transcript)
+      } catch (e) {
+        transcriptIssue = errorCode(e)
+      }
+    }
+    const noTranscript = transcriptIssue ?? 'no_transcript'
+
+    // Cắt: khoảng lặng (theo lời thoại, hoặc theo dạng sóng khi không có lời) và từ thừa.
+    const ranges: SourceRange[] = []
+    if (options.silences) {
+      const found = transcript
+        ? findSilences(transcript.words)
+        : waveform
+          ? findQuietRanges(waveform)
+          : null
+      if (found) {
+        ranges.push(...found)
+        report.push({ step: 'silences', status: 'done', detail: found.length })
+      } else report.push({ step: 'silences', status: 'skipped', detail: 'no_audio' })
+      tick('silences')
+    }
+    if (options.fillers) {
+      if (!transcript) report.push({ step: 'fillers', status: 'skipped', detail: noTranscript })
+      else {
+        let found: SourceRange[]
+        try {
+          // Claude tìm từ đệm và câu lặp; không có key Claude thì dùng danh sách từ đệm có sẵn.
+          const suggestions = await lumora().suggestCuts(folder)
+          found = suggestions
+            .filter((s) => s.kind !== 'silence')
+            .map((s) => ({ start: s.start, end: s.end }))
+        } catch {
+          found = wordsToRanges(
+            transcript.words,
+            findFillerWords(transcript.words, transcript.language),
+          )
+        }
+        ranges.push(...found)
+        report.push({ step: 'fillers', status: 'done', detail: found.length })
+      }
+      tick('fillers')
+    }
+    if (get().folder !== folder) return report
+    if (ranges.length > 0)
+      get().change((e) => ({ ...e, clips: removeSourceRanges(e.clips, ranges) }))
+
+    if (options.zooms) {
+      if (hasCursor) {
+        get().regenerateZooms()
+        report.push({ step: 'zooms', status: 'done', detail: get().edit?.zooms.length ?? 0 })
+      } else report.push({ step: 'zooms', status: 'skipped', detail: 'no_cursor' })
+      tick('zooms')
+    }
+    if (options.captions) {
+      if (transcript) {
+        const lines = buildCaptionLines(transcript.words)
+        get().change((e) => ({
+          ...e,
+          captions: {
+            ...e.captions,
+            enabled: true,
+            language: transcript!.language,
+            lines,
+            bilingual: false,
+            translationLanguage: '',
+          },
+        }))
+        report.push({ step: 'captions', status: 'done', detail: lines.length })
+      } else report.push({ step: 'captions', status: 'skipped', detail: noTranscript })
+      tick('captions')
+    }
+    if (options.audio) {
+      get().change((e) => ({
+        ...e,
+        audio: {
+          ...e.audio,
+          micFx: { ...e.audio.micFx, noise: 'medium', enhance: true, normalize: true },
+        },
+      }))
+      report.push({ step: 'audio', status: 'done', detail: 1 })
+      tick('audio')
+    }
+    if (options.title) {
+      if (!transcript) report.push({ step: 'title', status: 'skipped', detail: noTranscript })
+      else {
+        try {
+          const summary = await lumora().summarize(folder)
+          const title = summary.titles[0]?.trim()
+          if (get().folder !== folder) return report
+          if (title) {
+            const style = templateStyle('title')
+            get().addOverlay({
+              kind: 'text',
+              text: title,
+              style: 'title',
+              color: style.color,
+              textStyle: style,
+            })
+            // Đặt tiêu đề ở đầu video (addOverlay đặt tại đầu phát).
+            get().change((e) => {
+              const last = e.overlays[e.overlays.length - 1]
+              if (!last) return e
+              const total = outputDuration(e.clips)
+              return {
+                ...e,
+                overlays: e.overlays.map((o) =>
+                  o === last ? { ...o, start: 0, end: Math.min(total, AUTO_TITLE_MS) } : o,
+                ),
+              }
+            })
+            get().select(null)
+            report.push({ step: 'title', status: 'done', detail: 1 })
+          } else report.push({ step: 'title', status: 'skipped', detail: 'no_title' })
+        } catch (e) {
+          report.push({ step: 'title', status: 'error', detail: errorCode(e) })
+        }
+      }
+      tick('title')
+    }
+
+    // Gộp thành một bước hoàn tác.
+    const after = get().edit
+    if (after && after !== before)
+      set({ past: [...pastBefore, before].slice(-HISTORY_LIMIT), future: [] })
+    return report
   },
 }))
 

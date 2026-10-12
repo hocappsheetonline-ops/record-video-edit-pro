@@ -64,7 +64,7 @@ export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose: () 
   if (!open) return null
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6 backdrop-blur-sm"
       onPointerDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
@@ -72,7 +72,7 @@ export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose: () 
         aria-modal="true"
         aria-labelledby="shortcuts-title"
         data-testid="shortcuts-dialog"
-        className="flex max-h-full w-[560px] flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-2xl"
+        className="glass-strong flex max-h-full w-[560px] flex-col overflow-hidden rounded-2xl border shadow-2xl"
       >
         <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
           <h2 id="shortcuts-title" className="text-sm font-semibold">
@@ -83,7 +83,7 @@ export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose: () 
             aria-label={t('editor.export.close')}
             data-testid="shortcuts-close"
             onClick={onClose}
-            className="rounded-md p-1.5 text-muted hover:bg-surface-2 hover:text-text"
+            className="rounded-lg p-1.5 text-muted hover:bg-text/8 hover:text-text"
           >
             <X size={16} aria-hidden />
           </button>
@@ -91,13 +91,13 @@ export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose: () 
         <div className="grid grid-cols-2 gap-x-6 gap-y-4 overflow-y-auto p-4">
           {SHORTCUT_GROUPS.map(({ group, items }) => (
             <section key={group} className="flex flex-col gap-1.5">
-              <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+              <h3 className="text-[11px] font-semibold text-muted">
                 {t(`editor.help.groups.${group}`)}
               </h3>
               {items.map(([key, label]) => (
                 <div key={label} className="flex items-center justify-between gap-3 text-xs">
                   <span>{t(`editor.help.keys.${label}`)}</span>
-                  <kbd className="shrink-0 rounded border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-[10px]">
+                  <kbd className="shrink-0 rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-[10px]">
                     {key}
                   </kbd>
                 </div>
@@ -179,7 +179,7 @@ export function Onboarding() {
         aria-labelledby="onboarding-title"
         data-testid="onboarding"
         data-step={key}
-        className="fixed z-[56] flex flex-col gap-2 rounded-xl border border-border bg-surface p-4 shadow-2xl"
+        className="glass-strong fixed z-[56] flex flex-col gap-2 rounded-2xl border p-4 shadow-2xl"
         style={{ ...pos, width: cardW }}
       >
         <span className="text-[11px] text-muted">
@@ -204,7 +204,7 @@ export function Onboarding() {
                 type="button"
                 data-testid="onboarding-back"
                 onClick={() => setStep(step - 1)}
-                className="rounded-md border border-border px-2.5 py-1 text-xs hover:bg-surface-2"
+                className="rounded-lg border border-border bg-surface-2/70 px-2.5 py-1 text-xs font-medium hover:bg-surface-2"
               >
                 {t('editor.onboarding.back')}
               </button>
@@ -213,7 +213,7 @@ export function Onboarding() {
               type="button"
               data-testid="onboarding-next"
               onClick={() => (last ? finish() : setStep(step + 1))}
-              className="rounded-md bg-accent px-3 py-1 text-xs font-medium text-accent-fg"
+              className="rounded-lg bg-accent px-3 py-1 text-xs font-semibold text-accent-fg shadow-sm"
             >
               {last ? t('editor.onboarding.done') : t('editor.onboarding.next')}
             </button>
