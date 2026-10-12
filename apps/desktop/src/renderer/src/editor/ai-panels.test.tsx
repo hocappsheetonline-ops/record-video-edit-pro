@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { outputDuration } from '@lumora/core'
+import { EMPTY_MEMORY, outputDuration } from '@lumora/core'
 import i18n from '../i18n'
 import { createFakeApi, sampleSummary, sampleTranscript } from '../test/fake-api'
 import { AiPanel } from './AiPanel'
@@ -13,11 +13,14 @@ async function setup(withTranscript = false) {
   if (withTranscript) fake.api.getTranscript.mockResolvedValue(sampleTranscript)
   window.lumora = fake.api
   useEditorStore.getState().reset()
+  // Trí nhớ và tuỳ chọn đạo diễn là trạng thái toàn cục: xoá để các test không lẫn nhau.
+  useEditorStore.setState({ memory: EMPTY_MEMORY, askConfirm: false })
   await useEditorStore.getState().load(sampleSummary.folder)
   return fake.api
 }
 
 beforeEach(async () => {
+  localStorage.clear()
   await act(() => i18n.changeLanguage('vi'))
 })
 
@@ -118,26 +121,34 @@ describe('CaptionsPanel', () => {
 })
 
 describe('AiPanel', () => {
-  it('trợ lý AI: không có key thì hiểu theo từ khóa; làm nhiều việc trong một bước hoàn tác', async () => {
+  it('đạo diễn AI: không có AI thì hiểu theo từ khóa; làm nhiều việc trong một bước hoàn tác', async () => {
     const api = await setup()
     render(<AiPanel />)
+    expect(screen.getByTestId('director-engine')).toHaveAttribute('data-engine', 'keywords')
     await userEvent.type(
       screen.getByTestId('assistant-input'),
       'Cắt khoảng lặng, thêm phụ đề, bộ lọc cổ điển, tốc độ 2x, làm video dọc 9:16, tiêu đề "Xin chào"',
     )
     await userEvent.click(screen.getByTestId('assistant-run'))
     const chips = await screen.findAllByTestId('assistant-command')
+    // Bước AI (cắt, phụ đề) báo theo tên bước tự biên tập; lệnh còn lại theo loại lệnh.
     expect(chips.map((c) => c.getAttribute('data-kind'))).toEqual([
-      'cutSilences',
+      'silences',
       'captions',
       'title',
       'filter',
       'speed',
       'aspect',
     ])
-    expect(api.planEdits).toHaveBeenCalledWith(
+    expect(chips.every((c) => c.getAttribute('data-status') === 'done')).toBe(true)
+    expect(api.directEdits).toHaveBeenCalledWith(
       expect.stringContaining('Cắt khoảng lặng'),
-      expect.objectContaining({ durationMs: 7000, hasTranscript: false }),
+      expect.objectContaining({
+        durationMs: 7000,
+        hasTranscript: false,
+        musicTracks: [],
+        history: [],
+      }),
     )
     const s = useEditorStore.getState()
     expect(s.edit!.look.filter).toBe('vintage')
@@ -147,21 +158,137 @@ describe('AiPanel', () => {
     expect(s.edit!.overlays[0]).toMatchObject({ kind: 'text', text: 'Xin chào', start: 0 })
     expect(outputDuration(s.edit!.clips)).toBeLessThan(7000)
     expect(s.past).toHaveLength(1)
+    // Lịch sử trò chuyện: câu hỏi của người dùng + câu trả lời của AI, lưu theo dự án.
+    const msgs = screen.getAllByTestId('director-message')
+    expect(msgs.map((m) => m.getAttribute('data-role'))).toEqual(['user', 'ai'])
+    expect(
+      JSON.parse(localStorage.getItem(`lumora.director.${sampleSummary.folder}`)!).messages,
+    ).toHaveLength(2)
     s.undo()
     expect(useEditorStore.getState().edit!.look.filter).toBe('none')
     expect(outputDuration(useEditorStore.getState().edit!.clips)).toBe(7000)
   })
 
-  it('trợ lý AI: Claude trả lệnh thì dùng lệnh của Claude; không hiểu thì báo', async () => {
+  it('đạo diễn AI: hỏi lại khi thiếu thông tin, trả lời xong thì làm; nhạc nền, hiệu ứng và xuất', async () => {
     const api = await setup()
-    api.planEdits.mockResolvedValueOnce([{ kind: 'trimStart', ms: 2000 }])
+    await api.addMusicPaths(['C:\\nhac\\Lofi Chill.mp3'], 'file')
+    api.directEdits.mockResolvedValueOnce({
+      summary: 'Thêm nhạc nền cho video.',
+      questions: ['Bạn muốn nhạc kiểu gì?'],
+      commands: [],
+    })
     render(<AiPanel />)
-    await userEvent.type(screen.getByTestId('assistant-input'), 'bỏ 2 giây đầu{Enter}')
-    await waitFor(() => expect(outputDuration(useEditorStore.getState().edit!.clips)).toBe(5000))
-    expect(screen.getByTestId('assistant-command')).toHaveAttribute('data-kind', 'trimStart')
-    await userEvent.clear(screen.getByTestId('assistant-input'))
+    await userEvent.type(screen.getByTestId('assistant-input'), 'thêm nhạc nền cho hay{Enter}')
+    const plan = await screen.findByTestId('director-plan')
+    expect(within(plan).getByTestId('director-question')).toHaveTextContent(
+      'Bạn muốn nhạc kiểu gì?',
+    )
+    expect(useEditorStore.getState().edit!.audioClips).toHaveLength(0)
+    expect(screen.getByTestId('assistant-input')).toHaveAttribute(
+      'placeholder',
+      'Trả lời câu hỏi của AI, hoặc gõ yêu cầu khác…',
+    )
+
+    // Trả lời: AI nhận cả lịch sử, trả kế hoạch đầy đủ → làm luôn.
+    api.directEdits.mockResolvedValueOnce({
+      summary: 'Thêm nhạc lofi nhỏ, hiệu ứng rung nhẹ rồi xuất 1080p.',
+      questions: [],
+      commands: [
+        { kind: 'music', query: 'lofi', volume: 0.25 },
+        { kind: 'effect', effect: 'shake' },
+        { kind: 'export', resolution: 1080, format: 'mp4' },
+      ],
+    })
+    await userEvent.type(screen.getByTestId('assistant-input'), 'lofi nhỏ thôi{Enter}')
+    await waitFor(() => expect(useEditorStore.getState().edit!.audioClips).toHaveLength(1))
+    expect(api.directEdits).toHaveBeenLastCalledWith(
+      'lofi nhỏ thôi',
+      expect.objectContaining({
+        musicTracks: ['Lofi Chill'],
+        history: [
+          expect.objectContaining({ role: 'user', text: 'thêm nhạc nền cho hay' }),
+          expect.objectContaining({ role: 'ai' }),
+        ],
+      }),
+    )
+    const s = useEditorStore.getState()
+    expect(s.edit!.audioClips[0]).toMatchObject({ kind: 'music', volume: 0.25 })
+    // Hiệu ứng ở đầu video và mỗi chỗ nối clip (bản mẫu: clip 5 s + 2 s → chỗ nối ở 5000).
+    expect(s.edit!.effects.map((e) => e.kind)).toEqual(['shake', 'shake'])
+    expect(s.edit!.effects.map((e) => e.start)).toEqual([0, 5000])
+    expect(s.edit!.export).toMatchObject({ resolution: 1080, format: 'mp4' })
+    expect(s.exportRequest).toBeGreaterThan(0)
+    expect(s.autoExport).toBe(true)
+    expect(s.directorPlan).toBeNull()
+    const chips = screen.getAllByTestId('assistant-command')
+    expect(chips.map((c) => c.getAttribute('data-kind'))).toEqual(['music', 'effect', 'export'])
+    expect(screen.queryByTestId('director-plan')).not.toBeInTheDocument()
+  })
+
+  it('đạo diễn AI: hỏi trước khi làm, duyệt kế hoạch; không hiểu thì hỏi lại; bỏ qua', async () => {
+    await setup()
+    render(<AiPanel />)
+    await userEvent.click(screen.getByTestId('director-ask-confirm'))
+    await userEvent.type(screen.getByTestId('assistant-input'), 'cắt khoảng lặng{Enter}')
+    const plan = await screen.findByTestId('director-plan')
+    expect(within(plan).getByTestId('director-plan-command')).toHaveAttribute(
+      'data-kind',
+      'cutSilences',
+    )
+    expect(outputDuration(useEditorStore.getState().edit!.clips)).toBe(7000)
+    await userEvent.click(screen.getByTestId('director-apply'))
+    await waitFor(
+      () => expect(outputDuration(useEditorStore.getState().edit!.clips)).toBeLessThan(7000),
+      { timeout: 3000 },
+    )
+    expect(screen.queryByTestId('director-plan')).not.toBeInTheDocument()
+    expect(JSON.parse(localStorage.getItem('lumora.director-prefs')!)).toEqual({ askConfirm: true })
+
     await userEvent.type(screen.getByTestId('assistant-input'), 'xin chào{Enter}')
-    expect(await screen.findByTestId('assistant-none')).toBeInTheDocument()
+    expect(await screen.findByTestId('director-question')).toHaveTextContent(
+      'Bạn muốn làm gì với video này?',
+    )
+    await userEvent.click(screen.getByTestId('director-discard'))
+    expect(screen.queryByTestId('director-plan')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByTestId('director-ask-confirm'))
+  })
+
+  it('đạo diễn AI: nhớ quy tắc "từ nay…", gửi cho AI trong bộ nhớ, quên được; học thói quen', async () => {
+    const api = await setup()
+    render(<AiPanel />)
+    await userEvent.type(
+      screen.getByTestId('assistant-input'),
+      'từ nay luôn thêm phụ đề kiểu TikTok{Enter}',
+    )
+    await screen.findAllByTestId('assistant-command')
+    expect(useEditorStore.getState().memory.rules).toEqual(['từ nay luôn thêm phụ đề kiểu TikTok'])
+    expect(useEditorStore.getState().edit!.captions).toMatchObject({
+      enabled: true,
+      look: expect.objectContaining({ template: 'tiktok' }),
+    })
+    await userEvent.click(screen.getByTestId('director-rules-toggle'))
+    expect(screen.getByTestId('director-rule')).toHaveTextContent(
+      'từ nay luôn thêm phụ đề kiểu TikTok',
+    )
+
+    // Lượt sau: quy tắc nằm trong ngữ cảnh gửi AI; thói quen (mẫu phụ đề) được học từ bản chỉnh.
+    act(() => useEditorStore.getState().learnFromCurrentEdit())
+    expect(useEditorStore.getState().memory.counts.captionsTemplate).toEqual({ tiktok: 1 })
+    expect(await screen.findByTestId('director-habits')).toHaveTextContent(
+      'Mẫu phụ đề: tiktok (×1)',
+    )
+    await userEvent.type(screen.getByTestId('assistant-input'), 'bộ lọc điện ảnh{Enter}')
+    await waitFor(() => expect(useEditorStore.getState().edit!.look.filter).toBe('cinematic'))
+    expect(api.directEdits).toHaveBeenLastCalledWith(
+      'bộ lọc điện ảnh',
+      expect.objectContaining({
+        memory: expect.stringContaining('từ nay luôn thêm phụ đề kiểu TikTok'),
+      }),
+    )
+
+    await userEvent.click(screen.getByTestId('director-rule-forget'))
+    expect(useEditorStore.getState().memory.rules).toEqual([])
+    expect(screen.getByTestId('director-no-rules')).toBeInTheDocument()
   })
 
   it('chia video thành video ngắn: mỗi đoạn một dự án sao chép chỉ giữ đoạn đó, khung dọc', async () => {

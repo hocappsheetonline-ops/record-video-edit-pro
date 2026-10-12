@@ -352,6 +352,11 @@ export function createFakeApi(
       { id: 's0', kind: 'silence', start: 2500, end: 4000, text: '', reason: '' },
     ]),
     planEdits: vi.fn<LumoraApi['planEdits']>(async () => []),
+    directEdits: vi.fn<LumoraApi['directEdits']>(async () => ({
+      summary: '',
+      questions: [],
+      commands: [],
+    })),
     listLocalModels: vi.fn<LumoraApi['listLocalModels']>(async () => ['llama3.2', 'qwen2.5:7b']),
     pullLocalModel: vi.fn<LumoraApi['pullLocalModel']>(async (_url, model) => {
       localAiListeners.forEach((l) =>

@@ -48,6 +48,7 @@ const updates = {
   install: vi.fn(),
 }
 let validators: { [K in keyof Validators]: Mock<Validators[K]> }
+let ai: Parameters<typeof registerIpc>[1]['ai']
 
 // Electron biến lỗi ném ra trong handler (kể cả đồng bộ) thành promise bị từ chối.
 const call = async (channel: string, ...args: unknown[]) => handlers.get(channel)!({}, ...args)
@@ -61,6 +62,36 @@ beforeEach(async () => {
     elevenlabs: vi.fn<Validators['elevenlabs']>(async () => ({ ok: true })),
     anthropic: vi.fn<Validators['anthropic']>(async () => ({ ok: true })),
     pixabay: vi.fn<Validators['pixabay']>(async () => ({ ok: true })),
+  }
+  ai = {
+    transcribe: vi.fn(async () => ({ language: 'vi', words: [] })),
+    getTranscript: vi.fn(async () => null),
+    suggestCuts: vi.fn(async () => []),
+    plan: vi.fn(async () => [{ kind: 'captions' as const }]),
+    direct: vi.fn(async () => ({
+      summary: 'ok',
+      questions: [],
+      commands: [{ kind: 'captions' as const }],
+    })),
+    listLocalModels: vi.fn(async (url: string) => [`${url}:llama3.2`]),
+    benchmarkLocalModel: vi.fn(async () => ({
+      loadMs: 100,
+      tokensPerSecond: 20,
+      totalMs: 900,
+    })),
+    pullLocalModel: vi.fn(
+      async (_url: string, _model: string, onProgress: (p: unknown) => void) => {
+        onProgress({ status: 'pulling', completed: 5, total: 10 })
+      },
+    ),
+    summarize: vi.fn(async () => ({ titles: [], description: '', hashtags: [], chapters: [] })),
+    translate: vi.fn(async (lines: { id: string; text: string }[]) => lines),
+    voices: vi.fn(async () => [{ id: 'v1', name: 'Anna' }]),
+    speak: vi.fn(async (_dir: string, text: string) => ({
+      file: 'asset-tts-x.mp3',
+      name: text,
+      durationMs: 800,
+    })),
   }
   registerIpc(
     {
@@ -118,31 +149,7 @@ beforeEach(async () => {
         stopComments: vi.fn(),
         caption: vi.fn(async () => ''),
       },
-      ai: {
-        transcribe: vi.fn(async () => ({ language: 'vi', words: [] })),
-        getTranscript: vi.fn(async () => null),
-        suggestCuts: vi.fn(async () => []),
-        plan: vi.fn(async () => [{ kind: 'captions' as const }]),
-        listLocalModels: vi.fn(async (url: string) => [`${url}:llama3.2`]),
-        benchmarkLocalModel: vi.fn(async () => ({
-          loadMs: 100,
-          tokensPerSecond: 20,
-          totalMs: 900,
-        })),
-        pullLocalModel: vi.fn(
-          async (_url: string, _model: string, onProgress: (p: unknown) => void) => {
-            onProgress({ status: 'pulling', completed: 5, total: 10 })
-          },
-        ),
-        summarize: vi.fn(async () => ({ titles: [], description: '', hashtags: [], chapters: [] })),
-        translate: vi.fn(async (lines: { id: string; text: string }[]) => lines),
-        voices: vi.fn(async () => [{ id: 'v1', name: 'Anna' }]),
-        speak: vi.fn(async (_dir: string, text: string) => ({
-          file: 'asset-tts-x.mp3',
-          name: text,
-          durationMs: 800,
-        })),
-      },
+      ai,
       online: {
         search: vi.fn(async () => ({ items: [], next: null, attribution: 'Video từ Pixabay' })),
         download: vi.fn(async (_source: string, id: string) => ({
@@ -440,6 +447,48 @@ describe('registerIpc', () => {
       tokensPerSecond: 20,
       totalMs: 900,
     })
+  })
+
+  it('đạo diễn AI: kiểm tra câu yêu cầu, chuẩn hóa ngữ cảnh lộn xộn rồi gọi dịch vụ AI', async () => {
+    const direct = ai.direct as Mock
+    expect(
+      await call(IPC.aiDirect, 'làm cho hay', {
+        language: 'vi-VN-extra-long',
+        durationMs: 'nope',
+        hasTranscript: 1,
+        hasCursor: true,
+        musicTracks: ['Lofi chill', 42, null],
+        projects: 'not-a-list',
+        memory: 'Quy tắc: luôn dùng phụ đề tiktok',
+        history: [
+          { role: 'user', text: 'thêm nhạc', at: 5 },
+          { role: 'robot', text: 'bỏ qua' },
+          { role: 'ai', text: 'Đã thêm nhạc.', at: 'x' },
+          'junk',
+        ],
+      }),
+    ).toEqual({ summary: 'ok', questions: [], commands: [{ kind: 'captions' }] })
+    expect(direct).toHaveBeenCalledWith('làm cho hay', {
+      language: 'vi-VN-extr',
+      durationMs: 0,
+      hasTranscript: false,
+      hasCursor: true,
+      musicTracks: ['Lofi chill'],
+      projects: [],
+      memory: 'Quy tắc: luôn dùng phụ đề tiktok',
+      history: [
+        { role: 'user', text: 'thêm nhạc', at: 5 },
+        { role: 'ai', text: 'Đã thêm nhạc.', at: 0 },
+      ],
+    })
+    // Ngữ cảnh không phải object: dùng giá trị mặc định.
+    await call(IPC.aiDirect, 'x', null)
+    expect(direct).toHaveBeenLastCalledWith(
+      'x',
+      expect.objectContaining({ memory: '', history: [] }),
+    )
+    await expect(call(IPC.aiDirect, 42, {})).rejects.toThrow('direct_input')
+    await expect(call(IPC.aiDirect, 'x'.repeat(2001), {})).rejects.toThrow('direct_input')
   })
 
   it('cửa sổ không viền: thu nhỏ, phóng to / thu về, đóng, hỏi trạng thái', async () => {

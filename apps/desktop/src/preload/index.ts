@@ -101,6 +101,7 @@ const api: LumoraApi = {
   suggestCuts: (folder) => ipcRenderer.invoke(IPC.aiSuggestCuts, folder),
   summarize: (folder) => ipcRenderer.invoke(IPC.aiSummarize, folder),
   planEdits: (instruction, context) => ipcRenderer.invoke(IPC.aiPlan, instruction, context),
+  directEdits: (goal, context) => ipcRenderer.invoke(IPC.aiDirect, goal, context),
   listLocalModels: (baseUrl) => ipcRenderer.invoke(IPC.aiLocalModels, baseUrl),
   pullLocalModel: (baseUrl, model) => ipcRenderer.invoke(IPC.aiPullModel, baseUrl, model),
   installOllama: () => ipcRenderer.invoke(IPC.aiInstallOllama),

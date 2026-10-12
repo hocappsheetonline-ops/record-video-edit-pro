@@ -117,6 +117,12 @@ function fakeApis() {
             { kind: 'aspect', aspect: '9:16' },
           ],
         })
+      if (system.includes('AI director'))
+        return message({
+          summary: 'Cắt khoảng lặng và thêm phụ đề',
+          questions: [],
+          commands: [{ kind: 'cutSilences' }, { kind: 'captions' }, { kind: 'bogus' }],
+        })
       if (system.includes('metadata')) {
         return message({
           titles: ['A', 'B', 'C'],
@@ -318,6 +324,80 @@ describe('AiService.plan (trợ lý AI)', () => {
     expect(body.system).toContain('duration 60 s')
     expect(body.messages[0]!.content).toBe('cắt im lặng, nhanh 1.5x, dọc')
     await expect(service(fetchImpl, {}).plan('x', ctx)).rejects.toThrow()
+  })
+})
+
+describe('AiService.direct (đạo diễn AI)', () => {
+  const context = {
+    language: 'vi',
+    durationMs: 90_000,
+    hasTranscript: true,
+    hasCursor: false,
+    musicTracks: ['Lofi Chill Beats', 'Epic Trailer'],
+    projects: ['Demo tuần trước'],
+    memory: 'Quy tắc người dùng:\n- luôn dùng phụ đề tiktok',
+    history: [
+      { role: 'user' as const, text: 'thêm nhạc lofi', at: 1 },
+      { role: 'ai' as const, text: 'Đã thêm nhạc Lofi Chill Beats.', at: 2 },
+    ],
+  }
+
+  it('yêu cầu rỗng: kế hoạch trống, không gọi mạng', async () => {
+    const { calls, fetchImpl } = fakeApis()
+    expect(await service(fetchImpl).direct('   ', context)).toEqual({
+      summary: '',
+      questions: [],
+      commands: [],
+    })
+    expect(calls).toHaveLength(0)
+  })
+
+  it('gửi ngữ cảnh (thói quen, kho nhạc, hội thoại) trong lời nhắc hệ thống; lọc lệnh sai', async () => {
+    const { calls, fetchImpl } = fakeApis()
+    const plan = await service(fetchImpl).direct('dọn video rồi thêm phụ đề', context)
+    expect(plan).toEqual({
+      summary: 'Cắt khoảng lặng và thêm phụ đề',
+      questions: [],
+      commands: [{ kind: 'cutSilences' }, { kind: 'captions' }],
+    })
+    expect(calls).toHaveLength(1)
+    const body = calls[0]!.body as {
+      system: string
+      messages: { content: string }[]
+      output_config: { effort: string; format: { schema: { required: string[] } } }
+    }
+    expect(body.messages[0]!.content).toBe('dọn video rồi thêm phụ đề')
+    expect(body.system).toContain('AI director')
+    expect(body.system).toContain('duration 90 s')
+    expect(body.system).toContain('luôn dùng phụ đề tiktok')
+    expect(body.system).toContain('Lofi Chill Beats')
+    expect(body.system).toContain('Director: Đã thêm nhạc Lofi Chill Beats.')
+    expect(body.output_config.effort).toBe('medium')
+    expect(body.output_config.format.schema.required).toEqual(['summary', 'questions', 'commands'])
+  })
+
+  it('cắt gọn ngữ cảnh quá dài: 50 tên bài, 8 lượt hội thoại, bộ nhớ 2000 ký tự', async () => {
+    const { calls, fetchImpl } = fakeApis()
+    await service(fetchImpl).direct('x', {
+      ...context,
+      musicTracks: Array.from({ length: 60 }, (_, i) => `Track ${i} ${'y'.repeat(100)}`),
+      memory: 'm'.repeat(3000),
+      history: Array.from({ length: 12 }, (_, i) => ({
+        role: 'user' as const,
+        text: `turn ${i} ${'z'.repeat(600)}`,
+        at: i,
+      })),
+    })
+    const system = (calls[0]!.body as { system: string }).system
+    expect(system).toContain('Track 49')
+    expect(system).not.toContain('Track 50')
+    expect(system).not.toContain('y'.repeat(81))
+    expect(system).toContain('m'.repeat(2000))
+    expect(system).not.toContain('m'.repeat(2001))
+    expect(system).toContain('turn 4 ')
+    expect(system).not.toContain('turn 3 ')
+    expect(system).not.toContain('z'.repeat(500))
+    await expect(service(fetchImpl, {}).direct('x', context)).rejects.toThrow()
   })
 })
 

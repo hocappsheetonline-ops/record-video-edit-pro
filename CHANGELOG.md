@@ -2,6 +2,14 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.4.0
+
+- **Đạo diễn AI** (Thư viện → AI, thay cho Trợ lý AI): nói bạn muốn video thế nào, AI viết lại thành **kế hoạch** (cắt khoảng lặng / từ thừa, tự zoom, phụ đề và kiểu phụ đề, làm sạch âm thanh, tiêu đề, bộ lọc, tốc độ, khung hình, **hiệu ứng**, **chuyển cảnh**, **nhạc nền từ kho nhạc**, **xuất video** theo độ phân giải / định dạng, **chỉnh theo mẫu dự án khác**) rồi tự làm hết trong một bước hoàn tác; có yêu cầu xuất thì mở hộp thoại xuất và bắt đầu xuất luôn.
+- **Hỏi lại khi thiếu thông tin**: AI hỏi tối đa hai câu (ví dụ kho nhạc trống, hay "làm cho hay" chưa rõ) và chờ bạn trả lời ngay trong cuộc trò chuyện; bật **Hỏi lại trước khi làm** để luôn xem kế hoạch rồi mới duyệt.
+- **Lịch sử và trí nhớ**: mỗi dự án giữ lịch sử trò chuyện (AI nhớ ngữ cảnh lượt trước); câu "từ nay…" / "luôn…" được ghi thành **quy tắc lâu dài** (xem, quên được); app **học thói quen** từ cách bạn chỉnh (mẫu phụ đề, bộ lọc, khung hình, chuyển cảnh, hiệu ứng, âm lượng nhạc) và tự áp dụng khi lệnh không nói rõ.
+- Chạy được bằng **AI cục bộ (Ollama)**, Claude, hoặc chỉ từ khóa khi không có AI (huy hiệu ở góc cho biết đang dùng gì).
+- AI cục bộ ổn định hơn: tự tách JSON khi model trả kèm chữ, thử lại một lần khi lỗi, cỡ ngữ cảnh theo độ dài lời thoại, giữ model nóng 15 phút, tìm từ thừa theo từng đoạn cho lời thoại dài, nút **Đo tốc độ** và gợi ý model theo máy.
+
 ## 1.3.1
 
 - **Cài Ollama và tải model ngay trong app** (Cài đặt → AI cục bộ): nút **Cài Ollama** tự tải bộ cài chính thức rồi mở, nút **Tải model** tải model về Ollama với thanh tiến độ (không cần gõ lệnh). Ba bước ngay tại chỗ: Cài Ollama → Kiểm tra kết nối → Tải model.

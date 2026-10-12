@@ -35,7 +35,7 @@ const TIMELINE_KEY = 'lumora.timelineHeight'
 const iconButton =
   'flex size-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-text/8 hover:text-text disabled:opacity-40'
 
-/** Tự lưu bản chỉnh sửa sau khi người dùng ngừng thao tác một chút. */
+/** Tự lưu bản chỉnh sửa sau khi người dùng ngừng thao tác một chút; đồng thời học thói quen. */
 function useAutosave() {
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null
@@ -43,13 +43,28 @@ function useAutosave() {
       if (!state.folder || !state.edit || state.edit === prev.edit || !prev.edit) return
       if (timer) clearTimeout(timer)
       const { folder, edit } = state
-      timer = setTimeout(() => void lumora().saveEdit(folder, edit), 600)
+      timer = setTimeout(() => {
+        void lumora().saveEdit(folder, edit)
+        // Đạo diễn AI nhớ lựa chọn của người dùng (mẫu phụ đề, bộ lọc, khung hình…) cho lần sau.
+        useEditorStore.getState().learnFromCurrentEdit()
+      }, 600)
     })
     return () => {
       unsubscribe()
       if (timer) clearTimeout(timer)
     }
   }, [])
+}
+
+/** Trợ lý / Đạo diễn AI yêu cầu mở hộp thoại xuất (`exportRequest` tăng mỗi lần). */
+function useExportRequest(open: () => void) {
+  useEffect(
+    () =>
+      useEditorStore.subscribe((state, prev) => {
+        if (state.exportRequest > 0 && state.exportRequest !== prev.exportRequest) open()
+      }),
+    [open],
+  )
 }
 
 /** Hộp thoại xuất video đang mở: tạm tắt phím tắt của trình chỉnh sửa. */
@@ -394,8 +409,13 @@ export function EditorPage() {
   const playerRef = useRef<HTMLDivElement>(null)
   const resizing = useRef<{ y: number; h: number } | null>(null)
   const closeExport = useCallback(() => setExporting(false), [])
+  const openExport = useCallback(() => {
+    useEditorStore.getState().setPlaying(false)
+    setExporting(true)
+  }, [])
   useAutosave()
   useShortcuts()
+  useExportRequest(openExport)
 
   useEffect(() => {
     if (folder) void useEditorStore.getState().load(folder)
@@ -483,10 +503,7 @@ export function EditorPage() {
           <button
             type="button"
             data-testid="export-open"
-            onClick={() => {
-              useEditorStore.getState().setPlaying(false)
-              setExporting(true)
-            }}
+            onClick={openExport}
             className="mr-2 flex items-center gap-1.5 rounded-md bg-accent px-3.5 py-1 text-[13px] font-semibold text-accent-fg shadow-sm transition-[filter,transform] hover:brightness-110 active:scale-[0.98]"
           >
             <Download size={15} aria-hidden />

@@ -15,6 +15,7 @@ import {
   parseAudioFx,
   type AudioFx,
   normalizeLocalAi,
+  type DirectorMessage,
 } from '@lumora/core'
 import {
   IPC,
@@ -136,6 +137,7 @@ export interface IpcDeps {
     | 'suggestCuts'
     | 'summarize'
     | 'plan'
+    | 'direct'
     | 'listLocalModels'
     | 'pullLocalModel'
     | 'benchmarkLocalModel'
@@ -531,6 +533,40 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
       language: typeof c.language === 'string' ? c.language.slice(0, 10) : '',
       durationMs: typeof c.durationMs === 'number' ? Math.max(0, c.durationMs) : 0,
       hasTranscript: c.hasTranscript === true,
+    })
+  })
+  ipcMain.handle(IPC.aiDirect, (_event, goal: unknown, context: unknown) => {
+    if (typeof goal !== 'string' || goal.length > 2000) throw new Error('direct_input')
+    const c =
+      typeof context === 'object' && context !== null ? (context as Record<string, unknown>) : {}
+    const names = (value: unknown) =>
+      Array.isArray(value) ? value.filter((n): n is string => typeof n === 'string') : []
+    const history: DirectorMessage[] = Array.isArray(c.history)
+      ? c.history.flatMap((item: unknown) => {
+          const m =
+            typeof item === 'object' && item !== null ? (item as Record<string, unknown>) : null
+          if (!m || (m.role !== 'user' && m.role !== 'ai') || typeof m.text !== 'string') return []
+          return [
+            {
+              role: m.role,
+              text: m.text,
+              at: typeof m.at === 'number' && Number.isFinite(m.at) ? m.at : 0,
+            },
+          ]
+        })
+      : []
+    return deps.ai.direct(goal, {
+      language: typeof c.language === 'string' ? c.language.slice(0, 10) : '',
+      durationMs:
+        typeof c.durationMs === 'number' && Number.isFinite(c.durationMs)
+          ? Math.max(0, c.durationMs)
+          : 0,
+      hasTranscript: c.hasTranscript === true,
+      hasCursor: c.hasCursor === true,
+      musicTracks: names(c.musicTracks),
+      projects: names(c.projects),
+      memory: typeof c.memory === 'string' ? c.memory : '',
+      history,
     })
   })
   ipcMain.handle(IPC.aiLocalModels, (_event, baseUrl: unknown) => {

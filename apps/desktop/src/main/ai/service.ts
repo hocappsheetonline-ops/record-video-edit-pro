@@ -12,9 +12,12 @@ import {
   TRANSCRIPT_FILE,
   wordsToRanges,
   normalizeAssistantCommands,
+  normalizeDirectorPlan,
   type AssistantCommand,
   type AssistantContext,
   type CutSuggestion,
+  type DirectorContext,
+  type DirectorPlan,
   type LocalAiSettings,
   type Project,
   type Transcript,
@@ -33,6 +36,8 @@ import {
   createClaude,
   CUTS_SCHEMA,
   CUTS_SYSTEM,
+  DIRECTOR_SCHEMA,
+  directorSystem,
   SUMMARY_SCHEMA,
   summarySystem,
   TRANSLATE_SCHEMA,
@@ -84,6 +89,31 @@ const LOCAL_CUTS_WINDOW = 400
 
 /** Câu đọc tối đa (ký tự): meme sound / lời bình ngắn. */
 export const MAX_SPEECH_CHARS = 500
+
+/** Giới hạn ngữ cảnh gửi cho đạo diễn AI (tránh lời nhắc quá dài khi kho nhạc / lịch sử lớn). */
+const DIRECTOR_MAX_NAMES = 50
+const DIRECTOR_MAX_NAME_CHARS = 80
+const DIRECTOR_MAX_HISTORY = 8
+const DIRECTOR_MAX_MESSAGE_CHARS = 500
+const DIRECTOR_MAX_MEMORY_CHARS = 2000
+
+/** Cắt gọn ngữ cảnh đạo diễn trước khi đưa vào lời nhắc hệ thống. */
+function trimDirectorContext(context: DirectorContext): DirectorContext {
+  const names = (list: string[]) =>
+    list
+      .map((name) => name.trim().slice(0, DIRECTOR_MAX_NAME_CHARS))
+      .filter(Boolean)
+      .slice(0, DIRECTOR_MAX_NAMES)
+  return {
+    ...context,
+    musicTracks: names(context.musicTracks),
+    projects: names(context.projects),
+    memory: context.memory.trim().slice(0, DIRECTOR_MAX_MEMORY_CHARS),
+    history: context.history
+      .slice(-DIRECTOR_MAX_HISTORY)
+      .map((m) => ({ ...m, text: m.text.trim().slice(0, DIRECTOR_MAX_MESSAGE_CHARS) })),
+  }
+}
 
 function parseTranscript(value: unknown): Transcript | null {
   if (typeof value !== 'object' || value === null) return null
@@ -380,6 +410,23 @@ export class AiService {
       effort: 'low',
     })
     return normalizeAssistantCommands(answer.commands)
+  }
+
+  /**
+   * Đạo diễn AI: câu yêu cầu + ngữ cảnh (kho nhạc, dự án khác, thói quen, hội thoại) → kế hoạch
+   * gồm tóm tắt, câu hỏi làm rõ (nếu cần) và lệnh. Ngữ cảnh đi vào lời nhắc hệ thống, lượt người
+   * dùng chỉ có câu yêu cầu; kết quả kiểm tra lại bằng core.
+   */
+  async direct(goal: string, context: DirectorContext): Promise<DirectorPlan> {
+    const text = goal.trim().slice(0, 2000)
+    if (!text) return { summary: '', questions: [], commands: [] }
+    const answer = await this.askJson<unknown>({
+      system: directorSystem(trimDirectorContext(context)),
+      user: text,
+      schema: DIRECTOR_SCHEMA,
+      effort: 'medium',
+    })
+    return normalizeDirectorPlan(answer)
   }
 
   async translate(

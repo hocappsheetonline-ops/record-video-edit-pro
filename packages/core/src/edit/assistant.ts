@@ -256,7 +256,13 @@ export function parseAssistantRequest(text: string): AssistantCommand[] {
         t,
       )?.[1] ?? ''
     const quiet = /nhỏ|nhẹ|quiet|soft|low/i.test(t)
-    push({ kind: 'music', query: query.trim(), volume: quiet ? 0.25 : 0.4 })
+    // Bỏ từ chỉ âm lượng khỏi từ khóa tìm bài ("lofi nhỏ" → "lofi").
+    const cleaned = query
+      .split(/\s+/)
+      .filter((w) => !/^(nhỏ|nhẹ|to|lớn|quiet|soft|low|loud)$/iu.test(w))
+      .join(' ')
+      .trim()
+    push({ kind: 'music', query: cleaned, volume: quiet ? 0.25 : 0.4 })
   }
   const template = CAPTION_WORDS.find(([re]) => re.test(t))?.[1]
   if (template) {
@@ -264,7 +270,7 @@ export function parseAssistantRequest(text: string): AssistantCommand[] {
     push({ kind: 'captionsStyle', template })
   }
   if (/xuất|export|render|lưu video|save video/i.test(t)) {
-    const res = /(2160|4k|1440|1080|720)/i.exec(t)?.[1]
+    const res = /(2160|4k|1440|1080|720)/i.exec(t)?.[1]?.toLowerCase()
     push({
       kind: 'export',
       resolution: res === '4k' ? 2160 : res ? (Number(res) as 720 | 1080 | 1440 | 2160) : 1080,
