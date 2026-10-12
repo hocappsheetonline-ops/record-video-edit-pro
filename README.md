@@ -15,6 +15,7 @@ Kế hoạch đầy đủ nằm trong [PLAN.md](PLAN.md).
 | 3         | AI: phụ đề, tự biên tập                                               | ✅ Xong    |
 | 4         | Livestream (đa nền tảng, khách mời, bình luận, phụ đề trực tiếp)      | ✅ Xong    |
 | 5         | Hoàn thiện: icon, tự cập nhật, nhật ký lỗi                            | ✅ Xong    |
+| 6         | Lộ trình kiểu CapCut (ROADMAP Bước 1–6), bản 1.0                      | ✅ Xong    |
 
 ## Tải bản cài về chạy thử (không cần cài gì thêm)
 
@@ -244,3 +245,14 @@ Tự động test không có video người thật, nên cần thử bằng webc
 1. Quay một đoạn có webcam (mặt và vai trong khung).
 2. Mở Chỉnh sửa → Webcam → Phông nền (AI) → **Xóa**: chỉ còn người, phía sau là video màn hình; **Làm mờ** và **Màu** cũng đúng như vậy.
 3. Xuất video và xem lại: viền người mềm, không nhấp nháy mạnh.
+
+Trước khi phát hành bản lớn, thử thêm trên một máy Windows thật:
+
+1. **Quay thật**: toàn màn hình, một vùng, một cửa sổ; có webcam và micro; tạm dừng rồi quay tiếp.
+2. **Tự cập nhật**: cài bản cũ (ví dụ 0.9.1), mở app, chờ thông báo có bản mới, bấm cập nhật; app khởi động lại đúng phiên bản mới và mở được dự án cũ.
+3. **Tắt đột ngột**: đang chỉnh sửa thì tắt app bằng Task Manager; mở lại dự án thấy thông báo đã khôi phục bản tự lưu.
+4. **Hiệu năng**: mở một bản quay 1080p, thêm 3 lớp chữ / hình và một bộ lọc, bấm phát: nhãn "Xem trước nhẹ" không hiện trên máy tầm trung có card đồ họa.
+
+## Hiệu năng đo được
+
+Đo tự động (`e2e/settings-perf.spec.ts`) trên máy kiểm thử không có card đồ họa (vẽ bằng phần mềm): xem trước 720p có 3 lớp phủ và một bộ lọc mất khoảng **46 ms mỗi khung** (≈ 22 hình/giây), nên chế độ "Tự động" sẽ hạ xuống 540p cho mượt. Máy có card đồ họa vẽ nhanh hơn nhiều lần; video xuất luôn dùng đủ độ phân giải đã chọn.

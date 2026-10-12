@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
@@ -37,11 +38,29 @@ test('app tắt đột ngột khi đang chỉnh sửa: mở lại thấy bản t
     })
     .toBe(1)
   expect(existsSync(join(projectDir, '.editing.lock'))).toBe(true)
-  // Tắt ngang (như mất điện): không kịp gỡ khóa.
-  first.app.process().kill('SIGKILL')
-  await new Promise((r) => setTimeout(r, 1000))
+  // Tắt ngang (như mất điện / End task): không kịp gỡ khóa. Trên Windows phải tắt cả cây tiến
+  // trình (GPU, renderer…), nếu không app mở lại sẽ thấy "đang chạy" và tự thoát.
+  const pid = first.app.process().pid!
+  if (process.platform === 'win32') {
+    try {
+      execSync(`taskkill /PID ${pid} /T /F`, { stdio: 'ignore' })
+    } catch {
+      // Đã thoát.
+    }
+  } else first.app.process().kill('SIGKILL')
+  await new Promise((r) => setTimeout(r, 2000))
 
-  const { app, page, errors } = await launchApp(dirs.userData)
+  // Hệ điều hành có thể cần thêm chút thời gian để nhả khóa "một bản app".
+  let launched: Awaited<ReturnType<typeof launchApp>> | null = null
+  for (let i = 0; i < 3 && !launched; i++) {
+    try {
+      launched = await launchApp(dirs.userData)
+    } catch (error) {
+      if (i === 2) throw error
+      await new Promise((r) => setTimeout(r, 3000))
+    }
+  }
+  const { app, page, errors } = launched!
   await openEditor(page)
   await expect(page.getByTestId('toast')).toContainText('tắt đột ngột')
   await expect(page.getByTestId('timeline-overlay')).toHaveCount(1)

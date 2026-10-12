@@ -64,6 +64,7 @@ export class PreviewEngine {
   private readonly audioClips = new Map<string, HTMLAudioElement>()
   /** Thời gian vẽ các khung gần đây (ms), để tự hạ chất lượng xem trước. */
   private drawTimes: number[] = []
+  private recent: number[] = []
   /** Thẻ video cho từng video meme (theo id lớp), phát cả tiếng. */
   private readonly overlayVideos = new Map<string, HTMLVideoElement>()
   /** Thẻ media cho file đảo ngược của clip phát ngược (theo tên file). */
@@ -510,6 +511,14 @@ export class PreviewEngine {
    * 30 hình/giây) và nâng lại khi rảnh; "nhẹ" luôn 540p; "cao" luôn 720p. Video xuất không đổi.
    */
   private measure(ms: number, playing: boolean) {
+    // Thời gian vẽ trung bình gần đây (ms) — để đo hiệu năng (README, kiểm thử tự động).
+    if (playing) {
+      this.recent.push(ms)
+      if (this.recent.length > 120) this.recent.shift()
+      this.canvas.dataset.drawMs = (
+        this.recent.reduce((a, b) => a + b, 0) / this.recent.length
+      ).toFixed(1)
+    }
     const quality = useAppStore.getState().settings?.previewQuality ?? 'auto'
     const store = useEditorStore.getState()
     if (quality !== 'auto') {

@@ -2,6 +2,13 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.0.0
+
+- Hoàn tất lộ trình kiểu CapCut (ROADMAP Bước 1–6): giao diện biểu tượng, kho meme, âm thanh và lọc tạp âm, bộ lọc / keyframe / mặt nạ / xóa phông AI, chữ / phụ đề / giọng AI, timeline chuyên nghiệp, nhập video ngoài, việc nền, lịch sử, ổn định.
+- Cài đặt trình chỉnh sửa có kiểm thử tự động đầu-cuối (mẫu TikTok, xem trước nhẹ); đo hiệu năng xem trước ghi trong README.
+- 46 bài kiểm thử đầu-cuối chạy trên Windows (CI) và Linux, cả ở màn hình nhỏ 1024×768.
+- Bản cài 0.9.0 và 0.9.1 không được phát hành (kiểm thử trên Windows phát hiện lỗi bố cục màn hình nhỏ); mọi thay đổi của hai bản đó có trong 1.0.0.
+
 ## 0.9.1
 
 - **Ổn định**: phát hiện app tắt đột ngột khi đang chỉnh sửa (file khóa phiên) và báo đã mở lại bản tự lưu; lỗi của giao diện được ghi vào `main.log`; kiểm tra tự động không rò rỉ bộ nhớ khi mở / đóng trình chỉnh sửa nhiều lần.
