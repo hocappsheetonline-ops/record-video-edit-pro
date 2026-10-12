@@ -69,7 +69,7 @@ Cách app quay:
 
 ## Chỉnh sửa và xuất video
 
-Mở một dự án và bấm **Chỉnh sửa**. Giao diện bố trí giống phần mềm dựng phim chuyên nghiệp (CapCut, Premiere):
+Mở một dự án và bấm **Chỉnh sửa**. Giao diện bố trí giống phần mềm dựng phim chuyên nghiệp (CapCut, Premiere), phong cách thiết kế Apple (macOS): bề mặt kính mờ, bo góc lớn, màu hệ thống; đổi màu chủ đạo, giao diện tối / sáng và **Giảm trong suốt** trong Cài đặt.
 
 - **Bên trái — Thư viện** (cột mục có biểu tượng và nhãn như CapCut): Phương tiện · Âm thanh · Văn bản · Nhãn dán · Hiệu ứng · Bộ lọc · Chuyển cảnh · Phụ đề · AI. Bấm một mục để thêm tại đầu phát.
 - **Giữa — Xem trước**: bấm vào chữ, sticker, video meme hoặc **webcam** để chọn; kéo để dời, kéo góc để đổi cỡ, kéo nút tròn để xoay. Thanh điều khiển: về đầu, lùi/tới 1 khung hình, phát/dừng, tới cuối, đổi tỉ lệ khung, toàn màn hình.

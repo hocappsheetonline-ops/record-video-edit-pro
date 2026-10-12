@@ -2,6 +2,12 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.1.0
+
+- **Giao diện phong cách Apple** (macOS / Liquid Glass): chữ hệ thống, xám trung tính và màu hệ thống của Apple cho cả giao diện tối lẫn sáng; bo góc đồng tâm lớn; nút viên thuốc, segmented control, công tắc và thanh trượt kiểu macOS; sidebar, thanh công cụ, thanh phát, menu chuột phải, chú thích, thông báo và hộp thoại là **kính mờ** (blur + bán trong suốt); thanh cuộn mảnh; tiêu đề trang cỡ lớn.
+- **Màu chủ đạo** đổi sang bộ màu hệ thống macOS (xanh dương, tím, hồng, đỏ, cam, vàng, xanh lá, than chì); mặc định xanh dương Apple.
+- Cài đặt mới **Giảm trong suốt**: thanh công cụ, menu và hộp thoại dùng màu đặc thay vì kính mờ (nhẹ hơn cho máy yếu).
+
 ## 1.0.1
 
 - **Bỏ kho meme Tenor**: Google đã khai tử Tenor API ngày 30/6/2026 nên app không còn ô key Tenor, nguồn Meme và Sticker động; kho **Pixabay** (video, ảnh miễn phí) giữ nguyên. Meme đã tải trước đó vẫn nằm trong thư viện của bạn.

@@ -29,9 +29,13 @@ function NavButton({
       aria-label={compact ? t(`nav.${page}`) : undefined}
       data-tooltip={compact ? t(`nav.${page}`) : undefined}
       data-testid={`nav-${page}`}
-      className={`flex w-full items-center rounded-lg text-sm transition-colors ${
-        compact ? 'justify-center p-2.5' : 'gap-3 px-3 py-2'
-      } ${active ? 'bg-accent text-accent-fg' : 'text-muted hover:bg-surface-2 hover:text-text'}`}
+      className={`flex w-full items-center rounded-lg text-[13px] font-medium transition-colors ${
+        compact ? 'justify-center p-2.5' : 'gap-2.5 px-2.5 py-1.5'
+      } ${
+        active
+          ? 'bg-accent text-accent-fg shadow-sm'
+          : 'text-text/85 hover:bg-text/8 hover:text-text'
+      }`}
     >
       <Icon size={compact ? 20 : 18} aria-hidden />
       {!compact && t(`nav.${page}`)}
@@ -39,19 +43,22 @@ function NavButton({
   )
 }
 
-/** Thanh điều hướng. Ở trình chỉnh sửa thu gọn thành cột biểu tượng để nhường chỗ cho video. */
+/**
+ * Thanh điều hướng kiểu sidebar macOS (kính mờ, mục đang chọn là viên màu nhấn). Ở trình chỉnh
+ * sửa thu gọn thành cột biểu tượng để nhường chỗ cho video.
+ */
 export function Sidebar() {
   const compact = useAppStore((s) => s.page === 'editor')
   return (
     <nav
-      className={`flex shrink-0 flex-col gap-1 border-r border-border bg-surface ${
+      className={`glass flex shrink-0 flex-col gap-0.5 border-r ${
         compact ? 'w-14 items-center p-2' : 'w-56 p-3'
       }`}
       data-compact={compact}
     >
-      <div className={`flex items-center gap-2 ${compact ? 'mb-3 py-2' : 'mb-4 px-3 py-2'}`}>
-        <div className="size-7 rounded-lg bg-gradient-to-br from-accent to-sky-400" />
-        {!compact && <span className="text-lg font-semibold tracking-tight">Lumora</span>}
+      <div className={`flex items-center gap-2.5 ${compact ? 'mb-3 py-2' : 'mb-4 px-2 py-2'}`}>
+        <div className="size-7 rounded-[9px] bg-gradient-to-br from-accent to-sky-400 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_1px_2px_rgba(0,0,0,0.3)]" />
+        {!compact && <span className="text-[15px] font-semibold tracking-tight">Lumora</span>}
       </div>
       {ITEMS.map((item) => (
         <NavButton key={item.page} {...item} compact={compact} />

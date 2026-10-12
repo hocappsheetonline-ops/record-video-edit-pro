@@ -31,7 +31,7 @@ import { useAppStore } from '../store/app'
 
 const TIMELINE_KEY = 'lumora.timelineHeight'
 const iconButton =
-  'flex size-8 items-center justify-center rounded-md text-muted hover:bg-surface-2 hover:text-text disabled:opacity-40'
+  'flex size-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-text/8 hover:text-text disabled:opacity-40'
 
 /** Tự lưu bản chỉnh sửa sau khi người dùng ngừng thao tác một chút. */
 function useAutosave() {
@@ -153,7 +153,7 @@ function PlayerBar({ onFullscreen }: { onFullscreen: () => void }) {
   return (
     <div
       data-testid="player-bar"
-      className="flex min-h-11 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-t border-border bg-surface px-3 py-1"
+      className="glass flex min-h-11 shrink-0 flex-wrap items-center gap-x-2 gap-y-1 border-t px-3 py-1"
     >
       <span className="shrink-0 font-mono text-xs tabular-nums" data-testid="timecode">
         <span className="text-text">{formatTimecode(time)}</span>
@@ -190,7 +190,7 @@ function PlayerBar({ onFullscreen }: { onFullscreen: () => void }) {
           aria-label={playing ? t('editor.pause') : t('editor.play')}
           data-tooltip={playing ? t('editor.pause') : t('editor.play')}
           data-shortcut="Space"
-          className="mx-1 flex size-9 items-center justify-center rounded-full bg-text text-bg hover:scale-105"
+          className="mx-1 flex size-9 items-center justify-center rounded-full bg-text text-bg shadow-sm transition-transform hover:scale-105 active:scale-95"
         >
           {playing ? (
             <Pause size={17} aria-hidden />
@@ -240,7 +240,7 @@ function PlayerBar({ onFullscreen }: { onFullscreen: () => void }) {
           onChange={(e) =>
             s.setPreviewZoom(e.target.value === 'fit' ? 'fit' : Number(e.target.value))
           }
-          className="rounded-md border border-border bg-surface-2 px-1.5 py-1 text-xs"
+          className="rounded-md border border-border bg-surface-2 py-1 pl-2 text-xs"
         >
           <option value="fit">{t('editor.player.fit')}</option>
           {[25, 50, 75, 100, 150, 200].map((z) => (
@@ -276,7 +276,7 @@ function PlayerBar({ onFullscreen }: { onFullscreen: () => void }) {
               },
             }))
           }
-          className="rounded-md border border-border bg-surface-2 px-1.5 py-1 text-xs"
+          className="rounded-md border border-border bg-surface-2 py-1 pl-2 text-xs"
         >
           {ASPECTS.map((a) => (
             <option key={a} value={a}>
@@ -314,7 +314,7 @@ function ExportDialog({ open, onClose }: { open: boolean; onClose: () => void })
   return (
     <div
       hidden={!open}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6 backdrop-blur-sm"
       onPointerDown={(e) => e.target === e.currentTarget && onClose()}
     >
       <div
@@ -322,7 +322,7 @@ function ExportDialog({ open, onClose }: { open: boolean; onClose: () => void })
         aria-modal="true"
         aria-labelledby="export-title"
         data-testid="export-dialog"
-        className="flex max-h-full w-[440px] flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-2xl"
+        className="glass-strong flex max-h-full w-[440px] flex-col overflow-hidden rounded-2xl border shadow-2xl"
       >
         <header className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4">
           <h2 id="export-title" className="text-sm font-semibold">
@@ -424,10 +424,10 @@ export function EditorPage() {
       <ToastLayer />
       <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <Onboarding />
-      <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-surface px-3">
+      <header className="glass flex h-12 shrink-0 items-center gap-3 border-b px-3">
         <button
           type="button"
-          className="flex items-center gap-1 rounded-md px-2 py-1.5 text-xs text-muted hover:bg-surface-2 hover:text-text"
+          className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-muted transition-colors hover:bg-text/8 hover:text-text"
           onClick={() => setPage('projects')}
           data-testid="editor-back"
         >
@@ -449,7 +449,7 @@ export function EditorPage() {
           data-tooltip={t('editor.help.shortcuts')}
           data-shortcut="?"
           onClick={() => setShortcutsOpen(true)}
-          className="flex size-8 items-center justify-center rounded-md text-muted hover:bg-surface-2 hover:text-text"
+          className={iconButton}
         >
           <Keyboard size={16} aria-hidden />
         </button>
@@ -460,7 +460,7 @@ export function EditorPage() {
             useEditorStore.getState().setPlaying(false)
             setExporting(true)
           }}
-          className="flex items-center gap-2 rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-accent-fg hover:brightness-110"
+          className="flex items-center gap-2 rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-accent-fg shadow-sm transition-[filter,transform] hover:brightness-110 active:scale-[0.98]"
         >
           <Download size={16} aria-hidden />
           {t('editor.export.open')}
@@ -494,7 +494,7 @@ export function EditorPage() {
         role="separator"
         aria-orientation="horizontal"
         aria-label={t('editor.timeline.resize')}
-        className="h-1.5 shrink-0 cursor-row-resize border-t border-border bg-surface hover:bg-accent/40"
+        className="h-1.5 shrink-0 cursor-row-resize border-t border-border bg-surface transition-colors hover:bg-accent/40"
         onPointerDown={(e) => {
           ;(e.target as Element).setPointerCapture(e.pointerId)
           resizing.current = { y: e.clientY, h: timelineHeight }

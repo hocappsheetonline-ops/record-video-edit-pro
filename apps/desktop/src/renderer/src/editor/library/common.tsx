@@ -163,7 +163,5 @@ export const formatDuration = (ms: number) => {
 
 /** Tiêu đề nhỏ trong thư viện. */
 export function Heading({ children }: { children: ReactNode }) {
-  return (
-    <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted">{children}</h4>
-  )
+  return <h4 className="text-[11px] font-semibold text-muted">{children}</h4>
 }

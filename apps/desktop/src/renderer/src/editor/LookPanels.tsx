@@ -327,7 +327,7 @@ export function TransformPanel({ clip }: { clip: Clip }) {
           {t('editor.transform.rotated', { deg: tf.rotate })}
         </p>
       )}
-      <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-muted">
+      <div className="flex items-center gap-1.5 text-[11px] font-semibold text-muted">
         <Crop size={13} aria-hidden />
         {t('editor.transform.crop')}
       </div>

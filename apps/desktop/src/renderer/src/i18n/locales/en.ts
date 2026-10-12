@@ -1153,6 +1153,9 @@ export const en: Messages = {
     },
     onboardingHint: 'Show the quick tour again next time the editor opens.',
     onboardingReplay: 'Replay tour',
+    reduceTransparency: 'Reduce transparency',
+    reduceTransparencyHint:
+      'Toolbars, menus and dialogs use solid colours instead of frosted glass (lighter on slow machines).',
     title: 'Settings',
     general: 'General',
     language: 'Language',

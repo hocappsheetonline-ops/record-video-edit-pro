@@ -80,9 +80,7 @@ function CaptionThumb({ look }: { look: CaptionLook }) {
 }
 
 function Heading({ children }: { children: ReactNode }) {
-  return (
-    <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted">{children}</h3>
-  )
+  return <h3 className="text-[11px] font-semibold text-muted">{children}</h3>
 }
 
 export function CaptionsPanel() {

@@ -1143,6 +1143,9 @@ export const vi = {
     },
     onboardingHint: 'Xem lại phần giới thiệu nhanh lần sau khi mở trình chỉnh sửa.',
     onboardingReplay: 'Xem lại hướng dẫn',
+    reduceTransparency: 'Giảm trong suốt',
+    reduceTransparencyHint:
+      'Thanh công cụ, menu và hộp thoại dùng màu đặc thay vì kính mờ (nhẹ hơn cho máy yếu).',
     title: 'Cài đặt',
     general: 'Chung',
     language: 'Ngôn ngữ',

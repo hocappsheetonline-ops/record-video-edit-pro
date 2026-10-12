@@ -151,13 +151,17 @@ describe('Màu chủ đạo', () => {
   it('mặc định xanh dương; chọn màu khác thì cả app đổi theo', async () => {
     await renderApp(createFakeApi())
     await waitFor(() =>
-      expect(document.documentElement.style.getPropertyValue('--lm-accent')).toBe('#2563eb'),
+      expect(document.documentElement.style.getPropertyValue('--lm-accent')).toBe('#0a84ff'),
     )
     await userEvent.click(screen.getByTestId('nav-settings'))
-    await userEvent.click(screen.getByTestId('accent-#14b8a6'))
+    await userEvent.click(screen.getByTestId('accent-#30d158'))
     await waitFor(() =>
-      expect(document.documentElement.style.getPropertyValue('--lm-accent')).toBe('#14b8a6'),
+      expect(document.documentElement.style.getPropertyValue('--lm-accent')).toBe('#30d158'),
     )
-    expect(screen.getByTestId('accent-#14b8a6')).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByTestId('accent-#30d158')).toHaveAttribute('aria-pressed', 'true')
+    // Giảm trong suốt: tắt kính mờ trên toàn app.
+    expect(document.documentElement.dataset.glass).toBe('on')
+    await userEvent.click(screen.getByTestId('settings-reduce-transparency'))
+    await waitFor(() => expect(document.documentElement.dataset.glass).toBe('off'))
   })
 })

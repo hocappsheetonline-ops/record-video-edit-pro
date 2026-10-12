@@ -39,6 +39,8 @@ export function App() {
     document.documentElement.dataset.theme = resolveTheme(settings.theme)
     document.documentElement.style.setProperty('--lm-accent', settings.accent)
     document.documentElement.style.setProperty('--lm-accent-fg', accentForeground(settings.accent))
+    // Kính mờ (kiểu Apple) bật / tắt theo "Giảm trong suốt".
+    document.documentElement.dataset.glass = settings.reduceTransparency ? 'off' : 'on'
   }, [settings, i18n])
 
   if (!ready) return <div className="h-full bg-bg" />

@@ -82,12 +82,12 @@ export function MediaBrowser() {
               data-tooltip={t(`editor.library.tabs.${name}`)}
               data-testid={`lib-${name}`}
               onClick={() => setTab(name)}
-              className={`flex w-[58px] flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-[9.5px] leading-tight transition-colors ${
+              className={`flex min-h-[46px] w-[58px] flex-col items-center gap-1 rounded-lg px-0.5 py-1.5 text-[9.5px] leading-[1.15] transition-colors ${
                 active ? 'bg-surface-2 text-text' : 'text-muted hover:text-text'
               }`}
             >
               <Icon size={18} strokeWidth={active ? 2 : 1.75} aria-hidden />
-              <span className="w-full truncate text-center">
+              <span className="line-clamp-2 w-full break-words text-center">
                 {t(`editor.library.tabs.${name}`)}
               </span>
             </button>

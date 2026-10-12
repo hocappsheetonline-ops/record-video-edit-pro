@@ -189,7 +189,7 @@ export function PropertiesPanel() {
               className={`flex h-11 items-center justify-center border-b-2 transition-colors ${
                 active
                   ? 'border-accent text-accent'
-                  : 'border-transparent text-muted hover:bg-surface-2 hover:text-text'
+                  : 'border-transparent text-muted hover:bg-text/5 hover:text-text'
               }`}
             >
               <Icon size={18} strokeWidth={1.75} aria-hidden />
