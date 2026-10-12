@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { Mic, Music2, Sparkles, type LucideIcon } from 'lucide-react'
 import {
@@ -9,7 +10,10 @@ import {
   type AudioClip,
 } from '@lumora/core'
 import { WaveBars } from './ClipWaveform'
+import { openContextMenu } from './ContextMenu'
+import { snapDelta } from './snap'
 import { useEditorStore } from './store'
+import { itemMenu } from './timeline-menus'
 import { assignLanes } from './timeline-math'
 
 type Drag = { id: string; mode: 'move' | 'start' | 'end'; originX: number; origin: AudioClip }
@@ -32,7 +36,10 @@ export function AudioTrack({
   onSeek: (e: ReactPointerEvent) => void
 }) {
   const clips = useEditorStore((s) => s.edit?.audioClips ?? [])
-  const selection = useEditorStore((s) => s.selection)
+  const selectedItems = useEditorStore((s) => s.selected)
+  const locked = useEditorStore((s) => s.edit?.tracks.audio.locked ?? false)
+  const selectedIds = new Set(selectedItems.filter((x) => x.kind === 'audio').map((x) => x.id))
+  const { t: tr } = useTranslation()
   const peaks = useEditorStore((s) => s.assetPeaks)
   const [drag, setDrag] = useState<Drag | null>(null)
   const store = useEditorStore.getState
@@ -42,19 +49,24 @@ export function AudioTrack({
   }, [clips, store])
 
   const down = (e: ReactPointerEvent, clip: AudioClip, mode: Drag['mode']) => {
+    if (e.button !== 0) return
+    if (locked) return
     e.stopPropagation()
+    if (e.ctrlKey || e.metaKey || e.shiftKey) {
+      store().toggleSelect({ kind: 'audio', id: clip.id })
+      return
+    }
     ;(e.target as Element).setPointerCapture?.(e.pointerId)
-    store().select({ kind: 'audio', id: clip.id })
+    if (!store().isSelected('audio', clip.id) || store().selected.length <= 1)
+      store().select({ kind: 'audio', id: clip.id })
     setDrag({ id: clip.id, mode, originX: e.clientX, origin: clip })
   }
   const move = (e: ReactPointerEvent) => {
     if (!drag) return
-    const next = dragAudioClip(
-      drag.origin,
-      drag.mode,
-      (e.clientX - drag.originX) / pxPerMs,
-      duration,
-    )
+    const raw = (e.clientX - drag.originX) / pxPerMs
+    const span = { start: drag.origin.start, end: drag.origin.start + drag.origin.duration }
+    const delta = snapDelta(span, drag.mode, raw, pxPerMs, drag.id, e.altKey)
+    const next = dragAudioClip(drag.origin, drag.mode, delta, duration)
     store().updateAudioClip(drag.id, next, `audio-drag-${drag.id}`)
   }
 
@@ -71,12 +83,15 @@ export function AudioTrack({
       className="relative h-full flex-1"
       onPointerDown={onSeek}
       onPointerMove={move}
-      onPointerUp={() => setDrag(null)}
+      onPointerUp={() => {
+        setDrag(null)
+        store().setSnapLine(null)
+      }}
       data-testid="audio-track"
     >
       {clips.map((clip, index) => {
         const lane = lanes[index] ?? 0
-        const selected = selection?.kind === 'audio' && selection.id === clip.id
+        const selected = selectedIds.has(clip.id)
         const wave = peaks[clip.file]
         const bars = wave
           ? audioClipBars(clip, wave, Math.max(4, Math.min(600, Math.ceil(clip.duration / 60))))
@@ -90,6 +105,10 @@ export function AudioTrack({
             data-testid="timeline-audio"
             data-kind={clip.kind}
             onPointerDown={(e) => down(e, clip, 'move')}
+            onContextMenu={(e) => !locked && openContextMenu(e, itemMenu(tr, 'audio', clip.id))}
+            data-selected={selected}
+            data-sel-kind="audio"
+            data-sel-id={clip.id}
             className={`absolute flex cursor-grab items-center overflow-hidden rounded-md border-2 text-[11px] ${
               kind.className
             } ${selected ? 'border-white' : 'border-transparent hover:border-white/40'}`}

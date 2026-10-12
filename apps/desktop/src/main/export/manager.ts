@@ -8,6 +8,7 @@ import {
   planAudioClips,
   type EditState,
   type Project,
+  applyTrackState,
 } from '@lumora/core'
 import { buildExportMuxArgs, buildGifArgs } from '../ffmpeg/args'
 import type { FfmpegRunner } from '../ffmpeg/runner'
@@ -83,10 +84,12 @@ export class ExportManager {
   async finish(
     id: string,
     project: Project,
-    edit: EditState,
+    savedEdit: EditState,
     projectDir: string,
     baseName: string,
   ): Promise<ExportResult> {
+    // Hàng bị tắt tiếng / ẩn trên timeline: không trộn vào video xuất.
+    const edit = applyTrackState(savedEdit)
     const job = this.get(id)
     this.active.delete(id)
     await job.file.close()

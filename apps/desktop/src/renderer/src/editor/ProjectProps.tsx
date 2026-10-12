@@ -24,6 +24,7 @@ export const PROJECT_TABS = [
   'zoom',
   'audio',
   'adjust',
+  'markers',
 ] as const
 export type ProjectTab = (typeof PROJECT_TABS)[number]
 

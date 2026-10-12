@@ -1,7 +1,10 @@
 import { useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { dragOverlay, type Overlay, type OverlayKind } from '@lumora/core'
+import { openContextMenu } from './ContextMenu'
+import { snapDelta } from './snap'
 import { useEditorStore } from './store'
+import { itemMenu } from './timeline-menus'
 import { assignLanes } from './timeline-math'
 
 type Drag = { id: string; mode: 'move' | 'start' | 'end'; originX: number; origin: Overlay }
@@ -34,19 +37,31 @@ export function OverlayTrack({
 }) {
   const { t } = useTranslation()
   const effects = useEditorStore((s) => s.edit?.overlays ?? [])
-  const selection = useEditorStore((s) => s.selection)
+  const selectedItems = useEditorStore((s) => s.selected)
+  const locked = useEditorStore((s) => s.edit?.tracks.overlays.locked ?? false)
+  const selectedIds = new Set(selectedItems.filter((x) => x.kind === 'overlay').map((x) => x.id))
+  const { t: tr } = useTranslation()
   const [drag, setDrag] = useState<Drag | null>(null)
   const store = useEditorStore.getState
 
   const down = (e: ReactPointerEvent, fx: Overlay, mode: Drag['mode']) => {
+    if (e.button !== 0) return
+    if (locked) return
     e.stopPropagation()
+    if (e.ctrlKey || e.metaKey || e.shiftKey) {
+      store().toggleSelect({ kind: 'overlay', id: fx.id })
+      return
+    }
     ;(e.target as Element).setPointerCapture?.(e.pointerId)
-    store().select({ kind: 'overlay', id: fx.id })
+    if (!store().isSelected('overlay', fx.id) || store().selected.length <= 1)
+      store().select({ kind: 'overlay', id: fx.id })
     setDrag({ id: fx.id, mode, originX: e.clientX, origin: fx })
   }
   const move = (e: ReactPointerEvent) => {
     if (!drag) return
-    const next = dragOverlay(drag.origin, drag.mode, (e.clientX - drag.originX) / pxPerMs, duration)
+    const raw = (e.clientX - drag.originX) / pxPerMs
+    const delta = snapDelta(drag.origin, drag.mode, raw, pxPerMs, drag.id, e.altKey)
+    const next = dragOverlay(drag.origin, drag.mode, delta, duration)
     store().updateOverlay(
       drag.id,
       {
@@ -65,11 +80,14 @@ export function OverlayTrack({
       className="relative h-full flex-1"
       onPointerDown={onSeek}
       onPointerMove={move}
-      onPointerUp={() => setDrag(null)}
+      onPointerUp={() => {
+        setDrag(null)
+        store().setSnapLine(null)
+      }}
     >
       {effects.map((fx, index) => {
         const lane = lanes[index] ?? 0
-        const selected = selection?.kind === 'overlay' && selection.id === fx.id
+        const selected = selectedIds.has(fx.id)
         const end = Math.min(fx.end, duration)
         if (end <= fx.start) return null
         return (
@@ -78,7 +96,10 @@ export function OverlayTrack({
             data-testid="timeline-overlay"
             data-kind={fx.kind}
             onPointerDown={(e) => down(e, fx, 'move')}
+            onContextMenu={(e) => !locked && openContextMenu(e, itemMenu(tr, 'overlay', fx.id))}
             data-selected={selected}
+            data-sel-kind="overlay"
+            data-sel-id={fx.id}
             className={`absolute flex cursor-grab items-center overflow-hidden rounded-md border-2 text-[11px] ${KIND_STYLE[fx.kind]} ${
               selected ? 'border-white' : 'border-transparent hover:border-white/40'
             }`}

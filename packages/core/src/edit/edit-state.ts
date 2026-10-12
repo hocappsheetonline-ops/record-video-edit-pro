@@ -1,5 +1,7 @@
 import type { Project } from '../project'
 import { parseCaptionLook } from './caption-style'
+import { parseMarkers, type Marker } from './markers'
+import { DEFAULT_TRACKS, parseTracks, type Tracks } from './tracks'
 import {
   DEFAULT_CAPTIONS,
   type CaptionLine,
@@ -165,6 +167,10 @@ export interface EditState {
   look: Look
   export: ExportSettings
   captions: CaptionsState
+  /** Điểm đánh dấu trên timeline (thời gian trên video xuất). */
+  markers: Marker[]
+  /** Ẩn / tắt tiếng / khóa từng hàng trên timeline. */
+  tracks: Tracks
 }
 
 export const BACKGROUND_PRESETS: Background[] = [
@@ -227,6 +233,8 @@ export function createDefaultEdit(
     look: { ...DEFAULT_LOOK, adjust: { ...DEFAULT_LOOK.adjust } },
     export: { resolution: 1080, fps: project.fps >= 60 ? 60 : 30, format: 'mp4' },
     captions: { ...DEFAULT_CAPTIONS, lines: [] },
+    markers: [],
+    tracks: DEFAULT_TRACKS,
   }
 }
 
@@ -429,6 +437,8 @@ export function parseEditState(
       format: e.format === 'gif' ? 'gif' : 'mp4',
     },
     captions: parseCaptions(input.captions, duration),
+    markers: parseMarkers(input.markers, Number.POSITIVE_INFINITY),
+    tracks: parseTracks(input.tracks),
   }
 }
 

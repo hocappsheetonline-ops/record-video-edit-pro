@@ -19,6 +19,7 @@ import { ExportPanel } from '../editor/ExportPanel'
 import { MediaBrowser } from '../editor/MediaBrowser'
 import { PreviewCanvas } from '../editor/PreviewCanvas'
 import { PropertiesPanel } from '../editor/PropertiesPanel'
+import { ContextMenuLayer } from '../editor/ContextMenu'
 import { useEditorStore } from '../editor/store'
 import { Timeline } from '../editor/Timeline'
 import { formatTimecode } from '../editor/timeline-math'
@@ -73,6 +74,31 @@ function useShortcuts() {
       ) {
         e.preventDefault()
         s.redo()
+      } else if (mod && e.key.toLowerCase() === 'c') {
+        if (s.copySelection()) e.preventDefault()
+      } else if (mod && e.key.toLowerCase() === 'x') {
+        e.preventDefault()
+        s.cutSelection()
+      } else if (mod && e.key.toLowerCase() === 'v') {
+        e.preventDefault()
+        s.paste()
+      } else if (mod && e.key.toLowerCase() === 'd') {
+        e.preventDefault()
+        s.duplicateSelection()
+      } else if (mod && e.key.toLowerCase() === 'a') {
+        e.preventDefault()
+        s.selectAll()
+      } else if (mod && e.key.toLowerCase() === 'm') {
+        e.preventDefault()
+        s.jumpMarker(1)
+      } else if (!mod && e.shiftKey && e.key.toLowerCase() === 'm') {
+        s.jumpMarker(-1)
+      } else if (!mod && e.key.toLowerCase() === 'm') {
+        s.addMarkerAtPlayhead()
+      } else if (!mod && e.key.toLowerCase() === 'n') {
+        s.setSnapping(!s.snapping)
+      } else if (e.shiftKey && (e.key === 'Delete' || e.key === 'Backspace')) {
+        s.rippleDeleteSelection()
       } else if (!mod && e.key.toLowerCase() === 's') {
         s.splitAtPlayhead()
       } else if (!mod && e.key.toLowerCase() === 'a') {
@@ -326,6 +352,7 @@ export function EditorPage() {
 
   return (
     <div className="flex h-full flex-col bg-bg" data-testid="editor">
+      <ContextMenuLayer />
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-surface px-3">
         <button
           type="button"

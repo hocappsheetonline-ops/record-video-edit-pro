@@ -27,6 +27,7 @@ import {
   type InputEvent,
   type Project,
   type Size,
+  applyTrackState,
 } from '@lumora/core'
 import type { ExportResult } from '@shared/ipc'
 import { lumora } from '../api'
@@ -137,7 +138,9 @@ export async function exportVideo(options: {
   onProgress?: (p: ExportProgress) => void
   signal?: AbortSignal
 }): Promise<ExportResult> {
-  const { folder, project, edit, signal } = options
+  const { folder, project, signal } = options
+  // Hàng bị ẩn / tắt tiếng trên timeline: giống khi xem trước.
+  const edit = applyTrackState(options.edit)
   const api = lumora()
   const fps = edit.export.fps
   const size = outputSize(edit.frame.aspect, edit.export.resolution, options.videoSize)

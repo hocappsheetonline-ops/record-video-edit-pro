@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft,
   AudioLines,
+  Flag,
   Frame,
   MousePointer2,
   Move,
@@ -31,6 +32,7 @@ import {
   type ProjectTab,
 } from './ProjectProps'
 import { AdjustPanel } from './LookPanels'
+import { MarkersPanel } from './MarkersPanel'
 import { useEditorStore } from './store'
 
 const TAB_ICONS: Record<ProjectTab, LucideIcon> = {
@@ -41,6 +43,7 @@ const TAB_ICONS: Record<ProjectTab, LucideIcon> = {
   zoom: ZoomIn,
   audio: AudioLines,
   adjust: SlidersHorizontal,
+  markers: Flag,
 }
 
 /**
@@ -163,7 +166,7 @@ export function PropertiesPanel() {
   return (
     <div className="flex h-full flex-col" data-testid="properties">
       <div
-        className="grid shrink-0 grid-cols-6 border-b border-border"
+        className="grid shrink-0 grid-cols-8 border-b border-border"
         role="tablist"
         aria-label={t('editor.props.project')}
       >
@@ -202,6 +205,7 @@ export function PropertiesPanel() {
         {projectTab === 'zoom' && <ZoomProjectProps edit={edit} />}
         {projectTab === 'audio' && <AudioMixProps edit={edit} />}
         {projectTab === 'adjust' && <AdjustPanel />}
+        {projectTab === 'markers' && <MarkersPanel />}
       </div>
     </div>
   )

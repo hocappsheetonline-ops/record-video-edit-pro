@@ -45,6 +45,7 @@ export function CaptionTrack({
   const edit = useEditorStore((s) => s.edit)
   const time = useEditorStore((s) => s.time)
   const [drag, setDrag] = useState<Drag | null>(null)
+  const locked = useEditorStore((s) => s.edit?.tracks.captions.locked ?? false)
   if (!edit) return null
   const { lines } = edit.captions
   const store = useEditorStore.getState
@@ -55,6 +56,7 @@ export function CaptionTrack({
     mode: Drag['mode'],
     range: { start: number; end: number },
   ) => {
+    if (e.button !== 0 || locked) return
     e.stopPropagation()
     ;(e.target as Element).setPointerCapture?.(e.pointerId)
     if (mode === 'move') {

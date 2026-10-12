@@ -10,6 +10,8 @@ import {
   ArrowLeftToLine,
   ArrowRightToLine,
   Captions,
+  Flag,
+  Magnet,
   Layers,
   Music2,
   Redo2,
@@ -37,6 +39,7 @@ import {
   outputToSource,
   sourceDuration,
   type ZoomRegion,
+  type TimelineRow,
 } from '@lumora/core'
 import { AudioTrack } from './AudioTrack'
 import { CaptionTrack } from './CaptionTrack'
@@ -44,10 +47,13 @@ import { ClipFilmstrip } from './ClipFilmstrip'
 import { EffectTrack } from './EffectTrack'
 import { OverlayTrack } from './OverlayTrack'
 import { ClipWaveform } from './ClipWaveform'
-import { useEditorStore } from './store'
+import { openContextMenu } from './ContextMenu'
+import { useEditorStore, type SelItem } from './store'
+import { clipMenu, emptyMenu } from './timeline-menus'
+import { MarkerFlags, TrackControls } from './TimelineMarkers'
 import { formatTimecode, laneCount, tickInterval, zoomOutputIntervals } from './timeline-math'
 
-const HEADER_W = 104
+const HEADER_W = 148
 /** Chiều cao dải ảnh thu nhỏ trong clip (px): clip cao 64px − viền 4px − dải sóng 16px. */
 const FILM_H = 44
 const MAX_ZOOM = 24
@@ -65,6 +71,7 @@ function ToolButton({
   disabled,
   testId,
   showLabel,
+  pressed,
 }: {
   icon: LucideIcon
   label: string
@@ -73,13 +80,16 @@ function ToolButton({
   disabled?: boolean
   testId?: string
   showLabel?: boolean
+  /** Nút bật / tắt: hiện màu nhấn khi đang bật. */
+  pressed?: boolean
 }) {
   return (
     <button
       type="button"
-      className={toolButton}
+      className={`${toolButton} ${pressed ? 'text-accent' : ''}`}
       onClick={onClick}
       disabled={disabled}
+      aria-pressed={pressed}
       aria-label={label}
       data-tooltip={label}
       data-shortcut={shortcut}
@@ -98,9 +108,12 @@ function TimelineToolbar({ zoom, setZoom }: { zoom: number; setZoom: (z: number)
   const future = useEditorStore((s) => s.future)
   const selection = useEditorStore((s) => s.selection)
   const clips = useEditorStore((s) => s.edit?.clips.length ?? 0)
+  const snapping = useEditorStore((s) => s.snapping)
+  const selectedCount = useEditorStore((s) => s.selected.length)
   const s = useEditorStore.getState()
   const canDelete =
-    !!selection && selection.kind !== 'camera' && !(selection.kind === 'clip' && clips < 2)
+    selectedCount > 1 ||
+    (!!selection && selection.kind !== 'camera' && !(selection.kind === 'clip' && clips < 2))
   return (
     <div className="flex h-10 shrink-0 items-center gap-0.5 border-b border-border px-2">
       <ToolButton
@@ -162,6 +175,21 @@ function TimelineToolbar({ zoom, setZoom }: { zoom: number; setZoom: (z: number)
         onClick={() => s.addZoomAtPlayhead()}
         testId="toolbar-zoom-add"
       />
+      <ToolButton
+        icon={Flag}
+        label={t('editor.markers.add')}
+        shortcut="M"
+        onClick={() => s.addMarkerAtPlayhead()}
+        testId="toolbar-marker"
+      />
+      <ToolButton
+        icon={Magnet}
+        label={snapping ? t('editor.menu.snapOff') : t('editor.menu.snapOn')}
+        shortcut="N"
+        onClick={() => s.setSnapping(!snapping)}
+        pressed={snapping}
+        testId="toolbar-snap"
+      />
       <span className="ml-auto hidden text-[11px] text-muted xl:block">
         {t('editor.shortcuts')}
       </span>
@@ -203,25 +231,49 @@ function TrackHeader({
   icon: Icon,
   label,
   height,
+  row,
 }: {
   icon: LucideIcon
   label: string
   height: number
+  row?: TimelineRow
 }) {
   return (
     <div
-      className="flex shrink-0 items-start gap-2 border-b border-border/60 px-3 pt-2 text-[11px] text-muted"
+      className="flex shrink-0 items-start gap-1.5 border-b border-border/60 pl-3 pr-1 pt-1.5 text-[11px] text-muted"
       style={{ height }}
     >
-      <Icon size={14} aria-hidden className="shrink-0" />
-      <span className="truncate">{label}</span>
+      <Icon size={14} aria-hidden className="mt-0.5 shrink-0" />
+      <span className="mt-0.5 truncate">{label}</span>
+      {row && <TrackControls row={row} />}
     </div>
   )
 }
 
-function Row({ height, children }: { height: number; children: ReactNode }) {
+function Row({
+  height,
+  children,
+  row,
+}: {
+  height: number
+  children: ReactNode
+  /** Hàng ẩn / tắt tiếng / khóa: làm mờ để dễ nhận ra. */
+  row?: TimelineRow
+}) {
+  const state = useEditorStore((s) => (row ? s.edit?.tracks[row] : undefined))
+  const dim = !!state && (state.hidden || state.muted)
   return (
-    <div className="flex items-stretch border-b border-border/60" style={{ height }}>
+    <div
+      className={`flex items-stretch border-b border-border/60 ${dim ? 'opacity-40' : ''} ${
+        state?.locked
+          ? 'bg-[repeating-linear-gradient(135deg,transparent_0_6px,rgba(255,255,255,0.03)_6px_12px)]'
+          : ''
+      }`}
+      style={{ height }}
+      data-row={row}
+      data-dim={dim || undefined}
+      data-locked={state?.locked || undefined}
+    >
       {children}
     </div>
   )
@@ -243,6 +295,11 @@ export function Timeline() {
   const scrubbing = useRef(false)
   const [viewport, setViewport] = useState(800)
   const [zoom, setZoom] = useState(1)
+  const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(
+    null,
+  )
+  const snapLine = useEditorStore((s) => s.snapLine)
+  const clipsLocked = useEditorStore((s) => s.edit?.tracks.clips.locked ?? false)
   const hasEdit = edit !== null
 
   useEffect(() => {
@@ -293,10 +350,57 @@ export function Timeline() {
     store().setTime(timeAt(e.clientX))
   }
 
-  /** Bấm chỗ trống trên một hàng: dời đầu phát và bỏ chọn. */
+  /**
+   * Kéo trên chỗ trống: vẽ khung chọn, nhả chuột thì chọn các khối giao với khung
+   * (lớp phủ, hiệu ứng, âm thanh; bỏ qua hàng bị khóa). Giữ Ctrl để chọn thêm.
+   */
+  const startMarquee = (e: ReactPointerEvent) => {
+    const content = contentRef.current
+    if (!content || e.button !== 0) return
+    const rect = content.getBoundingClientRect()
+    const x0 = e.clientX - rect.left
+    const y0 = e.clientY - rect.top
+    const base = e.ctrlKey || e.metaKey ? store().selected : []
+    let moved = false
+    const onMove = (ev: PointerEvent) => {
+      const x1 = ev.clientX - rect.left
+      const y1 = ev.clientY - rect.top
+      if (!moved && Math.hypot(x1 - x0, y1 - y0) < 5) return
+      moved = true
+      setMarquee({ x0, y0, x1, y1 })
+    }
+    const onUp = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      setMarquee(null)
+      if (!moved) return
+      const left = Math.min(x0, ev.clientX - rect.left) + rect.left
+      const right = Math.max(x0, ev.clientX - rect.left) + rect.left
+      const top = Math.min(y0, ev.clientY - rect.top) + rect.top
+      const bottom = Math.max(y0, ev.clientY - rect.top) + rect.top
+      const tracks = store().edit?.tracks
+      const hits: SelItem[] = []
+      content.querySelectorAll<HTMLElement>('[data-sel-kind]').forEach((el) => {
+        const kind = el.dataset.selKind as SelItem['kind']
+        const row = kind === 'overlay' ? 'overlays' : kind === 'effect' ? 'effects' : 'audio'
+        if (tracks?.[row].locked) return
+        const r = el.getBoundingClientRect()
+        if (r.right >= left && r.left <= right && r.bottom >= top && r.top <= bottom)
+          hits.push({ kind, id: el.dataset.selId! })
+      })
+      const seen = new Set(base.map((x) => `${x.kind}:${x.id}`))
+      store().selectMany([...base, ...hits.filter((h) => !seen.has(`${h.kind}:${h.id}`))])
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
+  /** Bấm chỗ trống trên một hàng: dời đầu phát và bỏ chọn; kéo để chọn bằng khung. */
   const seekAndDeselect = (e: ReactPointerEvent) => {
+    if (e.button !== 0) return
     seek(e)
-    store().select(null)
+    if (!(e.ctrlKey || e.metaKey)) store().select(null)
+    startMarquee(e)
   }
 
   // Phóng to quanh vị trí con trỏ chuột (Ctrl + lăn chuột), giữ điểm dưới chuột đứng yên.
@@ -367,22 +471,35 @@ export function Timeline() {
             icon={Sparkles}
             label={t('editor.tracks.effects')}
             height={heights.effects}
+            row="effects"
           />
           <TrackHeader
             icon={Layers}
             label={t('editor.tracks.stickers')}
             height={heights.overlays}
+            row="overlays"
           />
           {heights.captions > 0 && (
             <TrackHeader
               icon={Captions}
               label={t('editor.tracks.captions')}
               height={heights.captions}
+              row="captions"
             />
           )}
           <TrackHeader icon={Search} label={t('editor.tracks.zooms')} height={heights.zoom} />
-          <TrackHeader icon={Video} label={t('editor.tracks.clips')} height={heights.clips} />
-          <TrackHeader icon={Music2} label={t('editor.tracks.audio')} height={heights.audio} />
+          <TrackHeader
+            icon={Video}
+            label={t('editor.tracks.clips')}
+            height={heights.clips}
+            row="clips"
+          />
+          <TrackHeader
+            icon={Music2}
+            label={t('editor.tracks.audio')}
+            height={heights.audio}
+            row="audio"
+          />
         </div>
         <div
           ref={scrollRef}
@@ -394,7 +511,12 @@ export function Timeline() {
             zoomAround(zoom * (e.deltaY < 0 ? 1.2 : 1 / 1.2), e.clientX)
           }}
         >
-          <div ref={contentRef} className="relative mx-2" style={{ width }}>
+          <div
+            ref={contentRef}
+            className="relative mx-2"
+            style={{ width }}
+            onContextMenu={(e) => openContextMenu(e, emptyMenu(t))}
+          >
             <div
               className="relative h-7 cursor-pointer border-b border-border text-[10px] text-muted"
               onPointerDown={(e) => {
@@ -406,6 +528,7 @@ export function Timeline() {
               onPointerUp={() => (scrubbing.current = false)}
               data-testid="timeline-ruler"
             >
+              <MarkerFlags duration={duration} pxPerMs={pxPerMs} />
               {ticks.map((ms) => (
                 <span
                   key={ms}
@@ -419,14 +542,14 @@ export function Timeline() {
               ))}
             </div>
 
-            <Row height={heights.effects}>
+            <Row height={heights.effects} row="effects">
               <EffectTrack duration={duration} pxPerMs={pxPerMs} onSeek={seekAndDeselect} />
             </Row>
-            <Row height={heights.overlays}>
+            <Row height={heights.overlays} row="overlays">
               <OverlayTrack duration={duration} pxPerMs={pxPerMs} onSeek={seekAndDeselect} />
             </Row>
             {heights.captions > 0 && (
-              <Row height={heights.captions}>
+              <Row height={heights.captions} row="captions">
                 <CaptionTrack duration={duration} pxPerMs={pxPerMs} onSeek={seekAndDeselect} />
               </Row>
             )}
@@ -470,7 +593,7 @@ export function Timeline() {
                 )}
               </div>
             </Row>
-            <Row height={heights.clips}>
+            <Row height={heights.clips} row="clips">
               <div className="relative flex-1 py-1" onPointerDown={seekAndDeselect}>
                 {clipPositions(edit.clips).map(({ clip, outputStart }, i) => {
                   const selected = selection?.kind === 'clip' && selection.id === clip.id
@@ -484,10 +607,16 @@ export function Timeline() {
                       data-selected={selected}
                       data-freeze={clip.freeze ? true : undefined}
                       onPointerDown={(e) => {
+                        if (e.button !== 0) return
                         e.stopPropagation()
-                        store().select({ kind: 'clip', id: clip.id })
+                        if (!clipsLocked) store().select({ kind: 'clip', id: clip.id })
                         seek(e)
                       }}
+                      onContextMenu={(e) =>
+                        clipsLocked
+                          ? openContextMenu(e, emptyMenu(t))
+                          : openContextMenu(e, clipMenu(t, clip.id))
+                      }
                       className={`absolute top-1 flex h-16 flex-col overflow-hidden rounded-md border-2 bg-surface-2 text-left ${
                         selected ? 'border-white' : 'border-transparent hover:border-white/40'
                       }`}
@@ -564,10 +693,29 @@ export function Timeline() {
                 })}
               </div>
             </Row>
-            <Row height={heights.audio}>
+            <Row height={heights.audio} row="audio">
               <AudioTrack duration={duration} pxPerMs={pxPerMs} onSeek={seekAndDeselect} />
             </Row>
 
+            {snapLine !== null && (
+              <div
+                data-testid="snap-line"
+                className="pointer-events-none absolute inset-y-0 z-20 w-px bg-accent"
+                style={{ left: `${(snapLine / duration) * 100}%` }}
+              />
+            )}
+            {marquee && (
+              <div
+                data-testid="marquee"
+                className="pointer-events-none absolute z-30 rounded-sm border border-accent bg-accent/15"
+                style={{
+                  left: Math.min(marquee.x0, marquee.x1),
+                  top: Math.min(marquee.y0, marquee.y1),
+                  width: Math.abs(marquee.x1 - marquee.x0),
+                  height: Math.abs(marquee.y1 - marquee.y0),
+                }}
+              />
+            )}
             <div
               className="pointer-events-none absolute inset-y-0 z-20 w-px bg-white"
               data-testid="playhead"

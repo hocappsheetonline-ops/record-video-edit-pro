@@ -446,6 +446,8 @@ export function lookLayers(look): { css: string; warm: number; cool: number; vig
 
 **Nghiệm thu**: thao tác timeline ngang CapCut (chọn nhiều, clipboard, hít dính, kéo thả, marker, khóa/ẩn, menu chuột phải), nhập video ngoài, ghép dự án. Phát hành **v0.8.0**.
 
+> **Trạng thái**: v0.8.0 đã làm 5.1 (chọn nhiều giữ `selection` làm mục chính + `selected[]`, clipboard, `snapTime` / `snapBlock`, xóa dồn trong `core/edit/timeline-ops.ts`), 5.3 phần đầu hàng (`EditState.tracks`, `applyTrackState` dùng chung cho xem trước, xuất ở renderer và main) và marker (`core/edit/markers.ts`, chương YouTube), 5.5 (menu chuột phải `ContextMenu.tsx` + `timeline-menus.ts`). Còn lại cho v0.8.1: 5.2 (kéo thả từ thư viện / từ Explorer), 5.4 (nhập video ngoài làm clip chính, ghép dự án), tooltip ảnh khi rê trên clip, tách âm thanh clip chính.
+
 ---
 
 ### Bước 6 — v0.9.0 → v1.0.0: Hoàn thiện, hiệu năng, trải nghiệm

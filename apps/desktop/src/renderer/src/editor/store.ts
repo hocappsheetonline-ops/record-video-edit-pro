@@ -24,6 +24,16 @@ import {
   DEFAULT_OVERLAY_MS,
   newOverlayId,
   templateStyle,
+  addMarker,
+  isClipboardEmpty,
+  markerNear,
+  pasteClipboard,
+  rippleDelete,
+  rippleDeleteAudio,
+  type ClipboardData,
+  type Marker,
+  type TimelineRow,
+  type TrackState,
   type Overlay,
   DEFAULT_EFFECT_MS,
   MIN_REGION_MS,
@@ -62,6 +72,15 @@ import {
 } from '@lumora/core'
 import type { AudioAsset, MediaAsset } from '@shared/ipc'
 import { lumora } from '../api'
+
+/** Mục chọn được nhiều cùng lúc (Ctrl+click, kéo khung chọn, Ctrl+A). */
+export type MultiKind = 'overlay' | 'effect' | 'audio'
+export interface SelItem {
+  kind: MultiKind
+  id: string
+}
+const isMulti = (k: string | undefined): k is MultiKind =>
+  k === 'overlay' || k === 'effect' || k === 'audio'
 
 /** `transition`: id là clip đứng trước chỗ nối. `camera`: bong bóng webcam (id rỗng). */
 export type Selection = {
@@ -109,6 +128,14 @@ interface EditorStore {
   time: number
   playing: boolean
   selection: Selection
+  /** Các mục đang chọn (lớp phủ, hiệu ứng, âm thanh); gồm cả `selection` nếu nó thuộc loại này. */
+  selected: SelItem[]
+  /** Nội dung đã sao chép (Ctrl+C / Ctrl+X). */
+  clipboard: ClipboardData | null
+  /** Hít dính khi kéo trên timeline (phím N). */
+  snapping: boolean
+  /** Vạch hít dính đang hiện (ms), null nếu không hít. */
+  snapLine: number | null
   past: EditState[]
   future: EditState[]
   loadError: string | null
@@ -122,6 +149,34 @@ interface EditorStore {
   setTime(ms: number): void
   setPlaying(playing: boolean): void
   select(selection: Selection): void
+  /** Ctrl+click: thêm / bớt một mục khỏi nhóm đang chọn. */
+  toggleSelect(item: SelItem): void
+  /** Chọn đúng các mục này (kéo khung chọn). */
+  selectMany(items: SelItem[]): void
+  /** Ctrl+A: chọn mọi lớp phủ, hiệu ứng, đoạn âm thanh (bỏ qua hàng bị khóa). */
+  selectAll(): void
+  isSelected(kind: string, id: string): boolean
+  /** Sao chép các mục đang chọn; trả về false nếu không có gì để chép. */
+  copySelection(): boolean
+  cutSelection(): void
+  /** Dán tại đầu phát (giữ khoảng cách tương đối); chọn các mục vừa dán. */
+  paste(): void
+  /** Nhân đôi các mục đang chọn, đặt ngay sau mục kết thúc muộn nhất. */
+  duplicateSelection(): void
+  /** Shift+Delete: xóa rồi dồn các mục phía sau cùng hàng sang trái. */
+  rippleDeleteSelection(): void
+  setSnapping(on: boolean): void
+  setSnapLine(t: number | null): void
+  /** Đổi thứ tự vẽ của lớp phủ (lên / xuống một lớp, lên trên cùng, xuống dưới cùng). */
+  reorderOverlay(id: string, to: 'up' | 'down' | 'top' | 'bottom'): void
+  /** Thêm marker tại đầu phát (phím M). */
+  addMarkerAtPlayhead(label?: string): void
+  updateMarker(id: string, patch: Partial<Omit<Marker, 'id'>>, coalesce?: string): void
+  removeMarker(id: string): void
+  /** Nhảy tới marker sau (1) / trước (-1). */
+  jumpMarker(dir: 1 | -1): void
+  /** Ẩn / tắt tiếng / khóa một hàng trên timeline. */
+  setTrack(row: TimelineRow, patch: Partial<TrackState>): void
   setVideoSize(size: Size): void
   setTranscript(transcript: Transcript | null): void
   splitAtPlayhead(): void
@@ -232,6 +287,10 @@ const initial = {
   time: 0,
   playing: false,
   selection: null,
+  selected: [] as SelItem[],
+  clipboard: null as ClipboardData | null,
+  snapping: true,
+  snapLine: null as number | null,
   past: [],
   future: [],
   loadError: null,
@@ -270,7 +329,7 @@ function insertAudio(asset: AudioAsset, kind: AudioClip['kind'], at?: number) {
     loop: kind === 'music',
   }
   useEditorStore.getState().change((e) => ({ ...e, audioClips: [...e.audioClips, clip] }))
-  useEditorStore.setState({ selection: { kind: 'audio', id: clip.id } })
+  useEditorStore.getState().select({ kind: 'audio', id: clip.id })
 }
 
 /** Khoảng lặng giữa các câu của kịch bản lồng tiếng. */
@@ -298,6 +357,29 @@ function narrationCaption(text: string): Omit<Overlay, 'id' | 'start' | 'end'> {
     keyColor: '',
     keyStrength: 0.4,
   }
+}
+
+/** Dán nội dung đã sao chép bắt đầu tại `at` (một bước hoàn tác), chọn các mục vừa dán. */
+function pasteInto(clipboard: ClipboardData, at: number) {
+  const { edit } = useEditorStore.getState()
+  if (!edit) return
+  const pasted = pasteClipboard(clipboard, at, outputDuration(edit.clips), (k) =>
+    k === 'overlay' ? newOverlayId() : k === 'effect' ? newEffectId() : newAudioClipId(),
+  )
+  if (isClipboardEmpty(pasted)) return
+  useEditorStore.getState().change((e) => ({
+    ...e,
+    overlays: [...e.overlays, ...pasted.overlays],
+    effects: [...e.effects, ...pasted.effects],
+    audioClips: [...e.audioClips, ...pasted.audioClips],
+  }))
+  useEditorStore
+    .getState()
+    .selectMany([
+      ...pasted.overlays.map((o) => ({ kind: 'overlay' as const, id: o.id })),
+      ...pasted.effects.map((x) => ({ kind: 'effect' as const, id: x.id })),
+      ...pasted.audioClips.map((c) => ({ kind: 'audio' as const, id: c.id })),
+    ])
 }
 
 /** Yêu cầu tạo file đảo ngược đang chạy (dùng chung khi gọi trùng). */
@@ -417,7 +499,170 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   select(selection) {
-    set({ selection })
+    set({
+      selection,
+      selected:
+        selection && isMulti(selection.kind) ? [{ kind: selection.kind, id: selection.id }] : [],
+    })
+  },
+
+  toggleSelect(item) {
+    const { selected } = get()
+    const has = selected.some((x) => x.kind === item.kind && x.id === item.id)
+    const next = has
+      ? selected.filter((x) => !(x.kind === item.kind && x.id === item.id))
+      : [...selected, item]
+    const last = next[next.length - 1]
+    set({ selected: next, selection: last ? { ...last } : null })
+  },
+
+  selectMany(items) {
+    const last = items[items.length - 1]
+    set({ selected: items, selection: last ? { ...last } : null })
+  },
+
+  selectAll() {
+    const { edit } = get()
+    if (!edit) return
+    const t = edit.tracks
+    const items: SelItem[] = [
+      ...(t.overlays.locked
+        ? []
+        : edit.overlays.map((o) => ({ kind: 'overlay' as const, id: o.id }))),
+      ...(t.effects.locked ? [] : edit.effects.map((x) => ({ kind: 'effect' as const, id: x.id }))),
+      ...(t.audio.locked ? [] : edit.audioClips.map((c) => ({ kind: 'audio' as const, id: c.id }))),
+    ]
+    get().selectMany(items)
+  },
+
+  isSelected(kind, id) {
+    return get().selected.some((x) => x.kind === kind && x.id === id)
+  },
+
+  copySelection() {
+    const { edit, selected } = get()
+    if (!edit || selected.length === 0) return false
+    const ids = (k: MultiKind) => new Set(selected.filter((x) => x.kind === k).map((x) => x.id))
+    const data: ClipboardData = {
+      overlays: edit.overlays.filter((o) => ids('overlay').has(o.id)),
+      effects: edit.effects.filter((x) => ids('effect').has(x.id)),
+      audioClips: edit.audioClips.filter((c) => ids('audio').has(c.id)),
+    }
+    if (isClipboardEmpty(data)) return false
+    set({ clipboard: structuredClone(data) })
+    return true
+  },
+
+  cutSelection() {
+    if (get().copySelection()) get().deleteSelection()
+  },
+
+  paste() {
+    const { clipboard, edit, time } = get()
+    if (!edit || !clipboard || isClipboardEmpty(clipboard)) return
+    pasteInto(clipboard, time)
+  },
+
+  duplicateSelection() {
+    const { edit, selected } = get()
+    if (!edit || selected.length === 0 || !get().copySelection()) return
+    const c = get().clipboard!
+    const end = Math.max(
+      ...c.overlays.map((o) => o.end),
+      ...c.effects.map((x) => x.end),
+      ...c.audioClips.map((a) => a.start + a.duration),
+    )
+    pasteInto(c, end)
+  },
+
+  rippleDeleteSelection() {
+    const { edit, selected } = get()
+    if (!edit || selected.length === 0) {
+      get().deleteSelection()
+      return
+    }
+    const ids = (k: MultiKind) => new Set(selected.filter((x) => x.kind === k).map((x) => x.id))
+    get().change((e) => ({
+      ...e,
+      overlays: rippleDelete(e.overlays, ids('overlay')),
+      effects: rippleDelete(e.effects, ids('effect')),
+      audioClips: rippleDeleteAudio(e.audioClips, ids('audio')),
+    }))
+    set({ selection: null, selected: [] })
+  },
+
+  setSnapping(on) {
+    set({ snapping: on })
+  },
+
+  setSnapLine(t) {
+    if (get().snapLine !== t) set({ snapLine: t })
+  },
+
+  reorderOverlay(id, to) {
+    get().change((e) => {
+      const i = e.overlays.findIndex((o) => o.id === id)
+      if (i < 0) return e
+      const list = [...e.overlays]
+      const [item] = list.splice(i, 1)
+      const j =
+        to === 'top'
+          ? list.length
+          : to === 'bottom'
+            ? 0
+            : to === 'up'
+              ? Math.min(list.length, i + 1)
+              : Math.max(0, i - 1)
+      list.splice(j, 0, item!)
+      return { ...e, overlays: list }
+    })
+  },
+
+  addMarkerAtPlayhead(label = '') {
+    const { time } = get()
+    get().change((e) => ({ ...e, markers: addMarker(e.markers, time, label) }))
+  },
+
+  updateMarker(id, patch, coalesce) {
+    get().change(
+      (e) => ({
+        ...e,
+        markers: e.markers
+          .map((m) => (m.id === id ? { ...m, ...patch } : m))
+          .sort((a, b) => a.t - b.t),
+      }),
+      coalesce,
+    )
+  },
+
+  removeMarker(id) {
+    get().change((e) => ({ ...e, markers: e.markers.filter((m) => m.id !== id) }))
+  },
+
+  jumpMarker(dir) {
+    const { edit, time } = get()
+    const m = edit && markerNear(edit.markers, time, dir)
+    if (m) get().setTime(m.t)
+  },
+
+  setTrack(row, patch) {
+    get().change((e) => ({ ...e, tracks: { ...e.tracks, [row]: { ...e.tracks[row], ...patch } } }))
+    // Hàng vừa khóa: bỏ chọn các mục trên hàng đó.
+    if (patch.locked) {
+      const kind =
+        row === 'overlays'
+          ? 'overlay'
+          : row === 'effects'
+            ? 'effect'
+            : row === 'audio'
+              ? 'audio'
+              : null
+      if (kind) {
+        const selected = get().selected.filter((x) => x.kind !== kind)
+        const selection = get().selection?.kind === kind ? null : get().selection
+        set({ selected, selection })
+      }
+    }
   },
 
   setVideoSize(size) {
@@ -580,7 +825,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       overlays: e.overlays.map((x) => (x.id === id ? { ...x, hasAudio: false } : x)),
       audioClips: [...e.audioClips, audio],
     }))
-    set({ selection: { kind: 'audio', id: audio.id } })
+    get().select({ kind: 'audio', id: audio.id })
   },
 
   async addSpeech(text, voiceId, at) {
@@ -636,7 +881,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       audioClips: [...e.audioClips, ...audio],
       overlays: [...e.overlays, ...captions],
     }))
-    set({ selection: { kind: 'audio', id: audio[0]!.id } })
+    get().select({ kind: 'audio', id: audio[0]!.id })
     return audio.length
   },
 
@@ -663,7 +908,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       intensity: 0.7,
     }
     get().change((e) => ({ ...e, effects: [...e.effects, effect] }))
-    set({ selection: { kind: 'effect', id: effect.id } })
+    get().select({ kind: 'effect', id: effect.id })
   },
 
   updateEffect(id, patch, coalesce) {
@@ -716,7 +961,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       ...init,
     }
     get().change((e) => ({ ...e, overlays: [...e.overlays, overlay] }))
-    set({ selection: { kind: 'overlay', id: overlay.id } })
+    get().select({ kind: 'overlay', id: overlay.id })
   },
 
   updateOverlay(id, patch, coalesce) {
@@ -807,7 +1052,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   deleteSelection() {
-    const { selection } = get()
+    const { selection, selected } = get()
+    if (selected.length > 1) {
+      const ids = (k: MultiKind) => new Set(selected.filter((x) => x.kind === k).map((x) => x.id))
+      get().change((e) => ({
+        ...e,
+        overlays: e.overlays.filter((o) => !ids('overlay').has(o.id)),
+        effects: e.effects.filter((x) => !ids('effect').has(x.id)),
+        audioClips: e.audioClips.filter((c) => !ids('audio').has(c.id)),
+      }))
+      set({ selection: null, selected: [] })
+      return
+    }
     if (!selection) return
     if (selection.kind === 'overlay') {
       get().change((e) => ({ ...e, overlays: e.overlays.filter((o) => o.id !== selection.id) }))
@@ -826,7 +1082,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     } else {
       get().change((e) => ({ ...e, zooms: e.zooms.filter((z) => z.id !== selection.id) }))
     }
-    set({ selection: null })
+    set({ selection: null, selected: [] })
   },
 
   setClipSpeed(id, speed) {
@@ -863,7 +1119,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const result = insertFreeze(edit.clips, time)
     if (!result) return
     get().change((e) => ({ ...e, clips: result.clips }))
-    set({ selection: { kind: 'clip', id: result.id } })
+    get().select({ kind: 'clip', id: result.id })
   },
 
   setFreezeDuration(id, ms) {
@@ -904,7 +1160,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         sourceDuration(project.segments),
       ),
     }))
-    set({ selection: { kind: 'zoom', id } })
+    get().select({ kind: 'zoom', id })
   },
 
   regenerateZooms() {

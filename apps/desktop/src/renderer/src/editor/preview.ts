@@ -18,6 +18,7 @@ import {
   type Size,
   type SourceSegment,
   type TrackKind,
+  applyTrackState,
 } from '@lumora/core'
 import { mediaUrl } from '../lib/media'
 import { drawScene, videoElementSource, type AnyCanvas } from './draw'
@@ -155,7 +156,9 @@ export class PreviewEngine {
   private loop(now: number) {
     if (this.disposed) return
     const store = useEditorStore.getState()
-    const { edit, playing } = store
+    const { playing } = store
+    // Hàng bị ẩn / tắt tiếng trên timeline: không vẽ / không phát (giống khi xuất).
+    const edit = store.edit && applyTrackState(store.edit)
     if (edit) {
       if (playing) {
         const dt = this.lastTick ? now - this.lastTick : 0
