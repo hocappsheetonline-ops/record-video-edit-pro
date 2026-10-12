@@ -148,7 +148,7 @@ export function Timeline() {
                   className={`absolute top-0 h-full overflow-hidden rounded-md border px-2 text-left ${
                     selected
                       ? 'border-accent bg-accent/40'
-                      : 'border-violet-500/40 bg-violet-500/20 hover:bg-violet-500/30'
+                      : 'border-accent/40 bg-accent/20 hover:bg-accent/30'
                   }`}
                   style={{
                     left: `${(outputStart / duration) * 100}%`,

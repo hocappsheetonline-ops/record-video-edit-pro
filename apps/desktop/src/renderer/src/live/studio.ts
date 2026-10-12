@@ -357,7 +357,7 @@ export class StudioEngine {
     const { width, height } = this.size
     const size = Math.round(height * 0.035)
     const h = size * 2
-    ctx.fillStyle = '#7c3aed'
+    ctx.fillStyle = '#2563eb'
     ctx.fillRect(0, height - h, width, h)
     ctx.fillStyle = '#ffffff'
     ctx.font = `700 ${size}px "Segoe UI", system-ui, sans-serif`

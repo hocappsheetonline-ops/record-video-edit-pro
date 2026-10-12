@@ -63,7 +63,14 @@ export function computeScene(input: SceneInput): FrameScene {
   // Lấp đầy: khung nhìn có đúng tỉ lệ vùng hiển thị và đi theo con trỏ (đã làm mượt) cả khi không zoom.
   const base = fill ? fillBaseView(video, content) : { width: 1, height: 1 }
   const rest = (fill && input.follow ? cursorAt(input.follow, source) : null) ?? { x: 0.5, y: 0.5 }
-  const camera = cameraAt(edit.zooms, source, input.follow, rest, base)
+  const camera = cameraAt(
+    edit.zooms,
+    source,
+    input.follow,
+    rest,
+    base,
+    edit.motion.zoomTransitionMs,
+  )
   const view = fill ? fillViewRect(camera, video, content) : viewRect(camera)
   const toOutput = (p: { x: number; y: number }) => ({
     x: content.x + ((p.x - view.x) / view.width) * content.width,

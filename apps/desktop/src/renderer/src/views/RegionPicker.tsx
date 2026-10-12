@@ -52,7 +52,7 @@ export function RegionPicker() {
     >
       {/* Làm tối phần ngoài vùng chọn bằng viền đổ bóng rất lớn. */}
       <div
-        className="pointer-events-none absolute border-2 border-violet-400"
+        className="pointer-events-none absolute border-2 border-accent"
         style={
           rect
             ? {
@@ -83,7 +83,7 @@ export function RegionPicker() {
             type="button"
             data-testid="region-confirm"
             onClick={() => submit(rect)}
-            className="rounded-md bg-violet-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-violet-500"
+            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg hover:opacity-90"
           >
             {t('region.confirm')}
           </button>

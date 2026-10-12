@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { CursorTrack } from './cursor'
 import {
   cameraAt,
+  cameraFollowTrack,
+  cameraOmega,
   clampCenter,
   easeInOut,
   generateAutoZooms,
@@ -108,5 +110,40 @@ describe('camera', () => {
       [1000, 4000],
       [4000, 6000],
     ])
+  })
+})
+
+describe('tốc độ chuyển động', () => {
+  const region: ZoomRegion = {
+    id: 'z',
+    start: 0,
+    end: 4000,
+    scale: 2,
+    mode: 'fixed',
+    x: 0.5,
+    y: 0.5,
+  }
+
+  it('zoom nhanh hơn khi thời gian chuyển ngắn hơn', () => {
+    expect(zoomProgress(region, 300, 300)).toBe(1)
+    expect(zoomProgress(region, 300, 1200)).toBeLessThan(0.3)
+    expect(cameraAt([region], 300, null, undefined, undefined, 300).scale).toBe(2)
+    expect(cameraAt([region], 300, null).scale).toBeLessThan(2)
+  })
+
+  it('khung nhìn theo con trỏ: độ mượt thấp thì bắt kịp con trỏ nhanh hơn', () => {
+    const jump: CursorTrack = {
+      stepMs: 50,
+      samples: Array.from({ length: 41 }, (_, i) => ({ s: i * 50, x: i < 10 ? 0.2 : 0.8, y: 0.5 })),
+      clicks: [],
+      keys: [],
+      moves: [],
+    }
+    const fast = cameraFollowTrack(jump, 1).samples[15]!.x
+    const slow = cameraFollowTrack(jump, 0).samples[15]!.x
+    expect(fast).toBeGreaterThan(0.7)
+    expect(slow).toBeLessThan(0.35)
+    // Mặc định giống cách cũ (độ mượt 0.92 trước đây ≈ 10.5 rad/s).
+    expect(cameraOmega(0.85)).toBeCloseTo(10.5)
   })
 })

@@ -12,6 +12,7 @@ import {
   sourceSegments,
   sourceToOutput,
   splitAt,
+  trimAtPlayhead,
   wallToSource,
   type Clip,
 } from './timeline'
@@ -135,5 +136,35 @@ describe('clips', () => {
       [6500, 9000],
     ])
     expect(new Set(result.map((c) => c.id)).size).toBe(3)
+  })
+})
+
+describe('trimAtPlayhead (phím A / D)', () => {
+  const clips: Clip[] = [
+    { id: 'a', sourceStart: 0, sourceEnd: 4000, speed: 1 },
+    { id: 'b', sourceStart: 6000, sourceEnd: 10_000, speed: 2 },
+  ]
+
+  it('A: bỏ phần bên trái đầu phát trong clip hiện tại, đầu phát về đầu clip', () => {
+    const r = trimAtPlayhead(clips, 1500, 'left')
+    expect(r.clips[0]).toMatchObject({ id: 'a', sourceStart: 1500, sourceEnd: 4000 })
+    expect(r.clips[1]).toEqual(clips[1])
+    expect(r.time).toBe(0)
+    expect(outputDuration(r.clips)).toBe(4500)
+  })
+
+  it('D: bỏ phần bên phải đầu phát, clip sau dồn lên; tính đúng khi clip chạy nhanh', () => {
+    // 5000ms xuất = 1000ms vào clip b (tốc độ 2×) → nguồn 8000.
+    const r = trimAtPlayhead(clips, 5000, 'right')
+    expect(r.clips[1]).toMatchObject({ id: 'b', sourceStart: 6000, sourceEnd: 8000 })
+    expect(r.time).toBe(5000)
+    expect(outputDuration(r.clips)).toBe(5000)
+  })
+
+  it('phần còn lại quá ngắn thì bỏ cả clip; clip duy nhất thì không làm gì', () => {
+    const r = trimAtPlayhead(clips, 3950, 'left')
+    expect(r.clips.map((c) => c.id)).toEqual(['b'])
+    const only = [clips[0]!]
+    expect(trimAtPlayhead(only, 30, 'right').clips).toEqual(only)
   })
 })

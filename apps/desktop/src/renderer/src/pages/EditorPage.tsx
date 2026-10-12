@@ -57,6 +57,10 @@ function useShortcuts() {
         s.redo()
       } else if (!mod && e.key.toLowerCase() === 's') {
         s.splitAtPlayhead()
+      } else if (!mod && e.key.toLowerCase() === 'a') {
+        s.trimAtPlayhead('left')
+      } else if (!mod && e.key.toLowerCase() === 'd') {
+        s.trimAtPlayhead('right')
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         s.deleteSelection()
       } else if (e.key === 'ArrowLeft') {

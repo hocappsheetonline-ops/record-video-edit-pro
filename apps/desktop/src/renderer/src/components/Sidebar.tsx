@@ -33,7 +33,7 @@ export function Sidebar() {
   return (
     <nav className="flex w-56 shrink-0 flex-col gap-1 border-r border-border bg-surface p-3">
       <div className="mb-4 flex items-center gap-2 px-3 py-2">
-        <div className="size-7 rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-500" />
+        <div className="size-7 rounded-lg bg-gradient-to-br from-accent to-sky-400" />
         <span className="text-lg font-semibold tracking-tight">Lumora</span>
       </div>
       {ITEMS.map((item) => (

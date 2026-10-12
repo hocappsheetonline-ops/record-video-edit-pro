@@ -32,7 +32,7 @@ export const ClipWaveform = memo(function ClipWaveform({
       aria-hidden
       viewBox={`0 0 ${bars.length} 100`}
       preserveAspectRatio="none"
-      className="pointer-events-none absolute inset-0 h-full w-full text-violet-200/70"
+      className="pointer-events-none absolute inset-0 h-full w-full text-white/70"
     >
       <path d={d} fill="currentColor" />
     </svg>

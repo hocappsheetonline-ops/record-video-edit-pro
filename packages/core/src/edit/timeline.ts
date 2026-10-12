@@ -151,6 +151,29 @@ export function splitAt(clips: readonly Clip[], t: number): Clip[] {
   return [...clips.slice(0, index), left, right, ...clips.slice(index + 1)]
 }
 
+/**
+ * Xóa nhanh kiểu CapCut tại đầu phát `t`: `left` bỏ phần clip từ đầu clip tới đầu phát,
+ * `right` bỏ phần từ đầu phát tới cuối clip. Các clip phía sau tự dồn lên. Trả về danh sách clip
+ * mới và vị trí đầu phát mới (để vẫn đứng ở đúng khung hình đang xem).
+ */
+export function trimAtPlayhead(
+  clips: readonly Clip[],
+  t: number,
+  side: 'left' | 'right',
+): { clips: Clip[]; time: number } {
+  const hit = outputToSource(clips, t)
+  if (!hit) return { clips: [...clips], time: t }
+  const { clip, index, outputStart } = hit.position
+  const s = Math.round(hit.source)
+  const keep: Clip = side === 'left' ? { ...clip, sourceStart: s } : { ...clip, sourceEnd: s }
+  const tooShort = keep.sourceEnd - keep.sourceStart < MIN_CLIP_MS
+  if (tooShort && clips.length === 1) return { clips: [...clips], time: t }
+  const next = tooShort
+    ? [...clips.slice(0, index), ...clips.slice(index + 1)]
+    : [...clips.slice(0, index), keep, ...clips.slice(index + 1)]
+  return { clips: next, time: side === 'left' ? outputStart : Math.min(t, outputDuration(next)) }
+}
+
 export function removeClip(clips: readonly Clip[], id: string): Clip[] {
   return clips.filter((c) => c.id !== id)
 }

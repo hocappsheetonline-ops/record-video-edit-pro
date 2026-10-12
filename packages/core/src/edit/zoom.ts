@@ -1,5 +1,5 @@
 import type { CursorTrack } from './cursor'
-import { cursorAt, smoothPath } from './cursor'
+import { cursorAt, springPath } from './cursor'
 
 export interface ZoomRegion {
   id: string
@@ -111,8 +111,13 @@ export function generateAutoZooms(
  * Đường đi rất mượt của con trỏ, dùng cho khung nhìn khi zoom theo con trỏ
  * (khung nhìn di chuyển êm hơn con trỏ thật để người xem không bị chóng mặt).
  */
-export function cameraFollowTrack(track: CursorTrack): CursorTrack {
-  return { ...track, samples: smoothPath(track.samples, track.stepMs, 0.92) }
+export function cameraFollowTrack(track: CursorTrack, speed = 0.85): CursorTrack {
+  return { ...track, samples: springPath(track.samples, track.stepMs, cameraOmega(speed)) }
+}
+
+/** Tốc độ khung nhìn 0..1 → tần số lò xo 2..12 rad/s (0 = lướt rất chậm, 1 = bám sát con trỏ). */
+export function cameraOmega(speed: number): number {
+  return 2 + Math.min(1, Math.max(0, speed)) * 10
 }
 
 /** Giữ tâm khung nhìn để khung không vượt ra ngoài video. */
@@ -122,10 +127,14 @@ export function clampCenter(value: number, scale: number, base = 1): number {
 }
 
 /** Mức độ zoom 0..1 của một đoạn tại thời điểm `s` (có chuyển cảnh vào/ra). */
-export function zoomProgress(region: ZoomRegion, s: number): number {
+export function zoomProgress(
+  region: ZoomRegion,
+  s: number,
+  transitionMs = ZOOM_TRANSITION_MS,
+): number {
   if (s < region.start || s > region.end) return 0
   const length = region.end - region.start
-  const transition = Math.min(ZOOM_TRANSITION_MS, length / 2)
+  const transition = Math.min(transitionMs, length / 2)
   if (transition <= 0) return 1
   return Math.min(
     easeInOut((s - region.start) / transition),
@@ -142,10 +151,12 @@ export function cameraAt(
   rest: { x: number; y: number } = { x: 0.5, y: 0.5 },
   /** Kích thước khung nhìn khi chưa zoom (chuẩn hóa); khung dọc hẹp hơn nên đi sát mép được hơn. */
   base: { width: number; height: number } = { width: 1, height: 1 },
+  /** Thời gian zoom vào/ra (ms). */
+  transitionMs = ZOOM_TRANSITION_MS,
 ): Camera {
   const region = regions.find((r) => s >= r.start && s <= r.end)
   if (!region) return { scale: 1, x: rest.x, y: rest.y }
-  const p = zoomProgress(region, s)
+  const p = zoomProgress(region, s, transitionMs)
   const scale = 1 + (region.scale - 1) * p
   const target =
     region.mode === 'follow' && follow

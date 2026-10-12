@@ -61,6 +61,14 @@ export interface CameraStyle {
 export const CAMERA_LAYOUTS = ['bubble', 'stack'] as const
 export type CameraLayout = (typeof CAMERA_LAYOUTS)[number]
 
+/** Tốc độ chuyển động của khung nhìn (camera ảo). */
+export interface MotionStyle {
+  /** Tốc độ khung nhìn đi theo con trỏ (khi zoom / video dọc): 0 = lướt chậm, 1 = bám sát. */
+  cameraSpeed: number
+  /** Thời gian zoom vào/ra (ms): nhỏ = zoom nhanh, lớn = zoom chậm (250..1500). */
+  zoomTransitionMs: number
+}
+
 export interface AudioMix {
   /** Âm lượng 0..2 (1 = giữ nguyên). */
   mic: number
@@ -80,6 +88,7 @@ export interface EditState {
   frame: FrameStyle
   cursor: CursorStyle
   camera: CameraStyle
+  motion: MotionStyle
   audio: AudioMix
   export: ExportSettings
   captions: CaptionsState
@@ -127,6 +136,7 @@ export function createDefaultEdit(
       layout: 'bubble',
       split: 0.4,
     },
+    motion: { cameraSpeed: 0.85, zoomTransitionMs: 700 },
     audio: { mic: 1, system: 1 },
     export: { resolution: 1080, fps: project.fps >= 60 ? 60 : 30, format: 'mp4' },
     captions: { ...DEFAULT_CAPTIONS, lines: [] },
@@ -238,6 +248,7 @@ export function parseEditState(
   const c = isObj(input.cursor) ? input.cursor : {}
   const cam = isObj(input.camera) ? input.camera : {}
   const a = isObj(input.audio) ? input.audio : {}
+  const m = isObj(input.motion) ? input.motion : {}
   const e = isObj(input.export) ? input.export : {}
 
   return {
@@ -276,6 +287,10 @@ export function parseEditState(
       position: pick(CORNERS, cam.position, base.camera.position),
       layout: pick(CAMERA_LAYOUTS, cam.layout, base.camera.layout),
       split: num(cam.split, base.camera.split, 0.2, 0.6),
+    },
+    motion: {
+      cameraSpeed: num(m.cameraSpeed, base.motion.cameraSpeed, 0, 1),
+      zoomTransitionMs: num(m.zoomTransitionMs, base.motion.zoomTransitionMs, 250, 1500),
     },
     audio: { mic: num(a.mic, 1, 0, 2), system: num(a.system, 1, 0, 2) },
     export: {

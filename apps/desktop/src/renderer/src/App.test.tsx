@@ -146,3 +146,18 @@ describe('Thông báo cập nhật', () => {
     expect(screen.queryByTestId('update-banner')).not.toBeInTheDocument()
   })
 })
+
+describe('Màu chủ đạo', () => {
+  it('mặc định xanh dương; chọn màu khác thì cả app đổi theo', async () => {
+    await renderApp(createFakeApi())
+    await waitFor(() =>
+      expect(document.documentElement.style.getPropertyValue('--lm-accent')).toBe('#2563eb'),
+    )
+    await userEvent.click(screen.getByTestId('nav-settings'))
+    await userEvent.click(screen.getByTestId('accent-#14b8a6'))
+    await waitFor(() =>
+      expect(document.documentElement.style.getPropertyValue('--lm-accent')).toBe('#14b8a6'),
+    )
+    expect(screen.getByTestId('accent-#14b8a6')).toHaveAttribute('aria-pressed', 'true')
+  })
+})

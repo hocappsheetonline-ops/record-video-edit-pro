@@ -1,5 +1,12 @@
 import { useTranslation } from 'react-i18next'
-import { LANGUAGES, SECRET_KEYS, THEMES, type Language, type Theme } from '@lumora/core'
+import {
+  ACCENT_PRESETS,
+  LANGUAGES,
+  SECRET_KEYS,
+  THEMES,
+  type Language,
+  type Theme,
+} from '@lumora/core'
 import { AboutCard } from '../components/AboutCard'
 import { ApiKeyCard } from '../components/ApiKeyCard'
 import { PageHeader } from '../components/PageHeader'
@@ -54,6 +61,32 @@ export function SettingsPage() {
             ))}
           </select>
         </label>
+        <div className="flex flex-col gap-1.5 text-sm sm:col-span-2">
+          {t('settings.accent')}
+          <div className="flex flex-wrap items-center gap-2">
+            {ACCENT_PRESETS.map((color) => (
+              <button
+                key={color}
+                type="button"
+                data-testid={`accent-${color}`}
+                aria-label={color}
+                aria-pressed={settings.accent === color}
+                onClick={() => void updateSettings({ accent: color })}
+                className={`size-7 rounded-full border-2 ${settings.accent === color ? 'border-text' : 'border-transparent'}`}
+                style={{ background: color }}
+              />
+            ))}
+            <label className="flex items-center gap-2 text-xs text-muted">
+              {t('settings.accentCustom')}
+              <input
+                type="color"
+                data-testid="accent-custom"
+                value={settings.accent}
+                onChange={(e) => void updateSettings({ accent: e.target.value })}
+              />
+            </label>
+          </div>
+        </div>
       </div>
 
       <h2 className="mb-1 text-sm font-medium uppercase tracking-wide text-muted">

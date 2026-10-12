@@ -13,7 +13,17 @@ import { CaptionsPanel } from './CaptionsPanel'
 import { ExportPanel } from './ExportPanel'
 import { useEditorStore } from './store'
 
-const TABS = ['frame', 'cursor', 'zoom', 'camera', 'audio', 'captions', 'ai', 'export'] as const
+const TABS = [
+  'frame',
+  'cursor',
+  'motion',
+  'zoom',
+  'camera',
+  'audio',
+  'captions',
+  'ai',
+  'export',
+] as const
 type Tab = (typeof TABS)[number]
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
@@ -34,6 +44,8 @@ function Slider(props: {
   onChange: (v: number) => void
   format?: (v: number) => string
   testId?: string
+  /** Chữ ở hai đầu thanh trượt, ví dụ "Chậm" — "Nhanh". */
+  ends?: [string, string]
 }) {
   return (
     <Row label={`${props.label}: ${props.format ? props.format(props.value) : props.value}`}>
@@ -47,6 +59,12 @@ function Slider(props: {
         onChange={(e) => props.onChange(Number(e.target.value))}
         className="accent-accent"
       />
+      {props.ends && (
+        <span className="flex justify-between text-xs text-muted">
+          <span>{props.ends[0]}</span>
+          <span>{props.ends[1]}</span>
+        </span>
+      )}
     </Row>
   )
 }
@@ -273,15 +291,6 @@ export function Inspector() {
               format={(v) => `${v.toFixed(1)}×`}
               onChange={(v) => set('cursor', { size: v }, 'cursor-size')}
             />
-            <Slider
-              label={t('editor.cursor.smoothing')}
-              value={edit.cursor.smoothing}
-              min={0}
-              max={1}
-              step={0.05}
-              format={pct}
-              onChange={(v) => set('cursor', { smoothing: v }, 'cursor-smooth')}
-            />
             <Check
               label={t('editor.cursor.clickEffect')}
               checked={edit.cursor.clickEffect}
@@ -292,6 +301,59 @@ export function Inspector() {
               checked={edit.cursor.hideIdle}
               onChange={(v) => set('cursor', { hideIdle: v })}
             />
+          </>
+        )}
+
+        {tab === 'motion' && (
+          <>
+            <p className="text-xs text-muted">{t('editor.motion.hint')}</p>
+            <Slider
+              label={t('editor.motion.cursor')}
+              // Lưu dưới dạng độ mượt (cao = chậm); hiển thị dạng tốc độ cho dễ hiểu.
+              value={Math.round((1 - edit.cursor.smoothing) * 100) / 100}
+              min={0}
+              max={1}
+              step={0.05}
+              format={pct}
+              ends={[t('editor.motion.slow'), t('editor.motion.fast')]}
+              onChange={(v) => set('cursor', { smoothing: 1 - v }, 'cursor-speed')}
+              testId="motion-cursor"
+            />
+            <Slider
+              label={t('editor.motion.camera')}
+              value={edit.motion.cameraSpeed}
+              min={0}
+              max={1}
+              step={0.05}
+              format={pct}
+              ends={[t('editor.motion.slow'), t('editor.motion.fast')]}
+              onChange={(v) => set('motion', { cameraSpeed: v }, 'camera-speed')}
+              testId="motion-camera"
+            />
+            <Slider
+              label={t('editor.motion.zoom')}
+              value={1500 - edit.motion.zoomTransitionMs}
+              min={0}
+              max={1250}
+              step={50}
+              format={(v) => t('editor.motion.seconds', { value: ((1500 - v) / 1000).toFixed(2) })}
+              ends={[t('editor.motion.slow'), t('editor.motion.fast')]}
+              onChange={(v) => set('motion', { zoomTransitionMs: 1500 - v }, 'zoom-speed')}
+              testId="motion-zoom"
+            />
+            <button
+              type="button"
+              className="self-start text-xs text-accent hover:underline"
+              onClick={() =>
+                change((e) => ({
+                  ...e,
+                  cursor: { ...e.cursor, smoothing: 0.6 },
+                  motion: { cameraSpeed: 0.85, zoomTransitionMs: 700 },
+                }))
+              }
+            >
+              {t('editor.motion.reset')}
+            </button>
           </>
         )}
 

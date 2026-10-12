@@ -34,7 +34,7 @@ export const CURSOR_STEP_MS = 1000 / 60
  */
 export function springOmega(smoothing: number): number {
   const s = Math.min(1, Math.max(0, smoothing))
-  return 40 - s * 32
+  return 40 - s * 35
 }
 
 /** Làm mượt chuỗi vị trí bằng lò xo giảm chấn tới hạn (tính sẵn, nên tua tới đâu cũng ra cùng kết quả). */
@@ -44,7 +44,16 @@ export function smoothPath(
   smoothing: number,
 ): CursorPoint[] {
   if (raw.length === 0 || smoothing <= 0) return raw.map((p) => ({ ...p }))
-  const omega = springOmega(smoothing)
+  return springPath(raw, stepMs, springOmega(smoothing))
+}
+
+/** Lò xo giảm chấn tới hạn với tần số `omega` (rad/s): nhỏ = trôi chậm, lớn = bám sát. */
+export function springPath(
+  raw: readonly CursorPoint[],
+  stepMs: number,
+  omega: number,
+): CursorPoint[] {
+  if (raw.length === 0) return []
   const dt = stepMs / 1000
   // Chia nhỏ bước tính để ổn định với lò xo cứng.
   const substeps = Math.max(1, Math.ceil(omega * dt * 4))

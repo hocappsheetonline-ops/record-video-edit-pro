@@ -84,3 +84,29 @@ describe('editor store', () => {
     expect(useEditorStore.getState().time).toBe(7000)
   })
 })
+
+describe('phím A / D', () => {
+  it('A xóa phần trái của clip tại đầu phát, D xóa phần phải; hoàn tác được', () => {
+    const s = useEditorStore.getState
+    s().setTime(2000)
+    s().trimAtPlayhead('left')
+    expect(s().edit!.clips[0]).toMatchObject({ sourceStart: 2000, sourceEnd: 5000 })
+    expect(s().time).toBe(0)
+    expect(outputDuration(s().edit!.clips)).toBe(5000)
+    s().setTime(1000)
+    s().trimAtPlayhead('right')
+    expect(s().edit!.clips[0]).toMatchObject({ sourceStart: 2000, sourceEnd: 3000 })
+    expect(outputDuration(s().edit!.clips)).toBe(3000)
+    s().undo()
+    s().undo()
+    expect(outputDuration(s().edit!.clips)).toBe(7000)
+  })
+
+  it('đổi tốc độ khung nhìn thì tính lại đường đi của khung nhìn', () => {
+    const s = useEditorStore.getState
+    const before = s().follow
+    s().change((e) => ({ ...e, motion: { ...e.motion, cameraSpeed: 0.1 } }))
+    expect(s().follow).not.toBe(before)
+    expect(s().cursor).not.toBeNull()
+  })
+})

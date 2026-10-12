@@ -14,6 +14,7 @@ import {
   setClipSpeed,
   sourceDuration,
   splitAt,
+  trimAtPlayhead,
   type CursorTrack,
   type EditState,
   type InputEvent,
@@ -58,6 +59,8 @@ interface EditorStore {
   setVideoSize(size: Size): void
   setTranscript(transcript: Transcript | null): void
   splitAtPlayhead(): void
+  /** Phím A / D: xóa phần clip bên trái / bên phải đầu phát (giống CapCut). */
+  trimAtPlayhead(side: 'left' | 'right'): void
   deleteSelection(): void
   setClipSpeed(id: string, speed: number): void
   addZoomAtPlayhead(): void
@@ -67,9 +70,14 @@ interface EditorStore {
 const HISTORY_LIMIT = 100
 let lastCoalesce: { key: string; at: number } | null = null
 
-function tracksFor(project: Project, events: InputEvent[], smoothing: number) {
-  const cursor = buildCursorTrack(events, project.segments, project.source.captureRect, smoothing)
-  return { cursor, follow: cameraFollowTrack(cursor) }
+function tracksFor(project: Project, events: InputEvent[], edit: EditState) {
+  const cursor = buildCursorTrack(
+    events,
+    project.segments,
+    project.source.captureRect,
+    edit.cursor.smoothing,
+  )
+  return { cursor, follow: cameraFollowTrack(cursor, edit.motion.cameraSpeed) }
 }
 
 const initial = {
@@ -105,11 +113,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (get().folder !== folder) return
     if (!project) return set({ loadError: 'not_found' })
     let edit = saved
-    const tracks = tracksFor(
-      project,
-      events,
-      (saved ?? createDefaultEdit(project)).cursor.smoothing,
-    )
+    const tracks = tracksFor(project, events, saved ?? createDefaultEdit(project))
     if (!edit) {
       // Lần đầu mở: tự tạo các đoạn zoom từ click chuột và lúc gõ phím.
       edit = createDefaultEdit(
@@ -150,8 +154,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     lastCoalesce = coalesce ? { key: coalesce, at: now } : null
     const past = merge ? get().past : [...get().past, edit].slice(-HISTORY_LIMIT)
     const patch: Partial<EditorStore> = { edit: next, past, future: [] }
-    if (next.cursor.smoothing !== edit.cursor.smoothing)
-      Object.assign(patch, tracksFor(project, events, next.cursor.smoothing))
+    if (
+      next.cursor.smoothing !== edit.cursor.smoothing ||
+      next.motion.cameraSpeed !== edit.motion.cameraSpeed
+    )
+      Object.assign(patch, tracksFor(project, events, next))
     const duration = outputDuration(next.clips)
     if (get().time > duration) patch.time = duration
     set(patch)
@@ -166,7 +173,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       edit: prev,
       past: past.slice(0, -1),
       future: [edit, ...future],
-      ...tracksFor(project, events, prev.cursor.smoothing),
+      ...tracksFor(project, events, prev),
     })
   },
 
@@ -179,7 +186,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       edit: next,
       past: [...past, edit],
       future: future.slice(1),
-      ...tracksFor(project, events, next.cursor.smoothing),
+      ...tracksFor(project, events, next),
     })
   },
 
@@ -208,6 +215,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   splitAtPlayhead() {
     get().change((e) => ({ ...e, clips: splitAt(e.clips, get().time) }))
+  },
+
+  trimAtPlayhead(side) {
+    const { edit, time } = get()
+    if (!edit) return
+    const result = trimAtPlayhead(edit.clips, time, side)
+    get().change((e) => ({ ...e, clips: result.clips }))
+    set({ time: result.time, selection: null })
   },
 
   deleteSelection() {

@@ -182,7 +182,7 @@ export function drawScene(
     ctx.fillStyle = `rgba(255,255,255,${0.35 * r.opacity})`
     ctx.fill()
     ctx.lineWidth = Math.max(1, r.radius * 0.12)
-    ctx.strokeStyle = `rgba(124,58,237,${0.9 * r.opacity})`
+    ctx.strokeStyle = `rgba(37,99,235,${0.9 * r.opacity})`
     ctx.stroke()
   }
   if (scene.cursor)

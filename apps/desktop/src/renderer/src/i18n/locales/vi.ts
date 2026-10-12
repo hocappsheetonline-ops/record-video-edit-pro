@@ -94,11 +94,13 @@ export const vi = {
     split: 'Tách',
     delete: 'Xóa',
     speed: 'Tốc độ',
-    shortcuts: 'Space: phát/dừng · S: tách · Delete: xóa · Ctrl+Z: hoàn tác',
+    shortcuts:
+      'Space: phát/dừng · S: tách · A: xóa bên trái · D: xóa bên phải · Delete: xóa · Ctrl+Z: hoàn tác',
     tracks: { clips: 'Video', zooms: 'Zoom' },
     tabs: {
       frame: 'Khung',
       cursor: 'Con trỏ',
+      motion: 'Chuyển động',
       zoom: 'Zoom',
       camera: 'Webcam',
       audio: 'Âm thanh',
@@ -122,6 +124,16 @@ export const vi = {
         'Cho TikTok, Shorts, Reels: video phủ kín khung dọc, tự cắt theo con trỏ, webcam nằm trong khung.',
       fill: 'Lấp đầy khung (tự cắt theo con trỏ)',
       fillHint: 'Video màn hình phủ kín khung; phần thừa được cắt và khung nhìn đi theo con trỏ.',
+    },
+    motion: {
+      hint: 'Chỉnh tốc độ con trỏ, khung nhìn và zoom. Kéo về "Chậm" để chuyển động mượt, điện ảnh hơn.',
+      cursor: 'Tốc độ con trỏ',
+      camera: 'Tốc độ khung nhìn đi theo con trỏ',
+      zoom: 'Tốc độ zoom vào/ra',
+      slow: 'Chậm, mượt',
+      fast: 'Nhanh',
+      seconds: '{{value}} giây',
+      reset: 'Về mặc định',
     },
     cursor: {
       visible: 'Hiện con trỏ (vẽ lại mượt)',
@@ -333,6 +345,8 @@ export const vi = {
     general: 'Chung',
     language: 'Ngôn ngữ',
     theme: 'Giao diện',
+    accent: 'Màu chủ đạo',
+    accentCustom: 'Màu khác',
     themes: { system: 'Theo hệ thống', dark: 'Tối', light: 'Sáng' },
     apiKeys: 'API key',
     apiKeysHint:

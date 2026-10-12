@@ -97,11 +97,13 @@ export const en: Messages = {
     split: 'Split',
     delete: 'Delete',
     speed: 'Speed',
-    shortcuts: 'Space: play/pause · S: split · Delete: remove · Ctrl+Z: undo',
+    shortcuts:
+      'Space: play/pause · S: split · A: delete left · D: delete right · Delete: remove · Ctrl+Z: undo',
     tracks: { clips: 'Video', zooms: 'Zoom' },
     tabs: {
       frame: 'Frame',
       cursor: 'Cursor',
+      motion: 'Motion',
       zoom: 'Zoom',
       camera: 'Webcam',
       audio: 'Audio',
@@ -126,6 +128,16 @@ export const en: Messages = {
       fill: 'Fill frame (auto-crop to cursor)',
       fillHint:
         'The screen video fills the whole frame; the overflow is cropped and the view follows the cursor.',
+    },
+    motion: {
+      hint: 'Adjust cursor, camera and zoom speed. Drag toward "Slow" for smoother, more cinematic motion.',
+      cursor: 'Cursor speed',
+      camera: 'Camera follow speed',
+      zoom: 'Zoom in/out speed',
+      slow: 'Slow, smooth',
+      fast: 'Fast',
+      seconds: '{{value}} s',
+      reset: 'Reset to default',
     },
     cursor: {
       visible: 'Show cursor (smoothly redrawn)',
@@ -337,6 +349,8 @@ export const en: Messages = {
     general: 'General',
     language: 'Language',
     theme: 'Theme',
+    accent: 'Accent color',
+    accentCustom: 'Custom',
     themes: { system: 'System', dark: 'Dark', light: 'Light' },
     apiKeys: 'API keys',
     apiKeysHint:

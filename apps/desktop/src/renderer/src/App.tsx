@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Theme } from '@lumora/core'
+import { accentForeground, type Theme } from '@lumora/core'
 import { Sidebar } from './components/Sidebar'
 import { UpdateBanner } from './components/UpdateBanner'
 import { EditorPage } from './pages/EditorPage'
@@ -36,6 +36,8 @@ export function App() {
     void i18n.changeLanguage(settings.language)
     document.documentElement.lang = settings.language
     document.documentElement.dataset.theme = resolveTheme(settings.theme)
+    document.documentElement.style.setProperty('--lm-accent', settings.accent)
+    document.documentElement.style.setProperty('--lm-accent-fg', accentForeground(settings.accent))
   }, [settings, i18n])
 
   if (!ready) return <div className="h-full bg-bg" />

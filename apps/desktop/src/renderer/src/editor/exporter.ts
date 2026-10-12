@@ -106,7 +106,7 @@ export async function exportVideo(options: {
     project.source.captureRect,
     edit.cursor.smoothing,
   )
-  const follow = cameraFollowTrack(cursor)
+  const follow = cameraFollowTrack(cursor, edit.motion.cameraSpeed)
 
   const codec = await getFirstEncodableVideoCodec(['avc', 'vp9', 'av1', 'vp8'], {
     width: size.width,
