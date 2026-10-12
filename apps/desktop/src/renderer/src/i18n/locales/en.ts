@@ -129,6 +129,13 @@ export const en: Messages = {
       fillHint:
         'The screen video fills the whole frame; the overflow is cropped and the view follows the cursor.',
     },
+    beauty: {
+      title: 'Beauty',
+      auto: 'Auto beauty',
+      smooth: 'Smooth skin',
+      brighten: 'Brighten',
+      warmth: 'Warm, rosy tone',
+    },
     motion: {
       hint: 'Adjust cursor, camera and zoom speed. Drag toward "Slow" for smoother, more cinematic motion.',
       cursor: 'Cursor speed',
@@ -271,6 +278,7 @@ export const en: Messages = {
       noScreen: 'Not sharing',
       display: 'Display {{n}}',
       off: 'Off',
+      beauty: 'Face beauty',
       hostOnStage: "I'm on stage",
       layout: 'Layout',
       bannerPlaceholder: 'Banner text (e.g. Subscribe to the channel!)',

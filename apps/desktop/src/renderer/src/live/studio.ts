@@ -2,11 +2,14 @@ import {
   containRect,
   coverCrop,
   studioSlots,
+  NO_BEAUTY,
+  type BeautyStyle,
   type LiveComment,
   type Rect,
   type Size,
   type StudioLayout,
 } from '@lumora/core'
+import { drawBeautified } from '../editor/draw'
 
 export interface StudioState {
   layout: StudioLayout
@@ -16,6 +19,8 @@ export interface StudioState {
   featured: LiveComment | null
   caption: string
   background: string
+  /** Làm đẹp mặt cho webcam của host. */
+  hostBeauty: BeautyStyle
 }
 
 interface Participant {
@@ -71,6 +76,7 @@ export class StudioEngine {
     featured: null,
     caption: '',
     background: '#111827',
+    hostBeauty: { ...NO_BEAUTY },
   }
   /** Hàm lấy phụ đề hiện tại (gọi mỗi khung hình). */
   captionSource: (() => string) | null = null
@@ -303,17 +309,21 @@ export class StudioEngine {
       const v = p.video
       if (v.videoWidth > 0) {
         const crop = coverCrop({ width: v.videoWidth, height: v.videoHeight }, slot)
-        ctx.drawImage(
-          v,
-          crop.x,
-          crop.y,
-          crop.width,
-          crop.height,
-          slot.x,
-          slot.y,
-          slot.width,
-          slot.height,
-        )
+        const paint = () =>
+          ctx.drawImage(
+            v,
+            crop.x,
+            crop.y,
+            crop.width,
+            crop.height,
+            slot.x,
+            slot.y,
+            slot.width,
+            slot.height,
+          )
+        // Làm đẹp mặt chỉ áp dụng cho webcam của host.
+        if (p.id === HOST_ID) drawBeautified(ctx, s.hostBeauty, slot.width, paint)
+        else paint()
       } else {
         ctx.fillStyle = '#9ca3af'
         ctx.font = `600 ${Math.round(slot.height * 0.25)}px system-ui, sans-serif`

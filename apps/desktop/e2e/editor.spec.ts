@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
 import { createFixtureProject, pixelAt } from './fixtures'
@@ -22,6 +22,7 @@ async function openEditor(page: Page) {
 }
 
 function exported(ext: string): string[] {
+  if (!existsSync(join(projectDir, 'exports'))) return []
   return readdirSync(join(projectDir, 'exports')).filter(
     (f) => f.endsWith(ext) && !f.startsWith('.'),
   )
@@ -217,6 +218,50 @@ test('timeline hiện dạng sóng âm thanh của bản quay trong clip video',
   expect(heights.length).toBeGreaterThan(50)
   expect(heights.filter((h) => h > 35).length / heights.length).toBeGreaterThan(0.8)
   expect(JSON.parse(readFileSync(join(projectDir, 'waveform.json'), 'utf8')).bucketMs).toBe(20)
+  expect(errors).toEqual([])
+  await app.close()
+})
+
+test('làm đẹp mặt webcam: video xuất ra sáng và mịn hơn bản không làm đẹp', async () => {
+  const { app, page, errors } = await launchApp(dirs.userData)
+  await openEditor(page)
+  // Webcam to ở góc trên trái để dễ đo.
+  await page.getByTestId('tab-camera').click()
+  await page.getByTestId('cam-layout-stack').click()
+  await page.getByTestId('cam-stack-top').click()
+  await page.getByTestId('tab-export').click()
+  await page.getByTestId('resolution-720').click()
+
+  async function exportOnce(): Promise<string> {
+    const before = new Set(exported('.mp4'))
+    await page.getByTestId('export-start').click()
+    await expect(page.getByTestId('export-result')).toBeVisible({ timeout: 150_000 })
+    await expect.poll(() => exported('.mp4').filter((f) => !before.has(f)).length).toBe(1)
+    return join(
+      projectDir,
+      'exports',
+      exported('.mp4').find((f) => !before.has(f))!,
+    )
+  }
+  const plain = await exportOnce()
+  await page.getByTestId('tab-camera').click()
+  await page.getByTestId('beauty-auto').click()
+  await page.getByTestId('tab-export').click()
+  // Tên file có giây nên chờ qua giây mới để không trùng tên.
+  await page.waitForTimeout(1100)
+  const pretty = await exportOnce()
+
+  // Trung bình độ sáng một hàng điểm ảnh trong dải webcam (nửa trên khung 1280×720 là dải 40%).
+  const row = [100, 300, 500, 700, 900, 1100].map((x) => [x, 150] as const)
+  const luma = (file: string) =>
+    row.reduce((sum, [x, y]) => {
+      const [r, g, b] = pixelAt(file, x, y)
+      return sum + 0.299 * r + 0.587 * g + 0.114 * b
+    }, 0) / row.length
+  expect(luma(pretty)).toBeGreaterThan(luma(plain) + 6)
+
+  const saved = JSON.parse(readFileSync(join(projectDir, 'edit.json'), 'utf8'))
+  expect(saved.camera.beauty.smooth).toBeGreaterThan(0)
   expect(errors).toEqual([])
   await app.close()
 })

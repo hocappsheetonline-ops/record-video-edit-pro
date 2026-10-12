@@ -125,6 +125,13 @@ export const vi = {
       fill: 'Lấp đầy khung (tự cắt theo con trỏ)',
       fillHint: 'Video màn hình phủ kín khung; phần thừa được cắt và khung nhìn đi theo con trỏ.',
     },
+    beauty: {
+      title: 'Làm đẹp',
+      auto: 'Làm đẹp tự động',
+      smooth: 'Mịn da',
+      brighten: 'Làm sáng da',
+      warmth: 'Tông ấm, hồng hào',
+    },
     motion: {
       hint: 'Chỉnh tốc độ con trỏ, khung nhìn và zoom. Kéo về "Chậm" để chuyển động mượt, điện ảnh hơn.',
       cursor: 'Tốc độ con trỏ',
@@ -267,6 +274,7 @@ export const vi = {
       noScreen: 'Không chia sẻ',
       display: 'Màn hình {{n}}',
       off: 'Tắt',
+      beauty: 'Làm đẹp mặt',
       hostOnStage: 'Tôi đang trên sóng',
       layout: 'Bố cục',
       bannerPlaceholder: 'Nội dung banner (vd: Đăng ký kênh nhé!)',

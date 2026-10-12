@@ -264,7 +264,10 @@ describe('computeScene — video dọc tự cắt theo con trỏ', () => {
       follow: null,
       hasCamera: true,
     })
-    expect(scene.camera).toEqual({ rect: { x: 0, y: 0, width: 1080, height: 768 }, shape: 'strip' })
+    expect(scene.camera).toMatchObject({
+      rect: { x: 0, y: 0, width: 1080, height: 768 },
+      shape: 'strip',
+    })
     expect(scene.content).toEqual({ x: 0, y: 768, width: 1080, height: 1152 })
     expect((scene.view.width * video.width) / (scene.view.height * video.height)).toBeCloseTo(
       1080 / 1152,

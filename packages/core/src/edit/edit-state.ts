@@ -5,6 +5,7 @@ import {
   type CaptionsState,
   type TranscriptWord,
 } from './captions'
+import { NO_BEAUTY, parseBeauty, type BeautyStyle } from './beauty'
 import { ASPECTS, CORNERS, RESOLUTIONS, type Aspect, type Corner, type Resolution } from './layout'
 import { initialClips, MIN_CLIP_MS, sourceDuration, type Clip } from './timeline'
 import { normalizeZooms, type ZoomRegion } from './zoom'
@@ -56,6 +57,8 @@ export interface CameraStyle {
   layout: CameraLayout
   /** Chiều cao dải webcam khi `stack`, tỉ lệ theo chiều cao khung (0.2..0.6). */
   split: number
+  /** Làm đẹp mặt (mịn da, làm sáng, tông ấm). */
+  beauty: BeautyStyle
 }
 
 export const CAMERA_LAYOUTS = ['bubble', 'stack'] as const
@@ -135,6 +138,7 @@ export function createDefaultEdit(
       position: 'bottom-right',
       layout: 'bubble',
       split: 0.4,
+      beauty: { ...NO_BEAUTY },
     },
     motion: { cameraSpeed: 0.85, zoomTransitionMs: 700 },
     audio: { mic: 1, system: 1 },
@@ -287,6 +291,7 @@ export function parseEditState(
       position: pick(CORNERS, cam.position, base.camera.position),
       layout: pick(CAMERA_LAYOUTS, cam.layout, base.camera.layout),
       split: num(cam.split, base.camera.split, 0.2, 0.6),
+      beauty: parseBeauty(cam.beauty),
     },
     motion: {
       cameraSpeed: num(m.cameraSpeed, base.motion.cameraSpeed, 0, 1),

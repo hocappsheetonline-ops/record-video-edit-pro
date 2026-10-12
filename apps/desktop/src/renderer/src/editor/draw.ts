@@ -1,4 +1,4 @@
-import { coverSource } from '@lumora/core'
+import { beautyLayers, coverSource, type BeautyStyle } from '@lumora/core'
 import type { FrameScene } from './scene'
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
@@ -27,6 +27,24 @@ export function videoElementSource(video: HTMLVideoElement): FrameSource | null 
     height: video.videoHeight,
     draw: (ctx, ...args) => ctx.drawImage(video, ...args),
   }
+}
+
+/**
+ * Vẽ webcam có làm đẹp: lớp gốc qua bộ lọc màu, rồi một lớp mờ trong suốt phủ lên để mịn da.
+ * Dùng chung cho trình chỉnh sửa, video xuất và studio livestream.
+ */
+export function drawBeautified(ctx: Ctx, beauty: BeautyStyle, width: number, paint: () => void) {
+  const layers = beautyLayers(beauty, width)
+  const before = { filter: ctx.filter, alpha: ctx.globalAlpha }
+  ctx.filter = layers.base
+  paint()
+  if (layers.soft) {
+    ctx.filter = layers.soft.filter
+    ctx.globalAlpha = before.alpha * layers.soft.alpha
+    paint()
+  }
+  ctx.filter = before.filter
+  ctx.globalAlpha = before.alpha
 }
 
 function roundedRect(ctx: Ctx, x: number, y: number, w: number, h: number, r: number) {
@@ -206,7 +224,9 @@ export function drawScene(
     ctx.clip()
     // Cắt giữa khung webcam cho vừa ô hiển thị (cover).
     const crop = coverSource({ width: camFrame.width, height: camFrame.height }, cam.rect)
-    camFrame.draw(ctx, crop.x, crop.y, crop.width, crop.height, x, y, width, height)
+    drawBeautified(ctx, cam.beauty, width, () =>
+      camFrame.draw(ctx, crop.x, crop.y, crop.width, crop.height, x, y, width, height),
+    )
     ctx.restore()
   }
   drawCaptions(ctx, scene)

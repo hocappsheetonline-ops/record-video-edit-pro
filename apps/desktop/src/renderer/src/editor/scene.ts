@@ -11,6 +11,7 @@ import {
   frameLayout,
   viewRect,
   type Background,
+  type BeautyStyle,
   type CursorTrack,
   type EditState,
   type Rect,
@@ -31,7 +32,11 @@ export interface FrameScene {
   cursor: { x: number; y: number; size: number; opacity: number } | null
   ripple: { x: number; y: number; radius: number; opacity: number } | null
   /** Webcam: bong bóng nổi (`circle`/`rounded`/`square`) hoặc dải ngang (`strip`, không bo góc). */
-  camera: { rect: Rect; shape: EditState['camera']['shape'] | 'strip' } | null
+  camera: {
+    rect: Rect
+    shape: EditState['camera']['shape'] | 'strip'
+    beauty: BeautyStyle
+  } | null
   captions: {
     words: { text: string; active: boolean }[]
     style: 'highlight' | 'classic'
@@ -137,10 +142,11 @@ export function computeScene(input: SceneInput): FrameScene {
     camera: !showCamera
       ? null
       : layout.strip
-        ? { rect: layout.strip, shape: 'strip' }
+        ? { rect: layout.strip, shape: 'strip', beauty: edit.camera.beauty }
         : {
             rect: cameraRect(output, edit.camera.size, edit.camera.position),
             shape: edit.camera.shape,
+            beauty: edit.camera.beauty,
           },
   }
 }

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import {
   ASPECTS,
   BACKGROUND_PRESETS,
+  BEAUTY_PRESET,
   CAMERA_LAYOUTS,
   CORNERS,
   type Background,
@@ -451,6 +452,34 @@ export function Inspector() {
               checked={edit.camera.visible}
               onChange={(v) => set('camera', { visible: v })}
             />
+            <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">{t('editor.beauty.title')}</span>
+                <button
+                  type="button"
+                  data-testid="beauty-auto"
+                  className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-accent-fg"
+                  onClick={() => set('camera', { beauty: { ...BEAUTY_PRESET } })}
+                >
+                  {t('editor.beauty.auto')}
+                </button>
+              </div>
+              {(['smooth', 'brighten', 'warmth'] as const).map((key) => (
+                <Slider
+                  key={key}
+                  label={t(`editor.beauty.${key}`)}
+                  value={edit.camera.beauty[key]}
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  format={pct}
+                  testId={`beauty-${key}`}
+                  onChange={(v) =>
+                    set('camera', { beauty: { ...edit.camera.beauty, [key]: v } }, `beauty-${key}`)
+                  }
+                />
+              ))}
+            </div>
             <Row label={t('editor.camera.layout')}>
               <div className="flex gap-1">
                 {CAMERA_LAYOUTS.map((layout) => (

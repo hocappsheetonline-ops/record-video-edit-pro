@@ -54,7 +54,9 @@ function HostControls() {
   const hostName = useLiveStore((s) => s.hostName)
   const sharing = useLiveStore((s) => s.sharing)
   const engine = useLiveStore((s) => s.engine)
-  const { setDevices, setHostOnStage, setHostName, shareScreen } = useLiveStore.getState()
+  const beautyLevel = useLiveStore((s) => s.beautyLevel)
+  const { setDevices, setHostOnStage, setHostName, shareScreen, setStudio } =
+    useLiveStore.getState()
   const [devices, setDeviceList] = useState<MediaDeviceInfo[]>([])
   const [sources, setSources] = useState<CaptureSources | null>(null)
   const [screenId, setScreenId] = useState('')
@@ -155,7 +157,7 @@ function HostControls() {
           ))}
         </select>
       </label>
-      <label className="col-span-2 flex items-center gap-2 lg:col-span-4">
+      <label className="col-span-2 flex items-center gap-2">
         <input
           type="checkbox"
           className="size-4 accent-accent"
@@ -164,6 +166,21 @@ function HostControls() {
           onChange={(e) => setHostOnStage(e.target.checked)}
         />
         {t('live.studio.hostOnStage')}
+      </label>
+      <label className="col-span-2 flex flex-col gap-1">
+        <span className="text-muted">
+          {t('live.studio.beauty')}: {Math.round(beautyLevel * 100)}%
+        </span>
+        <input
+          type="range"
+          min={0}
+          max={1}
+          step={0.05}
+          value={beautyLevel}
+          data-testid="host-beauty"
+          className="accent-accent"
+          onChange={(e) => setStudio({ beautyLevel: Number(e.target.value) })}
+        />
       </label>
     </div>
   )

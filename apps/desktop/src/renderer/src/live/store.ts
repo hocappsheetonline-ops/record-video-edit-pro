@@ -1,5 +1,11 @@
 import { create } from 'zustand'
-import { LiveCaptionBuffer, mergeComments, type LiveComment, type StudioLayout } from '@lumora/core'
+import {
+  BEAUTY_PRESET,
+  LiveCaptionBuffer,
+  mergeComments,
+  type LiveComment,
+  type StudioLayout,
+} from '@lumora/core'
 import type { GuestRoom, LiveConfig, LiveEnded, LiveSecretsStatus, LiveStatus } from '@shared/ipc'
 import { lumora } from '../api'
 import { getCameraStream, getDesktopStream, getMicStream, stopStream } from '../lib/media'
@@ -23,6 +29,8 @@ interface LiveStore {
   banner: string
   showBanner: boolean
   showNames: boolean
+  /** Mức làm đẹp mặt cho webcam host (0 = tắt, 1 = mạnh nhất). */
+  beautyLevel: number
   room: GuestRoom | null
   guests: GuestInfo[]
   stage: Record<string, boolean>
@@ -47,7 +55,11 @@ interface LiveStore {
   setHostOnStage(on: boolean): void
   setHostName(name: string): void
   shareScreen(sourceId: string | null): Promise<void>
-  setStudio(patch: Partial<Pick<LiveStore, 'layout' | 'banner' | 'showBanner' | 'showNames'>>): void
+  setStudio(
+    patch: Partial<
+      Pick<LiveStore, 'layout' | 'banner' | 'showBanner' | 'showNames' | 'beautyLevel'>
+    >,
+  ): void
   openRoom(): Promise<void>
   closeRoom(): Promise<void>
   setGuestStage(id: string, on: boolean): void
@@ -66,7 +78,7 @@ let chunker: CaptionChunker | null = null
 const captionBuffer = new LiveCaptionBuffer()
 
 function syncStudio(get: () => LiveStore) {
-  const { engine, layout, banner, showBanner, showNames, featuredId, comments } = get()
+  const { engine, layout, banner, showBanner, showNames, featuredId, comments, beautyLevel } = get()
   if (!engine) return
   engine.state = {
     ...engine.state,
@@ -75,6 +87,11 @@ function syncStudio(get: () => LiveStore) {
     showBanner,
     showNames,
     featured: comments.find((c) => c.id === featuredId) ?? null,
+    hostBeauty: {
+      smooth: BEAUTY_PRESET.smooth * 1.2 * beautyLevel,
+      brighten: BEAUTY_PRESET.brighten * 1.2 * beautyLevel,
+      warmth: BEAUTY_PRESET.warmth * 1.2 * beautyLevel,
+    },
   }
 }
 
@@ -91,6 +108,7 @@ export const useLiveStore = create<LiveStore>((set, get) => ({
   banner: '',
   showBanner: false,
   showNames: true,
+  beautyLevel: 0,
   room: null,
   guests: [],
   stage: {},

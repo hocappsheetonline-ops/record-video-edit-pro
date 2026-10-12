@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../i18n'
@@ -226,6 +226,9 @@ describe('LivePage', () => {
     expect(engine.rename).toHaveBeenLastCalledWith('host', 'An')
     await userEvent.click(screen.getByTestId('host-on-stage'))
     expect(engine.setOnStage).toHaveBeenLastCalledWith('host', false)
+    // Làm đẹp mặt cho webcam host.
+    fireEvent.change(screen.getByTestId('host-beauty'), { target: { value: '1' } })
+    expect((engine.state.hostBeauty as { smooth: number }).smooth).toBeCloseTo(0.72)
   })
 
   it('mời khách: mở phòng, hiện link, đưa khách lên sóng', async () => {
