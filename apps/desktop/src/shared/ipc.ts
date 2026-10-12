@@ -2,6 +2,8 @@ import type {
   AppSettings,
   AssistantCommand,
   AssistantContext,
+  DirectorContext,
+  DirectorPlan,
   AudioFx,
   Destination,
   Filmstrip,
@@ -92,6 +94,7 @@ export const IPC = {
   aiPullModel: 'ai:pull-model',
   aiInstallOllama: 'ai:install-ollama',
   aiBenchmark: 'ai:benchmark',
+  aiDirect: 'ai:direct',
   aiTranslate: 'ai:translate',
   aiVoices: 'ai:voices',
   aiSpeak: 'ai:speak',
@@ -479,6 +482,11 @@ export interface LumoraApi {
   summarize(folder: string): Promise<AiSummary>
   /** Trợ lý AI: mô tả bằng lời → danh sách lệnh chỉnh sửa. */
   planEdits(instruction: string, context: AssistantContext): Promise<AssistantCommand[]>
+  /**
+   * Đạo diễn AI: từ câu yêu cầu + ngữ cảnh (thói quen, kho nhạc, lịch sử) → kế hoạch gồm tóm tắt,
+   * câu hỏi làm rõ (nếu cần) và danh sách lệnh. Lỗi khi không có AI (thiếu key / Ollama tắt).
+   */
+  directEdits(goal: string, context: DirectorContext): Promise<DirectorPlan>
   /** Model đã tải trong Ollama tại địa chỉ đó (AI cục bộ). */
   listLocalModels(baseUrl: string): Promise<string[]>
   /** Tải một model về Ollama (tiến độ qua `onLocalAiProgress`). */
