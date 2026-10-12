@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -29,7 +29,7 @@ describe('SecretStore', () => {
     expect(await new SecretStore(file, fakeCipher()).status()).toEqual({
       elevenlabs: { state: 'missing' },
       anthropic: { state: 'missing' },
-      tenor: { state: 'missing' },
+      giphy: { state: 'missing' },
       pixabay: { state: 'missing' },
     })
   })
@@ -47,6 +47,17 @@ describe('SecretStore', () => {
     const status = await store.status()
     expect(status.anthropic).toEqual({ state: 'saved', masked: 'sk-a••••••••1234' })
     expect(JSON.stringify(status)).not.toContain(KEY)
+  })
+
+  it('bỏ qua key không còn hỗ trợ (Tenor đã bị Google khai tử) và xóa khỏi file khi lưu lại', async () => {
+    const store = new SecretStore(file, fakeCipher())
+    await store.set('anthropic', KEY)
+    const raw = JSON.parse(await readFile(file, 'utf8')) as Record<string, string>
+    await writeFile(file, JSON.stringify({ ...raw, tenor: raw.anthropic }))
+    const reloaded = new SecretStore(file, fakeCipher())
+    expect(Object.keys(await reloaded.status())).not.toContain('tenor')
+    await reloaded.set('giphy', 'g'.repeat(32))
+    expect(Object.keys(JSON.parse(await readFile(file, 'utf8')))).toEqual(['anthropic', 'giphy'])
   })
 
   it('xóa key', async () => {

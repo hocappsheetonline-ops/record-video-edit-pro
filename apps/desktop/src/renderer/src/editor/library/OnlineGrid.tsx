@@ -8,8 +8,8 @@ import { EmptyState, ErrorNote, formatDuration, SearchBox, useErrorText } from '
 
 /** Từ khóa gợi ý cho từng nguồn (bấm là tìm luôn). */
 const SUGGESTIONS: Record<OnlineSource, string[]> = {
-  tenor: ['bruh', 'green screen', 'cat', 'laugh', 'cry', 'wow', 'fail', 'dance'],
-  tenorSticker: ['wow', 'lol', 'heart', 'fire', 'arrow', 'subscribe', 'cat', 'ok'],
+  giphy: ['bruh', 'green screen', 'cat', 'laugh', 'cry', 'wow', 'fail', 'dance'],
+  giphySticker: ['wow', 'lol', 'heart', 'fire', 'arrow', 'subscribe', 'cat', 'ok'],
   pixabayVideo: ['city', 'nature', 'technology', 'abstract', 'ocean', 'night'],
   pixabayImage: ['background', 'texture', 'gradient', 'workspace', 'sky'],
 }
@@ -91,7 +91,7 @@ function ResultCard({
 }
 
 /**
- * Tìm và tải nội dung từ kho online (Tenor / Pixabay). Tải xong được lưu vào thư viện của tôi để
+ * Tìm và tải nội dung từ kho online (GIPHY / Pixabay). Tải xong được lưu vào thư viện của tôi để
  * dùng offline, rồi `onUse` thêm vào video tại đầu phát.
  */
 export function OnlineGrid({
@@ -102,7 +102,7 @@ export function OnlineGrid({
   onUse: (item: MemeItem) => Promise<void>
 }) {
   const { t } = useTranslation()
-  const keyName = source.startsWith('tenor') ? 'tenor' : 'pixabay'
+  const keyName = source.startsWith('giphy') ? 'giphy' : 'pixabay'
   const hasKey = useAppStore((s) => s.secrets?.[keyName]?.state === 'saved')
   const setPage = useAppStore((s) => s.setPage)
   const [q, setQ] = useState('')
@@ -194,7 +194,7 @@ export function OnlineGrid({
       />
     )
 
-  const square = source === 'tenorSticker'
+  const square = source === 'giphySticker'
   return (
     <div className="flex flex-col gap-3" data-testid="online-grid">
       <SearchBox

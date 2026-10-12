@@ -132,7 +132,8 @@ export interface MemeMeta {
 function parseOrigin(v: unknown): MemeOrigin | undefined {
   if (typeof v !== 'object' || v === null) return undefined
   const o = v as Record<string, unknown>
-  return (o.source === 'tenor' || o.source === 'pixabay') && typeof o.id === 'string'
+  return (o.source === 'giphy' || o.source === 'pixabay' || o.source === 'tenor') &&
+    typeof o.id === 'string'
     ? { source: o.source, id: o.id }
     : undefined
 }

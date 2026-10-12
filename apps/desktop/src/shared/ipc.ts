@@ -259,14 +259,16 @@ export interface AudioAsset {
   durationMs: number
 }
 
-/** Nguồn tìm trên kho online: meme Tenor, sticker Tenor, video / ảnh Pixabay. */
-export const ONLINE_SOURCES = ['tenor', 'tenorSticker', 'pixabayVideo', 'pixabayImage'] as const
+/** Nguồn tìm trên kho online: meme GIPHY, sticker GIPHY, video / ảnh Pixabay. */
+export const ONLINE_SOURCES = ['giphy', 'giphySticker', 'pixabayVideo', 'pixabayImage'] as const
 export type OnlineSource = (typeof ONLINE_SOURCES)[number]
+/** Nhà cung cấp (mỗi nhà một API key). */
+export type OnlineProvider = 'giphy' | 'pixabay'
 
 /** Một kết quả tìm kiếm trên kho online (URL đều là của máy chủ kho, không chứa key). */
 export interface OnlineItem {
   id: string
-  source: 'tenor' | 'pixabay'
+  source: OnlineProvider
   kind: 'gif' | 'video' | 'image' | 'sticker'
   title: string
   thumbUrl: string
@@ -300,7 +302,8 @@ export interface MediaAsset {
 
 /** Nguồn gốc của meme tải từ kho online (để không tải lại và ghi nguồn). */
 export interface MemeOrigin {
-  source: 'tenor' | 'pixabay'
+  /** `tenor`: meme tải trước khi Google khai tử Tenor API (30/6/2026), vẫn dùng offline được. */
+  source: OnlineProvider | 'tenor'
   id: string
 }
 
@@ -407,10 +410,10 @@ export interface LumoraApi {
   listVoices(): Promise<{ id: string; name: string }[]>
   /** Đọc câu bằng giọng AI và chép vào dự án (meme sound, lời bình). */
   speak(folder: string, text: string, voiceId: string): Promise<AudioAsset>
-  /** Tìm trên kho online (Tenor, Pixabay). */
+  /** Tìm trên kho online (GIPHY, Pixabay). */
   onlineSearch(source: OnlineSource, q: string, next: string | null): Promise<OnlineSearch>
   /** Tải một kết quả vừa tìm được vào thư viện meme. */
-  onlineDownload(source: 'tenor' | 'pixabay', id: string): Promise<MemeItem>
+  onlineDownload(source: OnlineProvider, id: string): Promise<MemeItem>
   /** Dung lượng bộ nhớ đệm (byte). */
   cacheInfo(): Promise<number>
   cacheClear(): Promise<number>

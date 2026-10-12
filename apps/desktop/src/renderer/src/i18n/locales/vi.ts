@@ -138,18 +138,18 @@ export const vi = {
       clear: 'Xóa',
       sources: {
         mine: 'Của tôi',
-        tenor: 'Meme',
+        giphy: 'Meme',
         pixabayVideo: 'Video',
         pixabayImage: 'Ảnh',
         emoji: 'Emoji',
-        tenorSticker: 'Sticker động',
+        giphySticker: 'Sticker động',
       },
-      noKey: { tenor: 'Cần key Tenor để tìm meme', pixabay: 'Cần key Pixabay để tìm video, ảnh' },
+      noKey: { giphy: 'Cần key GIPHY để tìm meme', pixabay: 'Cần key Pixabay để tìm video, ảnh' },
       noKeyText: 'Key miễn phí, nhập một lần trong Cài đặt → API key.',
       openSettings: 'Mở Cài đặt',
       searchPlaceholder: {
-        tenor: 'Tìm meme (bruh, mèo, green screen…)',
-        tenorSticker: 'Tìm sticker động',
+        giphy: 'Tìm meme (bruh, mèo, green screen…)',
+        giphySticker: 'Tìm sticker động',
         pixabayVideo: 'Tìm video miễn phí',
         pixabayImage: 'Tìm ảnh miễn phí',
       },
@@ -847,9 +847,10 @@ export const vi = {
   keys: {
     elevenlabs: { name: 'ElevenLabs', purpose: 'Chuyển giọng nói thành phụ đề' },
     anthropic: { name: 'Claude (Anthropic)', purpose: 'AI tự biên tập, tạo tiêu đề và chương' },
-    tenor: {
-      name: 'Tenor (Google)',
-      purpose: 'Tìm meme GIF / video và sticker ngay trong thư viện. Key miễn phí từ Google Cloud.',
+    giphy: {
+      name: 'GIPHY',
+      purpose:
+        'Tìm meme GIF / video và sticker ngay trong thư viện. Key miễn phí: tạo app API trên GIPHY Developers.',
     },
     pixabay: {
       name: 'Pixabay',

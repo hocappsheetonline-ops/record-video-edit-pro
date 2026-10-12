@@ -4,7 +4,7 @@ import {
   validateElevenLabsKey,
   validateKey,
   validatePixabayKey,
-  validateTenorKey,
+  validateGiphyKey,
   type FetchLike,
   type Validators,
 } from './key-validation'
@@ -62,12 +62,12 @@ describe('validateElevenLabsKey', () => {
   })
 })
 
-describe('key Tenor / Pixabay', () => {
+describe('key GIPHY / Pixabay', () => {
   it('gọi đúng endpoint với key, 200 là hợp lệ', async () => {
-    const fetchImpl = vi.fn(async () => json(200, { results: [] }))
-    expect(await validateTenorKey('AIzaTest', fetchImpl)).toEqual({ ok: true })
+    const fetchImpl = vi.fn(async () => json(200, { data: [] }))
+    expect(await validateGiphyKey('giphyTest', fetchImpl)).toEqual({ ok: true })
     expect(String((fetchImpl.mock.calls[0] as unknown[])[0])).toMatch(
-      /^https:\/\/tenor\.googleapis\.com\/v2\/featured\?key=AIzaTest&client_key=lumora&limit=1$/,
+      /^https:\/\/api\.giphy\.com\/v1\/gifs\/trending\?api_key=giphyTest&limit=1$/,
     )
     const pix = vi.fn(async () => json(200, { hits: [] }))
     expect(await validatePixabayKey('123-abc', pix)).toEqual({ ok: true })
@@ -83,11 +83,11 @@ describe('key Tenor / Pixabay', () => {
         fetchReturning(new Response('[ERROR 400] Invalid or missing API key', { status: 400 })),
       ),
     ).toEqual({ ok: false, reason: 'invalid' })
-    expect(await validateTenorKey('k', fetchReturning(json(403, {})))).toEqual({
+    expect(await validateGiphyKey('k', fetchReturning(json(403, {})))).toEqual({
       ok: false,
       reason: 'invalid',
     })
-    expect(await validateTenorKey('k', failingFetch)).toMatchObject({
+    expect(await validateGiphyKey('k', failingFetch)).toMatchObject({
       ok: false,
       reason: 'network',
     })
@@ -135,7 +135,7 @@ describe('validateKey', () => {
   const validators: Validators = {
     elevenlabs: vi.fn(async () => ({ ok: true as const })),
     anthropic: vi.fn(async () => ({ ok: true as const })),
-    tenor: vi.fn(async () => ({ ok: true as const })),
+    giphy: vi.fn(async () => ({ ok: true as const })),
     pixabay: vi.fn(async () => ({ ok: true as const })),
   }
 

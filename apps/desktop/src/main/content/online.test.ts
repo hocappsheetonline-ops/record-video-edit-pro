@@ -7,8 +7,8 @@ import { startMockContent } from '../../../e2e/mock-content'
 import { runFfmpeg } from '../ffmpeg/runner'
 import { MemeLibrary } from '../projects/images'
 import { OnlineService } from './online'
+import { searchGiphy } from './giphy'
 import { searchPixabay } from './pixabay'
-import { searchTenor } from './tenor'
 
 let dir: string
 let mock: Awaited<ReturnType<typeof startMockContent>>
@@ -50,11 +50,11 @@ beforeAll(async () => {
     gif: join(dir, 's.gif'),
     thumb: join(dir, 't.jpg'),
   })
-  process.env.LUMORA_TENOR_BASE_URL = mock.url
+  process.env.LUMORA_GIPHY_BASE_URL = mock.url
   process.env.LUMORA_PIXABAY_BASE_URL = mock.url
 }, 60_000)
 afterAll(async () => {
-  delete process.env.LUMORA_TENOR_BASE_URL
+  delete process.env.LUMORA_GIPHY_BASE_URL
   delete process.env.LUMORA_PIXABAY_BASE_URL
   await mock.close()
   await rm(dir, { recursive: true, force: true })
@@ -66,61 +66,70 @@ beforeEach(async () => {
 })
 afterEach(() => rm(work, { recursive: true, force: true }))
 
-const TENOR = 'AIzaMockTenorKey0123456789'
+const GIPHY = 'mockGiphyKey0123456789abcdefghij'
 const PIXABAY = 'mock-pixabay-key-0123456789'
 
-describe('Tenor', () => {
+describe('GIPHY', () => {
   it('tìm meme: chuẩn hóa kết quả, ưu tiên MP4, có trang tiếp và ghi nguồn', async () => {
-    const result = await searchTenor(TENOR, { q: 'bruh', kind: 'gif' })
-    expect(result.attribution).toBe('Powered by Tenor')
+    const result = await searchGiphy(GIPHY, { q: 'bruh', kind: 'gif' })
+    expect(result.attribution).toBe('Powered by GIPHY')
     expect(result.items).toHaveLength(3)
     expect(result.items[0]).toMatchObject({
-      id: 't0',
-      source: 'tenor',
+      id: 'g0',
+      source: 'giphy',
       kind: 'video',
       title: 'bruh 1',
       width: 320,
       height: 180,
-      durationMs: 2000,
+      durationMs: 0,
     })
-    expect(result.items[0]!.downloadUrl).toMatch(/t0-mp4\.mp4$/)
-    expect(result.items[0]!.previewUrl).toMatch(/t0-tinymp4\.mp4$/)
+    expect(result.items[0]!.downloadUrl).toMatch(/\/g0-original\.mp4\?/)
+    expect(result.items[0]!.previewUrl).toMatch(/\/g0-small\.mp4\?/)
+    expect(result.items[0]!.thumbUrl).toMatch(/\/g0-small\.gif\?/)
     expect(result.next).toBe('3')
     const req = mock.requests.at(-1)!
-    expect(req.path).toBe('/v2/search')
-    expect(req.query.get('contentfilter')).toBe('medium')
-    expect(req.query.get('client_key')).toBe('lumora')
+    expect(req.path).toBe('/v1/gifs/search')
+    expect(req.query.get('api_key')).toBe(GIPHY)
+    expect(req.query.get('rating')).toBe('pg-13')
+    expect(req.query.get('lang')).toBe('vi')
+    expect(req.query.get('offset')).toBe('0')
     // Trang tiếp theo.
-    const page2 = await searchTenor(TENOR, { q: 'bruh', kind: 'gif', next: result.next })
-    expect(page2.items[0]!.id).toBe('t3')
+    const page2 = await searchGiphy(GIPHY, { q: 'bruh', kind: 'gif', next: result.next })
+    expect(mock.requests.at(-1)!.query.get('offset')).toBe('3')
+    expect(page2.items[0]!.id).toBe('g3')
     expect(page2.next).toBeNull()
   })
 
-  it('sticker: GIF nền trong suốt; không có từ khóa thì lấy danh sách nổi bật', async () => {
-    const result = await searchTenor(TENOR, { q: '', kind: 'sticker' })
-    expect(mock.requests.at(-1)!.path).toBe('/v2/featured')
-    expect(mock.requests.at(-1)!.query.get('searchfilter')).toBe('sticker')
+  it('sticker: GIF nền trong suốt; không có từ khóa thì lấy danh sách thịnh hành', async () => {
+    const result = await searchGiphy(GIPHY, { q: '', kind: 'sticker' })
+    expect(mock.requests.at(-1)!.path).toBe('/v1/stickers/trending')
+    expect(mock.requests.at(-1)!.query.has('q')).toBe(false)
     expect(result.items[0]).toMatchObject({ kind: 'sticker', width: 200, height: 200 })
-    expect(result.items[0]!.downloadUrl).toMatch(/\.gif$/)
+    expect(result.items[0]!.downloadUrl).toMatch(/\/s0-original\.gif\?/)
+  })
+
+  it('từ khóa quá 50 ký tự (giới hạn của GIPHY) được cắt bớt', async () => {
+    await searchGiphy(GIPHY, { q: 'x'.repeat(80), kind: 'gif' })
+    expect(mock.requests.at(-1)!.query.get('q')).toBe('x'.repeat(50))
   })
 
   it('key sai, hết lượt, mất mạng, dữ liệu lạ: báo mã lỗi rõ ràng', async () => {
-    await expect(searchTenor('AIzaWrong', { q: 'x', kind: 'gif' })).rejects.toThrow('key_invalid')
+    await expect(searchGiphy('wrongKey', { q: 'x', kind: 'gif' })).rejects.toThrow('key_invalid')
     const quota = vi.fn(async () => new Response('', { status: 429 }))
-    await expect(searchTenor(TENOR, { q: 'x', kind: 'gif', fetchImpl: quota })).rejects.toThrow(
+    await expect(searchGiphy(GIPHY, { q: 'x', kind: 'gif', fetchImpl: quota })).rejects.toThrow(
       'quota',
     )
     const offline = vi.fn(async () => {
       throw new TypeError('fetch failed')
     })
-    await expect(searchTenor(TENOR, { q: 'x', kind: 'gif', fetchImpl: offline })).rejects.toThrow(
+    await expect(searchGiphy(GIPHY, { q: 'x', kind: 'gif', fetchImpl: offline })).rejects.toThrow(
       'net_offline',
     )
     const weird = vi.fn(
-      async () =>
-        new Response(JSON.stringify({ results: [{ id: 1 }, { id: 'a', media_formats: {} }] })),
+      async () => new Response(JSON.stringify({ data: [{ id: 1 }, { id: 'a', images: {} }] })),
     )
-    expect((await searchTenor(TENOR, { q: 'x', kind: 'gif', fetchImpl: weird })).items).toEqual([])
+    const result = await searchGiphy(GIPHY, { q: 'x', kind: 'gif', fetchImpl: weird })
+    expect(result).toMatchObject({ items: [], next: null })
   })
 })
 
@@ -152,7 +161,7 @@ describe('Pixabay', () => {
 })
 
 describe('OnlineService', () => {
-  function service(keys: Record<string, string | undefined> = { tenor: TENOR, pixabay: PIXABAY }) {
+  function service(keys: Record<string, string | undefined> = { giphy: GIPHY, pixabay: PIXABAY }) {
     const library = new MemeLibrary(join(work, 'memes'), runFfmpeg)
     const online = new OnlineService({
       getKey: async (name) => keys[name],
@@ -165,38 +174,38 @@ describe('OnlineService', () => {
   it('tìm kiếm được nhớ 10 phút; chưa nhập key thì báo key_missing', async () => {
     const { online } = service()
     const before = mock.requests.length
-    await online.search('tenor', 'Cat ', null)
-    await online.search('tenor', 'cat', null)
+    await online.search('giphy', 'Cat ', null)
+    await online.search('giphy', 'cat', null)
     expect(mock.requests.length).toBe(before + 1)
     await expect(service({}).online.search('pixabayVideo', 'x', null)).rejects.toThrow(
       'key_missing',
     )
   })
 
-  it('tải meme Tenor vào thư viện (chuẩn hóa MP4, có tiếng, nhớ nguồn), không tải lại lần hai', async () => {
+  it('tải meme GIPHY vào thư viện (chuẩn hóa MP4, có tiếng, nhớ nguồn), không tải lại lần hai', async () => {
     const { online, library } = service()
-    const { items } = await online.search('tenor', 'bruh', null)
-    const item = await online.download('tenor', items[0]!.id)
+    const { items } = await online.search('giphy', 'bruh', null)
+    const item = await online.download('giphy', items[0]!.id)
     expect(item).toMatchObject({
       kind: 'video',
       name: 'bruh 1',
       hasAudio: true,
-      origin: { source: 'tenor', id: 't0' },
+      origin: { source: 'giphy', id: 'g0' },
     })
     expect(item.file).toMatch(/^meme-[0-9a-f]{12}\.mp4$/)
     // File tạm đã được dọn.
     expect(readdirSync(join(work, 'cache'))).toEqual([])
     const before = mock.requests.length
-    const again = await online.download('tenor', items[0]!.id)
+    const again = await online.download('giphy', items[0]!.id)
     expect(again.file).toBe(item.file)
     expect(mock.requests.length).toBe(before)
     expect(await library.list()).toHaveLength(1)
   }, 60_000)
 
-  it('sticker Tenor và ảnh Pixabay tải về dạng ảnh GIF', async () => {
+  it('sticker GIPHY và ảnh Pixabay tải về dạng ảnh GIF', async () => {
     const { online } = service()
-    const stickers = await online.search('tenorSticker', 'wow', null)
-    const sticker = await online.download('tenor', stickers.items[1]!.id)
+    const stickers = await online.search('giphySticker', 'wow', null)
+    const sticker = await online.download('giphy', stickers.items[1]!.id)
     expect(sticker).toMatchObject({ kind: 'image', width: 100, height: 100 })
     expect(sticker.file).toMatch(/\.gif$/)
     const images = await online.search('pixabayImage', 'dog', null)
@@ -206,7 +215,7 @@ describe('OnlineService', () => {
 
   it('chỉ tải mục vừa có trong kết quả tìm kiếm', async () => {
     const { online } = service()
-    await expect(online.download('tenor', 'never-seen')).rejects.toThrow('online_unknown')
+    await expect(online.download('giphy', 'never-seen')).rejects.toThrow('online_unknown')
     expect(existsSync(join(work, 'memes'))).toBe(false)
   })
 })

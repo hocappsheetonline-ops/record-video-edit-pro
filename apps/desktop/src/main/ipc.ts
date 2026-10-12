@@ -417,7 +417,7 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
     return deps.online.search(source as OnlineSource, q, next)
   })
   ipcMain.handle(IPC.onlineDownload, (_event, source: unknown, id: unknown) => {
-    if ((source !== 'tenor' && source !== 'pixabay') || typeof id !== 'string' || id.length > 100)
+    if ((source !== 'giphy' && source !== 'pixabay') || typeof id !== 'string' || id.length > 100)
       throw new Error('online_unknown')
     return deps.online.download(source, id)
   })

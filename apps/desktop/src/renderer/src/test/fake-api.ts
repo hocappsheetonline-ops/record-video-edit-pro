@@ -339,9 +339,9 @@ export function createFakeApi(
     onlineSearch: vi.fn<LumoraApi['onlineSearch']>(async (source, q, next) => ({
       items: Array.from({ length: next ? 1 : 2 }, (_, i) => ({
         id: `${next ? 'p2-' : ''}${i}`,
-        source: source.startsWith('tenor') ? ('tenor' as const) : ('pixabay' as const),
+        source: source.startsWith('giphy') ? ('giphy' as const) : ('pixabay' as const),
         kind:
-          source === 'tenorSticker'
+          source === 'giphySticker'
             ? ('sticker' as const)
             : source === 'pixabayImage'
               ? ('image' as const)
@@ -355,7 +355,7 @@ export function createFakeApi(
         durationMs: 2000,
       })),
       next: next ? null : '2',
-      attribution: source.startsWith('tenor') ? 'Powered by Tenor' : 'Video từ Pixabay',
+      attribution: source.startsWith('giphy') ? 'Powered by GIPHY' : 'Video từ Pixabay',
     })),
     onlineDownload: vi.fn<LumoraApi['onlineDownload']>(async (source, id) => ({
       file: `meme-dl-${id}.mp4`,

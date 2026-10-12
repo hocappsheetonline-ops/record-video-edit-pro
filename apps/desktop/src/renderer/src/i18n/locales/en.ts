@@ -143,21 +143,21 @@ export const en: Messages = {
       clear: 'Clear',
       sources: {
         mine: 'Mine',
-        tenor: 'Memes',
+        giphy: 'Memes',
         pixabayVideo: 'Videos',
         pixabayImage: 'Images',
         emoji: 'Emoji',
-        tenorSticker: 'Animated',
+        giphySticker: 'Animated',
       },
       noKey: {
-        tenor: 'A Tenor key is needed to search memes',
+        giphy: 'A GIPHY key is needed to search memes',
         pixabay: 'A Pixabay key is needed to search videos and images',
       },
       noKeyText: 'Free key, enter it once in Settings → API keys.',
       openSettings: 'Open Settings',
       searchPlaceholder: {
-        tenor: 'Search memes (bruh, cat, green screen…)',
-        tenorSticker: 'Search animated stickers',
+        giphy: 'Search memes (bruh, cat, green screen…)',
+        giphySticker: 'Search animated stickers',
         pixabayVideo: 'Search free videos',
         pixabayImage: 'Search free images',
       },
@@ -859,9 +859,10 @@ export const en: Messages = {
   keys: {
     elevenlabs: { name: 'ElevenLabs', purpose: 'Speech-to-text captions' },
     anthropic: { name: 'Claude (Anthropic)', purpose: 'AI editing, titles and chapters' },
-    tenor: {
-      name: 'Tenor (Google)',
-      purpose: 'Search meme GIFs / videos and stickers in the library. Free key from Google Cloud.',
+    giphy: {
+      name: 'GIPHY',
+      purpose:
+        'Search meme GIFs / videos and stickers in the library. Free key: create an API app on GIPHY Developers.',
     },
     pixabay: {
       name: 'Pixabay',

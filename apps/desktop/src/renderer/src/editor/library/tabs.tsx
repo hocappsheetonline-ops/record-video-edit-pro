@@ -135,16 +135,16 @@ function EmojiGrid() {
   )
 }
 
-/** Nhãn dán: emoji có sẵn hoặc sticker động nền trong suốt từ Tenor. */
+/** Nhãn dán: emoji có sẵn hoặc sticker động nền trong suốt từ GIPHY. */
 export function StickersTab() {
   const { t } = useTranslation()
-  const [source, setSource] = useState<'emoji' | 'tenorSticker'>('emoji')
+  const [source, setSource] = useState<'emoji' | 'giphySticker'>('emoji')
   return (
     <div className="flex flex-col gap-3 p-3">
       <Segmented
         options={[
           { value: 'emoji', label: t('editor.library.sources.emoji') },
-          { value: 'tenorSticker', label: t('editor.library.sources.tenorSticker') },
+          { value: 'giphySticker', label: t('editor.library.sources.giphySticker') },
         ]}
         value={source}
         onChange={setSource}
@@ -153,7 +153,7 @@ export function StickersTab() {
       {source === 'emoji' ? (
         <EmojiGrid />
       ) : (
-        <OnlineGrid source="tenorSticker" onUse={addLibraryItem} />
+        <OnlineGrid source="giphySticker" onUse={addLibraryItem} />
       )}
     </div>
   )

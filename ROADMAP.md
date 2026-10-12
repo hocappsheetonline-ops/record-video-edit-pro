@@ -217,6 +217,7 @@ Mỗi mục có: thanh phụ (segmented) chọn nguồn "Của tôi / Kho online
     attribution: string
   }
   ```
+- _Cập nhật v0.6.4: Google khai tử Tenor API ngày 30/6/2026 nên `tenor.ts` được thay bằng `main/content/giphy.ts` (`/v1/gifs|stickers/search|trending`, `rating=pg-13`, phân trang theo `offset`, ghi nguồn "Powered by GIPHY"). Mô tả Tenor dưới đây giữ lại làm lịch sử._
 - `main/content/tenor.ts`: `search({ q, kind: 'gif'|'sticker', next })` → `GET https://tenor.googleapis.com/v2/search?q=&key=&client_key=lumora&limit=24&pos=&media_filter=gif,tinygif,mp4,tinymp4&contentfilter=medium&locale=vi_VN` (`searchfilter=sticker` cho sticker trong suốt); `trending()` → `/v2/featured`. `downloadUrl` = `media_formats.mp4.url` (ưu tiên) hoặc `gif.url`. **Bắt buộc** hiện "Powered by Tenor" trong UI (điều khoản Tenor).
 - `main/content/pixabay.ts`: video `GET https://pixabay.com/api/videos/?key=&q=&per_page=24&page=&safesearch=true` (dùng `videos.small.url` tải, `videos.tiny.url` phát thử, thumbnail từ `videos.tiny.thumbnail`); ảnh `GET https://pixabay.com/api/?key=&q=&image_type=photo&per_page=24` (`webformatURL` tải, `previewURL` thumb). Hiện "Ảnh/video từ Pixabay".
 - Gọi mạng bằng `fetch` của Node trong main (renderer không gọi trực tiếp: CORS + giấu key). Timeout 15s, cache kết quả 10 phút theo `(source,q,next)`, lỗi mạng → `net_offline`, 401/403 → `key_invalid`, 429 → `quota`.
@@ -472,15 +473,15 @@ Luôn thêm `-hide_banner -loglevel error -y`, ghi ra file `.part` rồi `rename
 
 ### 4.2 Dịch vụ online
 
-| Dịch vụ                       | Dùng cho                     | Key                            | Ghi chú                                                                 |
-| ----------------------------- | ---------------------------- | ------------------------------ | ----------------------------------------------------------------------- |
-| Tenor v2                      | meme GIF/MP4, sticker        | Google Cloud API key, miễn phí | Phải hiện "Powered by Tenor". `contentfilter=medium`.                   |
-| Pixabay                       | video/ảnh stock              | miễn phí                       | Không cần ghi nguồn; không được tải hàng loạt; cache ≤ 24h.             |
-| ElevenLabs                    | STT (đã có), TTS, giọng      | key người dùng                 | `eleven_multilingual_v2` cho tiếng Việt.                                |
-| Anthropic                     | AI cắt, tóm tắt, dịch phụ đề | key người dùng                 | Model mặc định trong `ai/service.ts`.                                   |
-| Freesound (tùy chọn, Bước 2+) | SFX CC0                      | key                            | Chỉ lọc `license:"Creative Commons 0"`, dùng `previews.preview-hq-mp3`. |
+| Dịch vụ                       | Dùng cho                     | Key                            | Ghi chú                                                                       |
+| ----------------------------- | ---------------------------- | ------------------------------ | ----------------------------------------------------------------------------- |
+| GIPHY v1                      | meme GIF/MP4, sticker        | key GIPHY Developers, miễn phí | Phải hiện "Powered by GIPHY". `rating=pg-13`. Thay Tenor (khai tử 30/6/2026). |
+| Pixabay                       | video/ảnh stock              | miễn phí                       | Không cần ghi nguồn; không được tải hàng loạt; cache ≤ 24h.                   |
+| ElevenLabs                    | STT (đã có), TTS, giọng      | key người dùng                 | `eleven_multilingual_v2` cho tiếng Việt.                                      |
+| Anthropic                     | AI cắt, tóm tắt, dịch phụ đề | key người dùng                 | Model mặc định trong `ai/service.ts`.                                         |
+| Freesound (tùy chọn, Bước 2+) | SFX CC0                      | key                            | Chỉ lọc `license:"Creative Commons 0"`, dùng `previews.preview-hq-mp3`.       |
 
-Mọi lời gọi mạng đi qua main process, có timeout, mã lỗi chuẩn, và **mock bằng HTTP server cục bộ** trong E2E (đặt URL gốc qua biến môi trường `LUMORA_TENOR_URL`, `LUMORA_PIXABAY_URL`, `LUMORA_ELEVENLABS_URL`, `LUMORA_ANTHROPIC_URL` như cách `mock-ai.ts` đang làm).
+Mọi lời gọi mạng đi qua main process, có timeout, mã lỗi chuẩn, và **mock bằng HTTP server cục bộ** trong E2E (đặt URL gốc qua biến môi trường `LUMORA_GIPHY_BASE_URL`, `LUMORA_PIXABAY_BASE_URL`, `LUMORA_ELEVENLABS_URL`, `LUMORA_ANTHROPIC_URL` như cách `mock-ai.ts` đang làm).
 
 ### 4.3 Tài nguyên bundle (ghi vào `THIRD_PARTY.md`)
 
@@ -493,7 +494,7 @@ Mọi lời gọi mạng đi qua main process, có timeout, mã lỗi chuẩn, v
 
 | Rủi ro                                     | Xử lý                                                                                                                                         |
 | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Key Tenor/Pixabay hết hạn mức              | Cache kết quả, báo `quota` rõ ràng, thư viện offline vẫn dùng được.                                                                           |
+| Key GIPHY/Pixabay hết hạn mức              | Cache kết quả, báo `quota` rõ ràng, thư viện offline vẫn dùng được.                                                                           |
 | `arnndn` chậm trên máy yếu                 | Chạy nền có tiến độ, cache theo hash, xem trước phát bản gốc tới khi xong.                                                                    |
 | MediaPipe không chạy (WebGL tắt)           | Tự tắt tính năng, thông báo; không chặn xuất.                                                                                                 |
 | Xuất chậm khi nhiều lớp + bộ lọc + mask    | Gộp lớp tĩnh vào scratch cache; đo trong E2E thời gian xuất 4s ≤ 60s.                                                                         |

@@ -178,7 +178,7 @@ function MyLibrary() {
   )
 }
 
-type MediaSource = 'mine' | Extract<OnlineSource, 'tenor' | 'pixabayVideo' | 'pixabayImage'>
+type MediaSource = 'mine' | Extract<OnlineSource, 'giphy' | 'pixabayVideo' | 'pixabayImage'>
 
 /** Thêm meme đã có trong thư viện của tôi vào video tại đầu phát. */
 export async function addLibraryItem(meme: MemeItem) {
@@ -187,14 +187,14 @@ export async function addLibraryItem(meme: MemeItem) {
   useEditorStore.getState().addMediaOverlay(await lumora().useMeme(folder, meme.file))
 }
 
-/** Mục Meme: thư viện của tôi, kho meme Tenor, video / ảnh miễn phí Pixabay. */
+/** Mục Meme: thư viện của tôi, kho meme GIPHY, video / ảnh miễn phí Pixabay. */
 export function MediaTab() {
   const { t } = useTranslation()
   const [source, setSource] = useState<MediaSource>('mine')
   return (
     <div className="flex min-h-full flex-col gap-3 p-3">
       <Segmented
-        options={(['mine', 'tenor', 'pixabayVideo', 'pixabayImage'] as const).map((s) => ({
+        options={(['mine', 'giphy', 'pixabayVideo', 'pixabayImage'] as const).map((s) => ({
           value: s,
           label: t(`editor.library.sources.${s}`),
         }))}

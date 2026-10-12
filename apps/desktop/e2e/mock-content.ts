@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 
 export interface MockContentFiles {
-  /** Video meme (MP4) mà kết quả Tenor / Pixabay video trỏ tới. */
+  /** Video meme (MP4) mà kết quả GIPHY / Pixabay video trỏ tới. */
   video: string
   /** Ảnh GIF (sticker / ảnh). */
   gif: string
@@ -11,8 +11,8 @@ export interface MockContentFiles {
 }
 
 /**
- * Máy chủ giả Tenor + Pixabay: trả JSON đúng cấu trúc API thật, các URL ảnh / video trỏ về chính
- * máy chủ này. Key hợp lệ: Tenor `AIzaMockTenorKey…`, Pixabay `mock-pixabay-key…`. Ghi lại các
+ * Máy chủ giả GIPHY + Pixabay: trả JSON đúng cấu trúc API thật, các URL ảnh / video trỏ về chính
+ * máy chủ này. Key hợp lệ: GIPHY `mockGiphyKey…`, Pixabay `mock-pixabay-key…`. Ghi lại các
  * request để test kiểm tra.
  */
 export async function startMockContent(files: MockContentFiles): Promise<{
@@ -44,37 +44,49 @@ export async function startMockContent(files: MockContentFiles): Promise<{
       if (url.pathname.endsWith('.gif')) return file(files.gif, 'image/gif')
       return file(files.thumb, 'image/jpeg')
     }
-    if (url.pathname === '/v2/search' || url.pathname === '/v2/featured') {
-      if (!key.startsWith('AIzaMock')) return json(400, { error: { message: 'API key not valid' } })
-      const sticker = url.searchParams.get('searchfilter') === 'sticker'
-      const q = url.searchParams.get('q') ?? 'featured'
-      const pos = Number(url.searchParams.get('pos') ?? 0)
-      const results = Array.from({ length: 3 }, (_, i) => {
-        const id = `${sticker ? 's' : 't'}${pos + i}`
-        const media = (name: string, ext: string, dims: number[]) => ({
-          url: `${base}/media/${id}-${name}.${ext}`,
-          dims,
-          duration: 2,
-          size: 1000,
+    const giphy = /^\/v1\/(gifs|stickers)\/(search|trending)$/.exec(url.pathname)
+    if (giphy) {
+      const apiKey = url.searchParams.get('api_key') ?? ''
+      if (!apiKey.startsWith('mockGiphy'))
+        return json(401, { meta: { status: 401, msg: 'Unauthorized' } })
+      const sticker = giphy[1] === 'stickers'
+      const q = url.searchParams.get('q') ?? 'trending'
+      const offset = Number(url.searchParams.get('offset') ?? 0)
+      const total = 6
+      const count = Math.max(0, Math.min(3, total - offset))
+      const data = Array.from({ length: count }, (_, i) => {
+        const id = `${sticker ? 's' : 'g'}${offset + i}`
+        // Giống API thật: kích thước dạng chuỗi, URL có tham số theo dõi phía sau.
+        const media = (name: string, w: number, h: number) => ({
+          url: `${base}/media/${id}-${name}.gif?cid=mock&rid=giphy.gif&ct=${sticker ? 's' : 'g'}`,
+          width: String(w),
+          height: String(h),
+          ...(sticker
+            ? {}
+            : { mp4: `${base}/media/${id}-${name}.mp4?cid=mock&rid=giphy.mp4&ct=g` }),
         })
         return {
+          type: sticker ? 'sticker' : 'gif',
           id,
-          title: '',
-          content_description: `${q} ${pos + i + 1}`,
-          media_formats: sticker
+          title: `${q} ${offset + i + 1}`,
+          alt_text: '',
+          images: sticker
             ? {
-                gif_transparent: media('gif', 'gif', [200, 200]),
-                tinygif_transparent: media('tiny', 'gif', [100, 100]),
+                original: media('original', 200, 200),
+                fixed_width_small: media('small', 100, 100),
               }
             : {
-                mp4: media('mp4', 'mp4', [320, 180]),
-                tinymp4: media('tinymp4', 'mp4', [160, 90]),
-                gif: media('gif', 'gif', [320, 180]),
-                tinygif: media('tinygif', 'gif', [160, 90]),
+                original: media('original', 320, 180),
+                fixed_width: media('fixed', 200, 113),
+                fixed_width_small: media('small', 100, 56),
               },
         }
       })
-      return json(200, { results, next: pos < 3 ? String(pos + 3) : '' })
+      return json(200, {
+        data,
+        pagination: { total_count: total, count, offset },
+        meta: { status: 200, msg: 'OK' },
+      })
     }
     if (url.pathname === '/api/videos/' || url.pathname === '/api/') {
       if (!key.startsWith('mock-pixabay'))

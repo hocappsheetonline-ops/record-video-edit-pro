@@ -92,10 +92,10 @@ function loudness(file: string, from: number, len: number) {
   return Number(/mean_volume: (-?[\d.]+) dB/.exec(stderr)?.[1] ?? -100)
 }
 
-test('kho meme online + giọng đọc AI: nhập key, tìm, tải meme Tenor và video Pixabay, đọc câu meme, xuất có hình và tiếng', async () => {
+test('kho meme online + giọng đọc AI: nhập key, tìm, tải meme GIPHY và video Pixabay, đọc câu meme, xuất có hình và tiếng', async () => {
   const { app, page, errors } = await launchApp(dirs.userData, {
     env: {
-      LUMORA_TENOR_BASE_URL: content.url,
+      LUMORA_GIPHY_BASE_URL: content.url,
       LUMORA_PIXABAY_BASE_URL: content.url,
       LUMORA_ELEVENLABS_BASE_URL: ai.url,
     },
@@ -103,11 +103,11 @@ test('kho meme online + giọng đọc AI: nhập key, tìm, tải meme Tenor v�
 
   // Key sai bị báo ngay khi kiểm tra; key đúng thì lưu được.
   await page.getByTestId('nav-settings').click()
-  const tenorCard = page.getByTestId('key-card-tenor')
-  await tenorCard.getByLabel('Tenor (Google)').fill('AIzaWrongKey0123456789abcd')
-  await tenorCard.getByRole('button', { name: 'Kiểm tra' }).click()
-  await expect(page.getByTestId('key-feedback-tenor')).not.toHaveText('Key hợp lệ')
-  await saveKey(page, 'tenor', 'Tenor (Google)', 'AIzaMockTenorKey0123456789')
+  const giphyCard = page.getByTestId('key-card-giphy')
+  await giphyCard.getByLabel('GIPHY').fill('wrongGiphyKey0123456789abcdefghi')
+  await giphyCard.getByRole('button', { name: 'Kiểm tra' }).click()
+  await expect(page.getByTestId('key-feedback-giphy')).not.toHaveText('Key hợp lệ')
+  await saveKey(page, 'giphy', 'GIPHY', 'mockGiphyKey0123456789abcdefghij')
   await saveKey(page, 'pixabay', 'Pixabay', 'mock-pixabay-key-0123456789')
   await saveKey(page, 'elevenlabs', 'ElevenLabs', 'el_test_key_0123456789abcdef')
   await expect(page.getByTestId('cache-card')).toBeVisible()
@@ -117,10 +117,10 @@ test('kho meme online + giọng đọc AI: nhập key, tìm, tải meme Tenor v�
   await page.getByTestId('open-editor').click()
   await expect(page.getByTestId('editor')).toBeVisible()
 
-  // Meme Tenor: danh sách nổi bật hiện ngay, ảnh thu nhỏ tải được (CSP cho phép), tìm từ khóa.
-  await page.getByTestId('media-source-tenor').click()
+  // Meme GIPHY: danh sách thịnh hành hiện ngay, ảnh thu nhỏ tải được (CSP cho phép), tìm từ khóa.
+  await page.getByTestId('media-source-giphy').click()
   await expect(page.getByTestId('online-item')).toHaveCount(3)
-  await expect(page.getByTestId('online-attribution')).toHaveText('Powered by Tenor')
+  await expect(page.getByTestId('online-attribution')).toHaveText('Powered by GIPHY')
   await expect
     .poll(() =>
       page

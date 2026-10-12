@@ -429,8 +429,8 @@ describe('EditorPage', () => {
   it('kho meme online: chưa có key thì hướng dẫn; có key thì tìm, xem thêm, tải và thêm vào video', async () => {
     const api = setup()
     await screen.findByTestId('editor')
-    await userEvent.click(screen.getByTestId('media-source-tenor'))
-    expect(screen.getByText('Cần key Tenor để tìm meme')).toBeInTheDocument()
+    await userEvent.click(screen.getByTestId('media-source-giphy'))
+    expect(screen.getByText('Cần key GIPHY để tìm meme')).toBeInTheDocument()
     await userEvent.click(screen.getByTestId('online-open-settings'))
     expect(useAppStore.getState().page).toBe('settings')
     act(() => {
@@ -439,25 +439,25 @@ describe('EditorPage', () => {
         secrets: {
           elevenlabs: { state: 'missing' },
           anthropic: { state: 'missing' },
-          tenor: { state: 'saved', masked: 'AIza••••' },
+          giphy: { state: 'saved', masked: 'aBcD••••' },
           pixabay: { state: 'missing' },
         },
       })
     })
     expect(await screen.findAllByTestId('online-item')).toHaveLength(2)
-    expect(api.onlineSearch).toHaveBeenCalledWith('tenor', '', null)
-    expect(screen.getByTestId('online-attribution')).toHaveTextContent('Powered by Tenor')
+    expect(api.onlineSearch).toHaveBeenCalledWith('giphy', '', null)
+    expect(screen.getByTestId('online-attribution')).toHaveTextContent('Powered by GIPHY')
     await userEvent.type(screen.getByTestId('online-search'), 'bruh{Enter}')
-    await waitFor(() => expect(api.onlineSearch).toHaveBeenLastCalledWith('tenor', 'bruh', null))
+    await waitFor(() => expect(api.onlineSearch).toHaveBeenLastCalledWith('giphy', 'bruh', null))
     await userEvent.click(screen.getByTestId('online-more'))
     await waitFor(() => expect(screen.getAllByTestId('online-item')).toHaveLength(3))
-    expect(api.onlineSearch).toHaveBeenLastCalledWith('tenor', 'bruh', '2')
+    expect(api.onlineSearch).toHaveBeenLastCalledWith('giphy', 'bruh', '2')
     expect(screen.queryByTestId('online-more')).not.toBeInTheDocument()
 
     act(() => useEditorStore.getState().setTime(500))
     await userEvent.click(screen.getAllByTestId('online-item')[0]!)
     await waitFor(() => expect(useEditorStore.getState().edit!.overlays).toHaveLength(1))
-    expect(api.onlineDownload).toHaveBeenCalledWith('tenor', '0')
+    expect(api.onlineDownload).toHaveBeenCalledWith('giphy', '0')
     expect(api.useMeme).toHaveBeenCalledWith(sampleSummary.folder, 'meme-dl-0.mp4')
     expect(screen.getAllByTestId('online-item')[0]).toHaveAttribute('data-state', 'done')
     // Bấm lần nữa: không tải lại.
@@ -473,7 +473,7 @@ describe('EditorPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('API key không đúng')
   })
 
-  it('sticker động Tenor và âm thanh meme + giọng đọc AI', async () => {
+  it('sticker động GIPHY và âm thanh meme + giọng đọc AI', async () => {
     const api = setup()
     await screen.findByTestId('editor')
     act(() => {
@@ -481,15 +481,15 @@ describe('EditorPage', () => {
         secrets: {
           elevenlabs: { state: 'saved', masked: 'el••' },
           anthropic: { state: 'missing' },
-          tenor: { state: 'saved', masked: 'AIza••' },
+          giphy: { state: 'saved', masked: 'aBcD••' },
           pixabay: { state: 'missing' },
         },
       })
     })
     await userEvent.click(screen.getByTestId('lib-stickers'))
-    await userEvent.click(screen.getByTestId('sticker-source-tenorSticker'))
+    await userEvent.click(screen.getByTestId('sticker-source-giphySticker'))
     expect(await screen.findAllByTestId('online-item')).toHaveLength(2)
-    expect(api.onlineSearch).toHaveBeenCalledWith('tenorSticker', '', null)
+    expect(api.onlineSearch).toHaveBeenCalledWith('giphySticker', '', null)
 
     await userEvent.click(screen.getByTestId('lib-audio'))
     await userEvent.click(screen.getByTestId('audio-section-meme'))

@@ -4,11 +4,11 @@ import { join } from 'node:path'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import type { ReadableStream as WebReadableStream } from 'node:stream/web'
-import type { MemeItem, OnlineItem, OnlineSearch, OnlineSource } from '@shared/ipc'
+import type { MemeItem, OnlineItem, OnlineProvider, OnlineSearch, OnlineSource } from '@shared/ipc'
 import type { FetchLike } from '../key-validation'
 import type { MemeLibrary } from '../projects/images'
+import { searchGiphy } from './giphy'
 import { searchPixabay } from './pixabay'
-import { searchTenor } from './tenor'
 import { ContentError } from './types'
 
 /** Kết quả tìm kiếm giữ lại 10 phút: gõ lại từ khóa cũ không tốn lượt gọi API. */
@@ -18,7 +18,7 @@ export const MAX_DOWNLOAD_BYTES = 150 * 1024 * 1024
 const DOWNLOAD_TIMEOUT_MS = 120_000
 
 export interface OnlineDeps {
-  getKey(name: 'tenor' | 'pixabay'): Promise<string | undefined>
+  getKey(name: OnlineProvider): Promise<string | undefined>
   library: MemeLibrary
   /** Thư mục tạm cho file đang tải. */
   tmpDir: string
@@ -26,7 +26,8 @@ export interface OnlineDeps {
   now?: () => number
 }
 
-const keyFor = (source: OnlineSource) => (source.startsWith('tenor') ? 'tenor' : 'pixabay')
+const keyFor = (source: OnlineSource): OnlineProvider =>
+  source.startsWith('giphy') ? 'giphy' : 'pixabay'
 
 const EXTENSIONS: Record<string, string> = {
   'video/mp4': 'mp4',
@@ -45,7 +46,7 @@ function extensionOf(url: string, contentType: string): string {
 }
 
 /**
- * Kho nội dung online (Tenor, Pixabay): tìm kiếm qua main process (giấu key, tránh CORS), tải
+ * Kho nội dung online (GIPHY, Pixabay): tìm kiếm qua main process (giấu key, tránh CORS), tải
  * về thư viện meme cá nhân để dùng offline. Chỉ tải được mục vừa có trong kết quả tìm kiếm, nên
  * giao diện không thể bắt app tải một địa chỉ tùy ý.
  */
@@ -73,10 +74,10 @@ export class OnlineService {
     const apiKey = await this.key(source)
     const fetchImpl = this.deps.fetchImpl
     const result =
-      source === 'tenor' || source === 'tenorSticker'
-        ? await searchTenor(apiKey, {
+      source === 'giphy' || source === 'giphySticker'
+        ? await searchGiphy(apiKey, {
             q,
-            kind: source === 'tenor' ? 'gif' : 'sticker',
+            kind: source === 'giphy' ? 'gif' : 'sticker',
             next,
             fetchImpl,
           })
@@ -92,7 +93,7 @@ export class OnlineService {
   }
 
   /** Tải một mục vào thư viện meme (đã có thì dùng lại, không tải lần hai). */
-  download(source: 'tenor' | 'pixabay', id: string): Promise<MemeItem> {
+  download(source: OnlineProvider, id: string): Promise<MemeItem> {
     const key = `${source}:${id}`
     const running = this.downloading.get(key)
     if (running) return running
@@ -101,7 +102,7 @@ export class OnlineService {
     return task
   }
 
-  private async doDownload(source: 'tenor' | 'pixabay', id: string): Promise<MemeItem> {
+  private async doDownload(source: OnlineProvider, id: string): Promise<MemeItem> {
     const existing = (await this.deps.library.list()).find(
       (m) => m.origin?.source === source && m.origin.id === id,
     )
