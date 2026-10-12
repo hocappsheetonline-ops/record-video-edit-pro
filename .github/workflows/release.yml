@@ -62,6 +62,23 @@ jobs:
           git tag "${{ steps.version.outputs.tag }}"
           git push origin "${{ steps.version.outputs.tag }}"
 
+      # Tạo sẵn release cho tag. Nếu để electron-builder tự tạo, các file tải lên song song có thể
+      # sinh ra hai release trùng tag (một cái chỉ có file .blockmap).
+      - name: Tạo release trên GitHub
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          api="https://api.github.com/repos/$GITHUB_REPOSITORY/releases"
+          auth=(-H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json")
+          if curl -sf "${auth[@]}" "$api/tags/$TAG" >/dev/null; then
+            echo "Release $TAG đã có, chỉ tải file lên."
+          else
+            curl -sf "${auth[@]}" -X POST "$api" \
+              -d "{\"tag_name\":\"$TAG\",\"name\":\"Lumora $TAG\",\"make_latest\":\"true\"}" >/dev/null
+          fi
+
       - name: Build và đăng lên GitHub Releases
         run: pnpm --filter @lumora/desktop release:win
         env:
