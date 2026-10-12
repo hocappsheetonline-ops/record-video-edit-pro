@@ -19,13 +19,13 @@
     -apple-system, 'SF Pro Text', 'SF Pro Display', 'Inter', 'Segoe UI Variable', 'Segoe UI',
     system-ui, sans-serif;
   --font-mono: 'SF Mono', 'Roboto Mono', ui-monospace, Menlo, Consolas, monospace;
-  /* Bo góc đồng tâm kiểu Apple: mọi lớp `rounded-*` hiện có bo tròn hơn. */
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
-  --radius-2xl: 22px;
-  --radius-3xl: 28px;
+  /* Bo góc vừa phải (như CapCut): toàn bộ thang `rounded-*` dùng giá trị này. */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 14px;
+  --radius-3xl: 18px;
   /* Bóng mềm, lan rộng (không gắt). */
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.12);
   --shadow: 0 1px 3px rgb(0 0 0 / 0.14), 0 1px 2px rgb(0 0 0 / 0.1);
@@ -223,7 +223,7 @@ kbd {
   box-shadow:
     0 0 0 1px var(--lm-bg),
     0 0 0 4px color-mix(in srgb, var(--lm-accent) 55%, transparent);
-  border-radius: 6px;
+  border-radius: 4px;
 }
 
 @media (prefers-reduced-motion: reduce) {

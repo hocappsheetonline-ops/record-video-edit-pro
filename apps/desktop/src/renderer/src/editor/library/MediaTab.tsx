@@ -125,7 +125,7 @@ function MyLibrary() {
             aria-checked={filter === f}
             data-testid={`media-filter-${f}`}
             onClick={() => setFilter(f)}
-            className={`rounded-full border px-2.5 py-0.5 text-[11px] ${
+            className={`rounded-md border px-2.5 py-0.5 text-[11px] ${
               filter === f
                 ? 'border-accent bg-accent/15 text-accent'
                 : 'border-border text-muted hover:text-text'

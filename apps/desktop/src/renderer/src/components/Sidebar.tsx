@@ -57,7 +57,7 @@ export function Sidebar() {
       data-compact={compact}
     >
       <div className={`flex items-center gap-2.5 ${compact ? 'mb-3 py-2' : 'mb-4 px-2 py-2'}`}>
-        <div className="size-7 rounded-[9px] bg-gradient-to-br from-accent to-sky-400 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_1px_2px_rgba(0,0,0,0.3)]" />
+        <div className="size-7 rounded-[7px] bg-gradient-to-br from-accent to-sky-400 shadow-[inset_0_1px_0_rgba(255,255,255,0.35),0_1px_2px_rgba(0,0,0,0.3)]" />
         {!compact && <span className="text-[15px] font-semibold tracking-tight">Lumora</span>}
       </div>
       {ITEMS.map((item) => (

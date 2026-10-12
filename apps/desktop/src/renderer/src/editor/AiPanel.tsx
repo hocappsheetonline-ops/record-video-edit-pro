@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Scissors, Sparkles, WandSparkles } from 'lucide-react'
+import { Scissors, Sparkle, WandSparkles } from 'lucide-react'
 import {
   removeSourceRanges,
   sourceToOutput,
@@ -107,7 +107,7 @@ function Assistant() {
             type="button"
             data-testid={`assistant-example-${k}`}
             onClick={() => setText(t(`ai.assistant.examples.${k}`))}
-            className="rounded-full border border-border px-2 py-0.5 text-[11px] text-muted hover:text-text"
+            className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted hover:text-text"
           >
             {t(`ai.assistant.examples.${k}`)}
           </button>
@@ -134,7 +134,7 @@ function Assistant() {
               key={i}
               data-testid="assistant-command"
               data-kind={c.kind}
-              className="rounded-full bg-accent/15 px-2 py-0.5 text-[11px] text-accent"
+              className="rounded-md bg-accent/15 px-2 py-0.5 text-[11px] text-accent"
             >
               {commandLabel(t, c)}
             </li>
@@ -210,7 +210,7 @@ function Shorts() {
                 setMode(m)
                 if (m === 'fixed') setSeconds(s)
               }}
-              className={`rounded-full border px-2.5 py-0.5 text-[11px] ${
+              className={`rounded-md border px-2.5 py-0.5 text-[11px] ${
                 active
                   ? 'border-accent bg-accent/15 text-accent'
                   : 'border-border text-muted hover:text-text'
@@ -238,7 +238,7 @@ function Shorts() {
         onClick={() => void run()}
         className={button}
       >
-        <Sparkles size={14} aria-hidden className="mr-1 inline" />
+        <Sparkle size={14} aria-hidden className="mr-1 inline" />
         {busy ? t('ai.working') : t('ai.shorts.run')}
       </button>
       {count === 0 && <p className="text-xs text-muted">{t('ai.shorts.tooShort')}</p>}

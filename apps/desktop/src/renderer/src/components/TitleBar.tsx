@@ -73,7 +73,7 @@ export function TitleBar() {
     >
       {!frameless && <div className="w-[72px] shrink-0" aria-hidden />}
       <div className="flex shrink-0 items-center gap-2 px-3">
-        <span className="size-5 rounded-[6px] bg-gradient-to-br from-accent to-sky-400 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]" />
+        <span className="size-5 rounded-[5px] bg-gradient-to-br from-accent to-sky-400 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]" />
         <span className="font-semibold tracking-tight">Lumora</span>
       </div>
       <div id={TITLE_BAR_SLOT} className="flex h-full min-w-0 flex-1 items-center gap-2" />

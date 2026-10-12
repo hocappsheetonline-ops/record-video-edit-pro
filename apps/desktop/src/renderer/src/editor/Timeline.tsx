@@ -21,7 +21,7 @@ import {
   Rewind,
   Scissors,
   Snowflake,
-  Sparkles,
+  Sparkle,
   TrendingUp,
   Trash2,
   Undo2,
@@ -545,7 +545,7 @@ export function Timeline() {
         <div className="shrink-0 border-r border-border bg-surface" style={{ width: HEADER_W }}>
           <div className="h-7 border-b border-border" />
           <TrackHeader
-            icon={Sparkles}
+            icon={Sparkle}
             label={t('editor.tracks.effects')}
             height={heights.effects}
             row="effects"

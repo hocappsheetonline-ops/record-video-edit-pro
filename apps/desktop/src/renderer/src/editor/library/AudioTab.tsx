@@ -129,7 +129,7 @@ function SpeechMaker({
             data-testid={`speech-line-${i}`}
             disabled={busy !== null || !voice}
             onClick={() => speak(line)}
-            className="flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[11px] text-muted hover:border-accent hover:text-text disabled:opacity-50"
+            className="flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[11px] text-muted hover:border-accent hover:text-text disabled:opacity-50"
           >
             {busy === `speech:${line}` && (
               <Loader2 size={10} className="animate-spin" aria-hidden />
