@@ -1,11 +1,13 @@
 name: Release
 
-# Phát hành bản mới: tăng "version" trong apps/desktop/package.json, rồi push tag cùng số, ví dụ:
-#   git tag v0.2.0 && git push origin v0.2.0
+# Phát hành bản mới: tăng "version" trong apps/desktop/package.json, rồi một trong hai cách:
+#   - push tag cùng số:  git tag v0.2.0 && git push origin v0.2.0
+#   - hoặc bấm "Run workflow" ở tab Actions → Release (workflow tự tạo tag sau khi test qua).
 # Workflow chạy toàn bộ test, build bộ cài và đăng lên GitHub Releases. App đã cài sẽ tự tải bản mới.
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -29,11 +31,18 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Kiểm tra tag khớp phiên bản app
+        id: version
         shell: bash
         run: |
           version=$(node -p "require('./apps/desktop/package.json').version")
-          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
-            echo "Tag $GITHUB_REF_NAME không khớp version $version trong apps/desktop/package.json"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+              echo "Tag $GITHUB_REF_NAME không khớp version $version trong apps/desktop/package.json"
+              exit 1
+            fi
+          elif git ls-remote --exit-code --tags origin "refs/tags/v$version" >/dev/null; then
+            echo "Tag v$version đã tồn tại. Hãy tăng version trong apps/desktop/package.json."
             exit 1
           fi
 
@@ -45,6 +54,13 @@ jobs:
 
       - name: Test E2E
         run: pnpm test:e2e
+
+      - name: Tạo tag (khi chạy bằng tay)
+        if: github.ref_type != 'tag'
+        shell: bash
+        run: |
+          git tag "${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
 
       - name: Build và đăng lên GitHub Releases
         run: pnpm --filter @lumora/desktop release:win

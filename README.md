@@ -90,7 +90,7 @@ Nếu FFmpeg dừng giữa chừng (mất mạng, sai key) hoặc mọi kênh đ
 ## Phát hành bản mới
 
 1. Tăng `version` trong `apps/desktop/package.json` (ví dụ `0.2.0`) rồi commit.
-2. Tạo tag cùng số và push: `git tag v0.2.0 && git push origin v0.2.0`.
+2. Vào tab **Actions** → **Release** → **Run workflow** (workflow tự tạo tag `v0.2.0` sau khi test qua), hoặc tự push tag: `git tag v0.2.0 && git push origin v0.2.0`.
 3. Workflow **Release** chạy toàn bộ test, build bộ cài và đăng lên **GitHub Releases**. Các máy đã cài sẽ tự nhận bản mới.
 
 ## Chạy từ mã nguồn
