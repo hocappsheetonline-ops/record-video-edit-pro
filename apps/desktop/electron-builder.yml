@@ -1,0 +1,25 @@
+appId: app.lumora.desktop
+productName: Lumora
+executableName: Lumora
+copyright: Copyright © 2026 Lumora
+directories:
+  output: release/${version}
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+  - '!**/*.{map,md,ts,tsx}'
+asarUnpack:
+  - resources/**
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: Lumora-Setup-${version}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  shortcutName: Lumora
+npmRebuild: false

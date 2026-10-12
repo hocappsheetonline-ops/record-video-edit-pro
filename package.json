@@ -1,0 +1,34 @@
+{
+  "name": "lumora",
+  "private": true,
+  "description": "Lumora — quay màn hình, tự động zoom, chỉnh sửa video và livestream có AI",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @lumora/desktop dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "pnpm -r test",
+    "test:e2e": "pnpm --filter @lumora/desktop test:e2e",
+    "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
+    "package:win": "pnpm --filter @lumora/desktop package:win"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/node": "^22.20.5",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.71.1",
+    "vite": "^7.3.7",
+    "vitest": "^4.1.11"
+  },
+  "type": "module"
+}

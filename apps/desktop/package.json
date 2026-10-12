@@ -1,0 +1,46 @@
+{
+  "name": "@lumora/desktop",
+  "productName": "Lumora",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lumora — quay màn hình, tự động zoom, chỉnh sửa video và livestream có AI",
+  "author": "Lumora",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json",
+    "test": "vitest run",
+    "test:e2e": "electron-vite build && playwright test",
+    "package:win": "electron-vite build && electron-builder --win --publish never"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.133.0"
+  },
+  "devDependencies": {
+    "@lumora/core": "workspace:*",
+    "@playwright/test": "^1.64.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.7",
+    "@types/node": "^22.20.5",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "electron": "44.7.0",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "i18next": "^26.4.3",
+    "jsdom": "^30.1.2",
+    "lucide-react": "^1.55.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-i18next": "^17.0.16",
+    "tailwindcss": "^4.3.3",
+    "vite": "^7.3.7",
+    "vitest": "^4.1.11",
+    "zustand": "^5.0.15"
+  }
+}

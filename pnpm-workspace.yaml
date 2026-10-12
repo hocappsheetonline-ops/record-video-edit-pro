@@ -1,0 +1,11 @@
+packages:
+  - apps/*
+  - packages/*
+
+onlyBuiltDependencies:
+  - electron
+  - esbuild
+
+# Dùng chung một phiên bản Vite cho electron-vite và Vitest.
+overrides:
+  vite: ^7.3.7

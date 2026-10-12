@@ -1,0 +1,63 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-bg: var(--lm-bg);
+  --color-surface: var(--lm-surface);
+  --color-surface-2: var(--lm-surface-2);
+  --color-border: var(--lm-border);
+  --color-text: var(--lm-text);
+  --color-muted: var(--lm-muted);
+  --color-accent: var(--lm-accent);
+  --color-accent-fg: var(--lm-accent-fg);
+  --color-success: var(--lm-success);
+  --color-danger: var(--lm-danger);
+  --font-sans: 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+}
+
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --lm-bg: #0b0b10;
+  --lm-surface: #14141c;
+  --lm-surface-2: #1c1c27;
+  --lm-border: #2a2a38;
+  --lm-text: #ececf1;
+  --lm-muted: #9a9aad;
+  --lm-accent: #8b5cf6;
+  --lm-accent-fg: #ffffff;
+  --lm-success: #34d399;
+  --lm-danger: #f87171;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --lm-bg: #f6f6f9;
+  --lm-surface: #ffffff;
+  --lm-surface-2: #eeeef3;
+  --lm-border: #dcdce5;
+  --lm-text: #16161d;
+  --lm-muted: #5c5c70;
+  --lm-accent: #7c3aed;
+  --lm-accent-fg: #ffffff;
+  --lm-success: #059669;
+  --lm-danger: #dc2626;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--lm-bg);
+  color: var(--lm-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+input {
+  user-select: text;
+}
