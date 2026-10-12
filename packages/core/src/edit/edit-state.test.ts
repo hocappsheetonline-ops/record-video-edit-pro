@@ -99,6 +99,40 @@ describe('edit-state', () => {
     expect(parsed.clips[1]).not.toHaveProperty('audio')
   })
 
+  it('bộ lọc, biến đổi và khung đứng yên của clip; bộ lọc chung của video', () => {
+    const parsed = parseEditState(
+      {
+        version: 1,
+        look: { filter: 'warm', intensity: 0.5, adjust: { contrast: 3 } },
+        clips: [
+          {
+            id: 'a',
+            sourceStart: 0,
+            sourceEnd: 4000,
+            speed: 1,
+            look: { filter: 'bw', intensity: 1 },
+            transform: { flipH: true, rotate: 90, crop: { x: 0.1, y: 0, width: 0.5, height: 1 } },
+          },
+          { id: 'f', sourceStart: 2000, sourceEnd: 2000, speed: 3, freeze: 1500 },
+          { id: 'z', sourceStart: 4000, sourceEnd: 4010, speed: 1 },
+          { id: 'n', sourceStart: 4000, sourceEnd: 8000, speed: 1, look: { filter: 'none' } },
+          { id: 't', sourceStart: 8000, sourceEnd: 9000, speed: 1, transform: { rotate: 0 } },
+        ],
+      },
+      project,
+    )
+    expect(parsed.look).toMatchObject({ filter: 'warm', intensity: 0.5 })
+    expect(parsed.look.adjust.contrast).toBe(1)
+    expect(parsed.clips.map((c) => c.id)).toEqual(['a', 'f', 'n', 't'])
+    expect(parsed.clips[0]!.look?.filter).toBe('bw')
+    expect(parsed.clips[0]!.transform).toMatchObject({ flipH: true, rotate: 90 })
+    expect(parsed.clips[1]).toMatchObject({ freeze: 1500, sourceEnd: 2000, speed: 1 })
+    // Bộ lọc / biến đổi rỗng thì không lưu.
+    expect(parsed.clips[2]).not.toHaveProperty('look')
+    expect(parsed.clips[3]).not.toHaveProperty('transform')
+    expect(createDefaultEdit(project).look.filter).toBe('none')
+  })
+
   it('file sai phiên bản thì dùng mặc định', () => {
     expect(parseEditState({ version: 9 }, project).clips).toHaveLength(1)
   })

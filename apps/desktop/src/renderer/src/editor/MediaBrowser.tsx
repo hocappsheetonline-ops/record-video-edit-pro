@@ -5,6 +5,7 @@ import {
   Captions,
   Clapperboard,
   Music2,
+  Palette,
   Smile,
   Sparkles,
   Type,
@@ -16,6 +17,7 @@ import { CaptionsPanel } from './CaptionsPanel'
 import { AudioTab } from './library/AudioTab'
 import { MediaTab } from './library/MediaTab'
 import { EffectsTab, StickersTab, TextTab, TransitionsTab } from './library/tabs'
+import { FiltersTab } from './LookPanels'
 import { useEditorStore } from './store'
 
 export const LIBRARY_TABS = [
@@ -24,6 +26,7 @@ export const LIBRARY_TABS = [
   'text',
   'stickers',
   'effects',
+  'filters',
   'transitions',
   'captions',
   'ai',
@@ -36,6 +39,7 @@ const TAB_ICONS: Record<LibraryTab, LucideIcon> = {
   text: Type,
   stickers: Smile,
   effects: Sparkles,
+  filters: Palette,
   transitions: ArrowLeftRight,
   captions: Captions,
   ai: WandSparkles,
@@ -98,6 +102,7 @@ export function MediaBrowser() {
           {tab === 'text' && <TextTab />}
           {tab === 'stickers' && <StickersTab />}
           {tab === 'effects' && <EffectsTab />}
+          {tab === 'filters' && <FiltersTab />}
           {tab === 'transitions' && <TransitionsTab />}
           {tab === 'captions' && (
             <div className="p-3">

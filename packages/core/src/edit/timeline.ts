@@ -1,4 +1,6 @@
 import type { Project, Segment, TrackKind } from '../project'
+import type { Look } from './look'
+import type { ClipTransform } from './orient'
 
 /**
  * "Thời gian nguồn" (ms): các đoạn quay được nối liền nhau theo thứ tự, bỏ qua lúc tạm dừng.
@@ -64,6 +66,15 @@ export interface Clip {
   speed: number
   /** Âm lượng riêng của clip (nhân với mức chung của dự án); không có = giữ nguyên. */
   audio?: ClipAudio
+  /** Bộ lọc màu / điều chỉnh riêng của clip; không có = dùng của cả video. */
+  look?: Look
+  /** Cắt / lật / xoay riêng của clip. */
+  transform?: ClipTransform
+  /**
+   * Khung hình đứng yên (ms): clip giữ khung tại `sourceStart` trong chừng ấy thời gian, không có
+   * tiếng. Clip đứng yên có `sourceEnd === sourceStart`.
+   */
+  freeze?: number
 }
 
 export interface ClipAudio {
@@ -100,8 +111,13 @@ export function newClipId(): string {
 }
 
 export function clipDuration(clip: Clip): number {
+  if (clip.freeze) return clip.freeze
   return (clip.sourceEnd - clip.sourceStart) / clip.speed
 }
+
+/** Thời lượng khung hình đứng yên mặc định và giới hạn (ms). */
+export const FREEZE_DEFAULT_MS = 2000
+export const FREEZE_MAX_MS = 60_000
 
 export function outputDuration(clips: readonly Clip[]): number {
   return clips.reduce((sum, c) => sum + clipDuration(c), 0)
@@ -134,8 +150,9 @@ export function outputToSource(
   for (const position of positions) {
     const end = position.outputStart + clipDuration(position.clip)
     if (clamped < end) {
-      const source =
-        position.clip.sourceStart + (clamped - position.outputStart) * position.clip.speed
+      const source = position.clip.freeze
+        ? position.clip.sourceStart
+        : position.clip.sourceStart + (clamped - position.outputStart) * position.clip.speed
       return { position, source }
     }
   }
@@ -146,6 +163,7 @@ export function outputToSource(
 /** Thời điểm nguồn → thời điểm trên video xuất, hoặc null nếu đoạn đó đã bị cắt bỏ. */
 export function sourceToOutput(clips: readonly Clip[], s: number): number | null {
   for (const { clip, outputStart } of clipPositions(clips)) {
+    if (clip.freeze) continue
     if (s >= clip.sourceStart && s <= clip.sourceEnd) {
       return outputStart + (s - clip.sourceStart) / clip.speed
     }
@@ -170,6 +188,13 @@ export function splitAt(clips: readonly Clip[], t: number): Clip[] {
   const hit = outputToSource(clips, t)
   if (!hit) return [...clips]
   const { clip, index } = hit.position
+  if (clip.freeze) {
+    const local = Math.round(t - hit.position.outputStart)
+    if (local < MIN_CLIP_MS || clip.freeze - local < MIN_CLIP_MS) return [...clips]
+    const left: Clip = { ...clip, freeze: local }
+    const right: Clip = { ...clip, id: newClipId(), freeze: clip.freeze - local }
+    return [...clips.slice(0, index), left, right, ...clips.slice(index + 1)]
+  }
   const s = Math.round(hit.source)
   if (s - clip.sourceStart < MIN_CLIP_MS || clip.sourceEnd - s < MIN_CLIP_MS) return [...clips]
   const left: Clip = { ...clip, sourceEnd: s }
@@ -191,8 +216,15 @@ export function trimAtPlayhead(
   if (!hit) return { clips: [...clips], time: t }
   const { clip, index, outputStart } = hit.position
   const s = Math.round(hit.source)
-  const keep: Clip = side === 'left' ? { ...clip, sourceStart: s } : { ...clip, sourceEnd: s }
-  const tooShort = keep.sourceEnd - keep.sourceStart < MIN_CLIP_MS
+  const local = Math.round(t - outputStart)
+  const keep: Clip = clip.freeze
+    ? { ...clip, freeze: side === 'left' ? clip.freeze - local : local }
+    : side === 'left'
+      ? { ...clip, sourceStart: s }
+      : { ...clip, sourceEnd: s }
+  const tooShort = clip.freeze
+    ? (keep.freeze ?? 0) < MIN_CLIP_MS
+    : keep.sourceEnd - keep.sourceStart < MIN_CLIP_MS
   if (tooShort && clips.length === 1) return { clips: [...clips], time: t }
   const next = tooShort
     ? [...clips.slice(0, index), ...clips.slice(index + 1)]
@@ -206,7 +238,44 @@ export function removeClip(clips: readonly Clip[], id: string): Clip[] {
 
 export function setClipSpeed(clips: readonly Clip[], id: string, speed: number): Clip[] {
   const safe = Math.min(16, Math.max(0.25, speed))
-  return clips.map((c) => (c.id === id ? { ...c, speed: safe } : c))
+  return clips.map((c) => (c.id === id && !c.freeze ? { ...c, speed: safe } : c))
+}
+
+/**
+ * Chèn khung hình đứng yên tại đầu phát `t` (kiểu CapCut "Đóng băng"): tách clip ở đó và chèn một
+ * clip đứng yên giữ đúng khung đang xem (cùng bộ lọc / biến đổi của clip gốc).
+ */
+export function insertFreeze(
+  clips: readonly Clip[],
+  t: number,
+  durationMs = FREEZE_DEFAULT_MS,
+): { clips: Clip[]; id: string } | null {
+  const hit = outputToSource(clips, t)
+  if (!hit) return null
+  const { clip } = hit.position
+  const s = clip.freeze ? clip.sourceStart : Math.round(hit.source)
+  const frozen: Clip = {
+    id: newClipId(),
+    sourceStart: s,
+    sourceEnd: s,
+    speed: 1,
+    freeze: Math.min(FREEZE_MAX_MS, Math.max(MIN_CLIP_MS, Math.round(durationMs))),
+    ...(clip.look ? { look: clip.look } : {}),
+    ...(clip.transform ? { transform: clip.transform } : {}),
+  }
+  const split = splitAt(clips, t)
+  // Đã tách được: chèn sau nửa trái. Không tách được (sát mép): chèn trước / sau cả clip.
+  const local = t - hit.position.outputStart
+  let at: number
+  if (split.length > clips.length) at = hit.position.index + 1
+  else at = local < clipDuration(clip) / 2 ? hit.position.index : hit.position.index + 1
+  return { clips: [...split.slice(0, at), frozen, ...split.slice(at)], id: frozen.id }
+}
+
+/** Đổi thời lượng của clip đứng yên. */
+export function setFreezeDuration(clips: readonly Clip[], id: string, ms: number): Clip[] {
+  const safe = Math.min(FREEZE_MAX_MS, Math.max(MIN_CLIP_MS, Math.round(ms)))
+  return clips.map((c) => (c.id === id && c.freeze ? { ...c, freeze: safe } : c))
 }
 
 export interface SourceRange {
@@ -222,6 +291,10 @@ export function removeSourceRanges(clips: readonly Clip[], ranges: readonly Sour
   const sorted = [...ranges].filter((r) => r.end > r.start).sort((a, b) => a.start - b.start)
   const result: Clip[] = []
   for (const clip of clips) {
+    if (clip.freeze) {
+      result.push(clip)
+      continue
+    }
     let pieces: Clip[] = [clip]
     for (const range of sorted) {
       pieces = pieces.flatMap((piece) => {

@@ -162,6 +162,8 @@ export class PreviewEngine {
   private sync(edit: EditState, time: number, playing: boolean) {
     const hit = outputToSource(edit.clips, time)
     const item = hit ? segmentAt(this.segments, hit.source) : null
+    // Khung hình đứng yên: hình dừng đúng khung, không có tiếng.
+    const frozen = !!hit?.position.clip.freeze
     for (const [key, el] of this.media) {
       const [segText, kind] = key.split(':') as [string, TrackKind]
       // Track có lọc tạp âm / hiệu ứng: đổi sang bản đã xử lý ngay cả khi chưa tới lượt phát.
@@ -175,7 +177,9 @@ export class PreviewEngine {
       }
       const active = item && Number(segText) === item.segment.index
       const target = active && hit ? mediaTime(item, kind, hit.source) : null
-      if (target === null || target < 0 || (Number.isFinite(el.duration) && target > el.duration)) {
+      const outOfRange =
+        target === null || target < 0 || (Number.isFinite(el.duration) && target > el.duration)
+      if (outOfRange || (frozen && (kind === 'mic' || kind === 'system'))) {
         if (!el.paused) el.pause()
         continue
       }
@@ -188,7 +192,7 @@ export class PreviewEngine {
       const speed = hit!.position.clip.speed
       if (el.playbackRate !== speed) el.playbackRate = speed
       const drift = Math.abs(el.currentTime - target)
-      if (playing) {
+      if (playing && !frozen) {
         if (drift > RESYNC_S) el.currentTime = target
         if (el.paused) safePlay(el)
       } else {

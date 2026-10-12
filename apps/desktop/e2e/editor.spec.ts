@@ -857,3 +857,94 @@ test('video meme phông xanh: nhập vào thư viện, thêm vào timeline, xóa
   expect(errors).toEqual([])
   await app.close()
 })
+
+/** Độ bão hòa màu trung bình (SATAVG) của vùng crop=w:h:x:y tại giây t. */
+function saturation(file: string, t: number, crop: string): number {
+  const { stderr } = spawnSync(
+    ffmpegPath as unknown as string,
+    ['-hide_banner', '-ss', String(t), '-i', file, '-frames:v', '1'].concat([
+      '-vf',
+      `crop=${crop},signalstats,metadata=print`,
+      '-f',
+      'null',
+      '-',
+    ]),
+    { encoding: 'utf8' },
+  )
+  return Number(/signalstats\.SATAVG=([\d.]+)/.exec(stderr)?.[1] ?? -1)
+}
+
+test('bộ lọc màu, lật clip và đóng băng khung hình: video xuất đúng như chỉnh', async () => {
+  const { app, page, errors } = await launchApp(dirs.userData)
+  await openEditor(page)
+  const exportNew = async () => {
+    await openExport(page)
+    await page.getByTestId('resolution-720').click()
+    await page.waitForTimeout(1100)
+    const old = new Set(exported('.mp4'))
+    await page.getByTestId('export-start').click()
+    await expect(page.getByTestId('export-result')).toBeVisible({ timeout: 150_000 })
+    await expect.poll(() => exported('.mp4').filter((f) => !old.has(f)).length).toBe(1)
+    await closeExport(page)
+    return join(
+      projectDir,
+      'exports',
+      exported('.mp4').find((f) => !old.has(f))!,
+    )
+  }
+  const saved = () => JSON.parse(readFileSync(join(projectDir, 'edit.json'), 'utf8'))
+  const centre = '400:200:440:260'
+  const plain = await exportNew()
+  expect(saturation(plain, 1, centre)).toBeGreaterThan(15)
+
+  // Bộ lọc Đen trắng cho cả video: phần video màn hình mất màu.
+  await page.getByTestId('lib-filters').click()
+  await page.getByTestId('filter-bw').click()
+  await expect.poll(() => saved().look?.filter).toBe('bw')
+  const bw = await exportNew()
+  expect(saturation(bw, 1, centre)).toBeLessThan(3)
+
+  // Bộ lọc Ấm: ngả đỏ (V tăng) và bớt xanh dương (U giảm) so với bản gốc (đo cả vùng video).
+  await page.getByTestId('filter-warm').click()
+  await expect.poll(() => saved().look?.filter).toBe('warm')
+  const warm = await exportNew()
+  const video = '1100:600:90:60'
+  const [, uPlain, vPlain] = areaStats(plain, 1, video)
+  const [, uWarm, vWarm] = areaStats(warm, 1, video)
+  expect(vWarm).toBeGreaterThan(vPlain! + 1)
+  expect(uWarm).toBeLessThan(uPlain! - 6)
+
+  // Lật ngang clip: bên trái của video mới giống bên phải (soi gương) của bản gốc.
+  await page.getByTestId('filter-none').click()
+  await page.getByTestId('timeline-clip').first().click()
+  await page.getByTestId('clip-flip-h').click()
+  await expect.poll(() => saved().clips[0].transform?.flipH).toBe(true)
+  const flipped = await exportNew()
+  const left = '160:160:200:200'
+  const mirrored = '160:160:920:200'
+  expect(statsDiff(areaStats(flipped, 1, left), areaStats(plain, 1, mirrored))).toBeLessThan(8)
+  expect(statsDiff(areaStats(flipped, 1, left), areaStats(plain, 1, left))).toBeGreaterThan(15)
+
+  // Bỏ lật, đóng băng 2 giây tại giây 1: video dài thêm 2 giây và hình đứng yên trong lúc đó.
+  await page.getByTestId('clip-flip-h').click()
+  await expect.poll(() => saved().clips[0].transform).toBeUndefined()
+  // Bấm clip trên timeline cũng dời đầu phát: về đầu video rồi tiến 1 giây.
+  await page.getByTestId('editor-canvas').click()
+  await page.keyboard.press('Home')
+  await page.keyboard.press('ArrowRight')
+  await expect(page.getByTestId('timecode')).toContainText('0:01.0 /')
+  await page.getByTestId('freeze').click()
+  await expect(page.getByTestId('clip-freeze-badge')).toHaveCount(1)
+  await expect(page.getByTestId('timecode')).toContainText('/ 0:06.0')
+  await expect.poll(() => saved().clips.length).toBe(3)
+  const frozen = await exportNew()
+  expect(probeMedia(frozen).durationMs).toBeGreaterThan(5800)
+  const moving = '1280:720:0:0'
+  expect(statsDiff(areaStats(frozen, 1.3, moving), areaStats(frozen, 2.7, moving))).toBeLessThan(1)
+  expect(statsDiff(areaStats(plain, 1.3, centre), areaStats(plain, 2.7, centre))).toBeGreaterThan(2)
+  // Sau khi hết đứng yên, video chạy tiếp từ đúng chỗ (giây 3.5 của bản mới = giây 1.5 bản gốc).
+  expect(statsDiff(areaStats(frozen, 3.5, centre), areaStats(plain, 1.5, centre))).toBeLessThan(4)
+
+  expect(errors).toEqual([])
+  await app.close()
+})

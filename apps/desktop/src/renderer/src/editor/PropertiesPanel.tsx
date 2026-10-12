@@ -6,6 +6,7 @@ import {
   Frame,
   MousePointer2,
   Move,
+  SlidersHorizontal,
   Trash2,
   Video,
   ZoomIn,
@@ -29,6 +30,7 @@ import {
   ZoomProjectProps,
   type ProjectTab,
 } from './ProjectProps'
+import { AdjustPanel } from './LookPanels'
 import { useEditorStore } from './store'
 
 const TAB_ICONS: Record<ProjectTab, LucideIcon> = {
@@ -38,6 +40,7 @@ const TAB_ICONS: Record<ProjectTab, LucideIcon> = {
   motion: Move,
   zoom: ZoomIn,
   audio: AudioLines,
+  adjust: SlidersHorizontal,
 }
 
 /**
@@ -196,6 +199,7 @@ export function PropertiesPanel() {
         {projectTab === 'motion' && <MotionProps edit={edit} />}
         {projectTab === 'zoom' && <ZoomProjectProps edit={edit} />}
         {projectTab === 'audio' && <AudioMixProps edit={edit} />}
+        {projectTab === 'adjust' && <AdjustPanel />}
       </div>
     </div>
   )

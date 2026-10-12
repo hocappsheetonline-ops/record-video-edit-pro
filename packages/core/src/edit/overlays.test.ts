@@ -114,6 +114,18 @@ describe('overlays', () => {
     expect(parseOverlays([{ ...meme, keyColor: 'green' }])[0]!.keyColor).toBe('')
   })
 
+  it('bộ lọc của ảnh / video meme được đọc lại; chữ và bộ lọc rỗng thì bỏ', () => {
+    const base = { id: 'a', start: 0, end: 1000, file: 'meme-a.png' }
+    const [img, text, plain] = parseOverlays([
+      { ...base, kind: 'image', look: { filter: 'vivid', intensity: 0.7 } },
+      { ...base, id: 't', kind: 'text', text: 'hi', look: { filter: 'bw' } },
+      { ...base, id: 'p', kind: 'image', look: { filter: 'none' } },
+    ])
+    expect(img!.look).toMatchObject({ filter: 'vivid', intensity: 0.7 })
+    expect(text).not.toHaveProperty('look')
+    expect(plain).not.toHaveProperty('look')
+  })
+
   it('video meme: thời điểm trong file, giữ khung cuối khi hết file', () => {
     expect(overlayMediaTime(meme, 2000)).toBe(500)
     expect(overlayMediaTime(meme, 3000)).toBe(1500)

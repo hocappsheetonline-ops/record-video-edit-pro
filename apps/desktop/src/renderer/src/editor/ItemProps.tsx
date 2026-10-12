@@ -7,6 +7,7 @@ import {
   Maximize,
   Minimize,
   Scissors,
+  SlidersHorizontal,
   Unlink,
   type LucideIcon,
 } from 'lucide-react'
@@ -31,12 +32,20 @@ import {
   type ZoomRegion,
 } from '@lumora/core'
 import { AudioFxPanel } from './AudioFxPanel'
+import { AdjustPanel, FreezePanel, TransformPanel } from './LookPanels'
 import { useEditorStore } from './store'
 import { ghostButton, pct, secs, Section, Segmented, SliderRow, Toggle } from './ui'
 
-const CLIP_TABS = ['video', 'audio', 'speed'] as const
+const CLIP_TABS = ['video', 'adjust', 'audio', 'speed'] as const
 type ClipTab = (typeof CLIP_TABS)[number]
-const CLIP_TAB_ICONS: Record<ClipTab, LucideIcon> = { video: Film, audio: AudioLines, speed: Gauge }
+/** Clip đứng yên không có tiếng và tốc độ. */
+const FREEZE_TABS = ['video', 'adjust'] as const
+const CLIP_TAB_ICONS: Record<ClipTab, LucideIcon> = {
+  video: Film,
+  adjust: SlidersHorizontal,
+  audio: AudioLines,
+  speed: Gauge,
+}
 
 /** Hàng tab chỉ biểu tượng (chú thích khi rê chuột) cho bảng thuộc tính của một mục. */
 export function IconTabs<T extends string>({
@@ -90,7 +99,9 @@ export function IconTabs<T extends string>({
 /** Thuộc tính clip video chính, chia tab như CapCut: Video · Âm thanh · Tốc độ. */
 export function ClipProps({ clip, index }: { clip: Clip; index: number }) {
   const { t } = useTranslation()
-  const [tab, setTab] = useState<ClipTab>('video')
+  const [chosen, setTab] = useState<ClipTab>('video')
+  const tabs: readonly ClipTab[] = clip.freeze ? FREEZE_TABS : CLIP_TABS
+  const tab = tabs.includes(chosen) ? chosen : 'video'
   const { setClipSpeed, splitAtPlayhead, change } = useEditorStore.getState()
   const audio = clip.audio ?? DEFAULT_CLIP_AUDIO
   const setAudio = (patch: Partial<ClipAudio>, coalesce?: string) =>
@@ -106,14 +117,15 @@ export function ClipProps({ clip, index }: { clip: Clip; index: number }) {
   return (
     <>
       <IconTabs
-        tabs={CLIP_TABS}
+        tabs={tabs}
         icons={CLIP_TAB_ICONS}
         value={tab}
         onChange={setTab}
         label={(x) => t(`editor.props.clipTabs.${x}`)}
         testIdPrefix="clip-tab-"
       />
-      {tab === 'video' && (
+      {tab === 'video' && clip.freeze && <FreezePanel clip={clip} />}
+      {tab === 'video' && !clip.freeze && (
         <Section title={t('editor.props.clipInfo', { n: index + 1 })}>
           <dl className="grid grid-cols-2 gap-y-1 text-xs">
             <dt className="text-muted">{t('editor.props.length')}</dt>
@@ -131,6 +143,8 @@ export function ClipProps({ clip, index }: { clip: Clip; index: number }) {
           </button>
         </Section>
       )}
+      {tab === 'video' && <TransformPanel clip={clip} />}
+      {tab === 'adjust' && <AdjustPanel />}
       {tab === 'audio' && (
         <Section testId="clip-audio">
           <Toggle
@@ -605,6 +619,8 @@ export function OverlayProps({ overlay }: { overlay: Overlay }) {
           <p className="text-xs text-muted">{t('editor.stickers.keyHint')}</p>
         </Section>
       )}
+
+      {media && <AdjustPanel />}
 
       <Section title={t('editor.props.animation')}>
         <div className="grid grid-cols-3 gap-1.5">

@@ -15,7 +15,15 @@ import { AudioFxPanel } from './AudioFxPanel'
 import { useEditorStore } from './store'
 import { ghostButton, pct, primaryButton, Section, Segmented, SliderRow, Toggle } from './ui'
 
-export const PROJECT_TABS = ['frame', 'camera', 'cursor', 'motion', 'zoom', 'audio'] as const
+export const PROJECT_TABS = [
+  'frame',
+  'camera',
+  'cursor',
+  'motion',
+  'zoom',
+  'audio',
+  'adjust',
+] as const
 export type ProjectTab = (typeof PROJECT_TABS)[number]
 
 function useSetters() {

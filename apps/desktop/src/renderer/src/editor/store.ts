@@ -43,6 +43,11 @@ import {
   isDefaultFx,
   overlayAudioClips,
   type AudioFx,
+  insertFreeze,
+  setFreezeDuration,
+  DEFAULT_LOOK,
+  type Clip,
+  type Look,
 } from '@lumora/core'
 import type { AudioAsset, MediaAsset } from '@shared/ipc'
 import { lumora } from '../api'
@@ -132,6 +137,13 @@ interface EditorStore {
   addMediaOverlay(asset: MediaAsset): void
   deleteSelection(): void
   setClipSpeed(id: string, speed: number): void
+  /** Sửa một clip (bộ lọc, cắt / lật / xoay…). */
+  updateClip(id: string, patch: Partial<Clip>, coalesce?: string): void
+  /** Chèn khung hình đứng yên tại đầu phát và chọn nó. */
+  freezeAtPlayhead(): void
+  setFreezeDuration(id: string, ms: number): void
+  /** Đặt bộ lọc / điều chỉnh cho đối tượng đang chọn (clip, ảnh / video meme) hoặc cả video. */
+  setLook(look: Look, coalesce?: string): void
   addZoomAtPlayhead(): void
   regenerateZooms(): void
 }
@@ -582,6 +594,45 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().change((e) => ({ ...e, clips: setClipSpeed(e.clips, id, speed) }))
   },
 
+  updateClip(id, patch, coalesce) {
+    get().change(
+      (e) => ({
+        ...e,
+        clips: e.clips.map((c) => {
+          if (c.id !== id) return c
+          const next: Clip = { ...c, ...patch }
+          // Giá trị rỗng: bỏ hẳn trường (file lưu gọn, clip dùng lại cài đặt chung).
+          for (const key of ['look', 'transform', 'audio'] as const)
+            if (key in patch && patch[key] === undefined) delete next[key]
+          return next
+        }),
+      }),
+      coalesce,
+    )
+  },
+
+  freezeAtPlayhead() {
+    const { edit, time } = get()
+    if (!edit) return
+    const result = insertFreeze(edit.clips, time)
+    if (!result) return
+    get().change((e) => ({ ...e, clips: result.clips }))
+    set({ selection: { kind: 'clip', id: result.id } })
+  },
+
+  setFreezeDuration(id, ms) {
+    get().change((e) => ({ ...e, clips: setFreezeDuration(e.clips, id, ms) }), `freeze-${id}`)
+  },
+
+  setLook(look, coalesce) {
+    const { edit, selection } = get()
+    if (!edit) return
+    const target = lookTarget(edit, selection)
+    if (target.kind === 'clip') get().updateClip(target.id, { look }, coalesce)
+    else if (target.kind === 'overlay') get().updateOverlay(target.id, { look }, coalesce)
+    else get().change((e) => ({ ...e, look }), coalesce)
+  },
+
   addZoomAtPlayhead() {
     const { edit, project, time } = get()
     if (!edit || !project) return
@@ -624,4 +675,29 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 export function selectedClip(edit: EditState | null, selection: Selection) {
   if (!edit || selection?.kind !== 'clip') return null
   return clipPositions(edit.clips).find((p) => p.clip.id === selection.id) ?? null
+}
+
+/** Bộ lọc / điều chỉnh sẽ áp dụng cho đâu: clip đang chọn, ảnh / video meme đang chọn, hay cả video. */
+export type LookTarget = { kind: 'all' } | { kind: 'clip' | 'overlay'; id: string }
+
+export function lookTarget(edit: EditState, selection: Selection): LookTarget {
+  if (selection?.kind === 'clip' && edit.clips.some((c) => c.id === selection.id))
+    return { kind: 'clip', id: selection.id }
+  if (
+    selection?.kind === 'overlay' &&
+    edit.overlays.some((o) => o.id === selection.id && (o.kind === 'image' || o.kind === 'video'))
+  )
+    return { kind: 'overlay', id: selection.id }
+  return { kind: 'all' }
+}
+
+/** Bộ lọc đang có hiệu lực ở đối tượng đó (clip chưa có riêng thì dùng của cả video). */
+export function currentLook(edit: EditState, target: LookTarget): Look {
+  if (target.kind === 'clip') {
+    const clip = edit.clips.find((c) => c.id === target.id)
+    return clip?.look ?? edit.look ?? DEFAULT_LOOK
+  }
+  if (target.kind === 'overlay')
+    return edit.overlays.find((o) => o.id === target.id)?.look ?? DEFAULT_LOOK
+  return edit.look ?? DEFAULT_LOOK
 }

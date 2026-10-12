@@ -343,4 +343,95 @@ describe('computeScene — video dọc tự cắt theo con trỏ', () => {
     expect(scene.camera).toBeNull()
     expect(scene.content.height).toBe(1920)
   })
+  it('clip xoay 90°: khung hình theo video dọc, con trỏ và vùng vẽ đổi theo; clip khác không đổi', () => {
+    const edit = createDefaultEdit(project)
+    edit.frame.padding = 0
+    edit.frame.aspect = 'source'
+    const [a] = edit.clips
+    edit.clips = [
+      {
+        ...a!,
+        sourceEnd: 5000,
+        transform: {
+          flipH: false,
+          flipV: false,
+          rotate: 90,
+          crop: { x: 0, y: 0, width: 1, height: 1 },
+        },
+      },
+      { ...a!, id: 'b', sourceStart: 5000 },
+    ]
+    const at = (time: number) =>
+      computeScene({
+        time,
+        edit,
+        output: { width: 1080, height: 1920 },
+        video,
+        source: time,
+        cursor: track(0, 0),
+        follow: null,
+        hasCamera: false,
+      })
+    const rotated = at(1000)
+    expect(rotated.orient).toEqual({ flipH: false, flipV: false, rotate: 90 })
+    // Video 1920×1080 xoay thành 1080×1920: phủ kín khung dọc.
+    expect(rotated.content).toEqual({ x: 0, y: 0, width: 1080, height: 1920 })
+    // Góc trên trái của video gốc sau khi xoay nằm ở góc trên phải.
+    expect(rotated.cursor).toMatchObject({ x: 1080, y: 0 })
+    expect(rotated.source).toEqual({ x: 0, y: 0, width: 1, height: 1 })
+    const plain = at(6000)
+    expect(plain.orient).toBeNull()
+    expect(plain.cursor).toMatchObject({ x: 0 })
+  })
+
+  it('clip cắt khung: vùng vẽ là phần đã cắt, tỉ lệ khung theo phần cắt', () => {
+    const edit = createDefaultEdit(project)
+    edit.frame.padding = 0
+    edit.frame.aspect = 'source'
+    edit.clips = [
+      {
+        ...edit.clips[0]!,
+        transform: {
+          flipH: true,
+          flipV: false,
+          rotate: 0,
+          crop: { x: 0.5, y: 0, width: 0.5, height: 1 },
+        },
+      },
+    ]
+    const scene = computeScene({
+      time: 0,
+      edit,
+      output: { width: 960, height: 1080 },
+      video,
+      source: 1000,
+      cursor: track(0.75, 0.5),
+      follow: null,
+      hasCamera: false,
+    })
+    expect(scene.source).toEqual({ x: 0.5, y: 0, width: 0.5, height: 1 })
+    expect(scene.content.width / scene.content.height).toBeCloseTo(960 / 1080)
+    // Giữa phần cắt, lật ngang vẫn ở giữa.
+    expect(scene.cursor!.x).toBeCloseTo(480)
+  })
+
+  it('bộ lọc: của clip ưu tiên hơn của cả video; không có thì không vẽ lớp nào', () => {
+    const edit = createDefaultEdit(project)
+    const input = {
+      time: 1000,
+      edit,
+      output,
+      video,
+      source: 1000,
+      cursor: null,
+      follow: null,
+      hasCamera: false,
+    }
+    expect(computeScene(input).look).toBeNull()
+    edit.look = { ...edit.look, filter: 'bw' }
+    expect(computeScene(input).look?.css).toContain('saturate(0)')
+    edit.clips = [{ ...edit.clips[0]!, look: { ...edit.look, filter: 'warm' } }]
+    expect(computeScene(input).look?.temperature).toBeGreaterThan(0)
+    expect(computeScene(input).time).toBe(1000)
+  })
 })

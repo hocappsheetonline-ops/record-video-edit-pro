@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Segment } from '../project'
 import {
+  clipDuration,
+  insertFreeze,
   initialClips,
+  setFreezeDuration,
   mediaTime,
   outputDuration,
   outputToSource,
@@ -166,5 +169,55 @@ describe('trimAtPlayhead (phím A / D)', () => {
     expect(r.clips.map((c) => c.id)).toEqual(['b'])
     const only = [clips[0]!]
     expect(trimAtPlayhead(only, 30, 'right').clips).toEqual(only)
+  })
+})
+
+describe('khung hình đứng yên', () => {
+  const clips: Clip[] = [clip('a', 0, 4000), clip('b', 6000, 10_000, 2)]
+
+  it('chèn tại đầu phát: tách clip, giữ đúng khung đang xem, kéo dài video', () => {
+    const r = insertFreeze(clips, 1500, 2000)!
+    expect(r.clips.map((c) => [c.sourceStart, c.sourceEnd, c.freeze])).toEqual([
+      [0, 1500, undefined],
+      [1500, 1500, 2000],
+      [1500, 4000, undefined],
+      [6000, 10_000, undefined],
+    ])
+    expect(r.clips[1]!.id).toBe(r.id)
+    expect(outputDuration(r.clips)).toBe(outputDuration(clips) + 2000)
+    // Trong lúc đứng yên, thời điểm nguồn không đổi; sau đó chạy tiếp từ đúng chỗ.
+    expect(outputToSource(r.clips, 1600)!.source).toBe(1500)
+    expect(outputToSource(r.clips, 3400)!.source).toBe(1500)
+    expect(outputToSource(r.clips, 3600)!.source).toBe(1600)
+    // Thời điểm nguồn 1500 ứng với lúc bắt đầu đứng yên, không trỏ vào giữa khung đứng yên.
+    expect(sourceToOutput(r.clips, 2000)).toBe(4000)
+  })
+
+  it('giữ bộ lọc / biến đổi của clip gốc; sát mép thì chèn trước / sau cả clip', () => {
+    const look = { filter: 'bw' as const, intensity: 1, adjust: {} as never }
+    const withLook: Clip[] = [{ ...clip('a', 0, 4000), look }]
+    const start = insertFreeze(withLook, 20)!
+    expect(start.clips.map((c) => c.freeze ?? 0)).toEqual([2000, 0])
+    expect(start.clips[0]!.look).toBe(look)
+    const end = insertFreeze(withLook, 3990)!
+    expect(end.clips.map((c) => c.freeze ?? 0)).toEqual([0, 2000])
+    expect(end.clips[1]!.sourceStart).toBe(3990)
+  })
+
+  it('tách, cắt A/D và đổi độ dài của clip đứng yên; không đổi tốc độ', () => {
+    const frozen = insertFreeze(clips, 1500, 3000)!.clips
+    const split = splitAt(frozen, 2500)
+    expect(split.map((c) => c.freeze ?? 0)).toEqual([0, 1000, 2000, 0, 0])
+    const trimmed = trimAtPlayhead(frozen, 2500, 'right')
+    expect(trimmed.clips[1]!.freeze).toBe(1000)
+    const left = trimAtPlayhead(frozen, 2500, 'left')
+    expect(left.clips[1]!.freeze).toBe(2000)
+    expect(setClipSpeed(frozen, frozen[1]!.id, 4)[1]!.speed).toBe(1)
+    const longer = setFreezeDuration(frozen, frozen[1]!.id, 120_000)
+    expect(clipDuration(longer[1]!)).toBe(60_000)
+    // AI cắt khoảng nguồn không làm mất khung đứng yên.
+    expect(removeSourceRanges(frozen, [{ start: 1000, end: 2000 }]).some((c) => c.freeze)).toBe(
+      true,
+    )
   })
 })

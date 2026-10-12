@@ -1,5 +1,6 @@
 import { beautyLayers, cameraCrop, type BeautyStyle } from '@lumora/core'
 import { applyEffects } from './effects-draw'
+import { applyLookLayers, joinFilters } from './look-draw'
 import { drawOverlays, type OverlayMediaFn } from './overlay-draw'
 import type { FrameScene } from './scene'
 
@@ -35,10 +36,17 @@ export function videoElementSource(video: HTMLVideoElement): FrameSource | null 
  * Vẽ webcam có làm đẹp: lớp gốc qua bộ lọc màu, rồi một lớp mờ trong suốt phủ lên để mịn da.
  * Dùng chung cho trình chỉnh sửa, video xuất và studio livestream.
  */
-export function drawBeautified(ctx: Ctx, beauty: BeautyStyle, width: number, paint: () => void) {
+export function drawBeautified(
+  ctx: Ctx,
+  beauty: BeautyStyle,
+  width: number,
+  paint: () => void,
+  /** Bộ lọc màu thêm (bộ lọc của clip). */
+  extra?: string,
+) {
   const layers = beautyLayers(beauty, width)
   const before = { filter: ctx.filter, alpha: ctx.globalAlpha }
-  ctx.filter = layers.base
+  ctx.filter = joinFilters(layers.base, extra)
   paint()
   if (layers.soft) {
     ctx.filter = layers.soft.filter
@@ -186,19 +194,46 @@ export function drawScene(
   ctx.fillStyle = '#000000'
   ctx.fillRect(content.x, content.y, content.width, content.height)
   const screen = frames.screen
+  const look = scene.look
   if (screen) {
-    const v = scene.view
-    screen.draw(
-      ctx,
-      v.x * screen.width,
-      v.y * screen.height,
-      v.width * screen.width,
-      v.height * screen.height,
-      content.x,
-      content.y,
-      content.width,
-      content.height,
-    )
+    const v = scene.source
+    ctx.save()
+    if (look) ctx.filter = look.css
+    if (!scene.orient) {
+      screen.draw(
+        ctx,
+        v.x * screen.width,
+        v.y * screen.height,
+        v.width * screen.width,
+        v.height * screen.height,
+        content.x,
+        content.y,
+        content.width,
+        content.height,
+      )
+    } else {
+      // Lật / xoay quanh tâm khung: vẽ vùng gốc theo hướng gốc rồi để phép biến đổi xoay vào chỗ.
+      const { flipH, flipV, rotate } = scene.orient
+      const swap = rotate % 180 !== 0
+      const dw = swap ? content.height : content.width
+      const dh = swap ? content.width : content.height
+      ctx.translate(content.x + content.width / 2, content.y + content.height / 2)
+      ctx.rotate((rotate * Math.PI) / 180)
+      ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1)
+      screen.draw(
+        ctx,
+        v.x * screen.width,
+        v.y * screen.height,
+        v.width * screen.width,
+        v.height * screen.height,
+        -dw / 2,
+        -dh / 2,
+        dw,
+        dh,
+      )
+    }
+    ctx.restore()
+    if (look) applyLookLayers(ctx, look, content, Math.floor(scene.time / 40))
   }
   if (scene.ripple) {
     const r = scene.ripple
@@ -235,9 +270,14 @@ export function drawScene(
       cam.rect,
       cam.framing,
     )
-    drawBeautified(ctx, cam.beauty, width, () =>
-      camFrame.draw(ctx, crop.x, crop.y, crop.width, crop.height, x, y, width, height),
+    drawBeautified(
+      ctx,
+      cam.beauty,
+      width,
+      () => camFrame.draw(ctx, crop.x, crop.y, crop.width, crop.height, x, y, width, height),
+      look?.css,
     )
+    if (look) applyLookLayers(ctx, look, cam.rect, Math.floor(scene.time / 40) + 7)
     ctx.restore()
     if (cam.border > 0) {
       ctx.save()

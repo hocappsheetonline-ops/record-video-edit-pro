@@ -1,5 +1,6 @@
-import { accentForeground, chromaKey, overlayMotion, type Overlay } from '@lumora/core'
+import { accentForeground, chromaKey, lookLayers, overlayMotion, type Overlay } from '@lumora/core'
 import type { Ctx, FrameSource } from './draw'
+import { applyLookLayers } from './look-draw'
 
 /** Hình của lớp ảnh / video tại `local` ms kể từ lúc hiện (null nếu chưa tải xong). */
 export type OverlayMediaFn = (overlay: Overlay, local: number) => FrameSource | null
@@ -82,7 +83,7 @@ export function drawOverlays(
     ctx.scale(m.scale, m.scale)
     if (o.kind === 'image' || o.kind === 'video') {
       const media = mediaAt(o, local)
-      if (media) drawMedia(ctx, media, o, box.w, box.h)
+      if (media) drawMedia(ctx, media, o, box.w, box.h, Math.floor((o.start + local) / 40))
     } else if (o.kind === 'emoji') {
       ctx.font = `${px}px ${EMOJI_FONT}`
       ctx.textAlign = 'center'
@@ -149,40 +150,77 @@ function drawText(ctx: Ctx, o: Overlay, px: number, box: { w: number; h: number 
 
 /** Bản nháp xóa phông, riêng cho từng canvas đích (giống `snapshot`). */
 const keyScratch = new WeakMap<object, OffscreenCanvas | HTMLCanvasElement>()
-/** Cạnh dài tối đa khi xóa phông: đủ nét mà vẫn nhẹ (xử lý từng điểm ảnh mỗi khung). */
+const maskScratch = new WeakMap<object, OffscreenCanvas | HTMLCanvasElement>()
+/** Cạnh dài tối đa (px) khi xử lý ảnh / video meme ở canvas nháp (xóa phông, bộ lọc). */
 const KEY_MAX = 720
 
-function drawMedia(ctx: Ctx, media: FrameSource, o: Overlay, w: number, h: number) {
+function scratchFor(
+  map: WeakMap<object, OffscreenCanvas | HTMLCanvasElement>,
+  owner: object,
+  w: number,
+  h: number,
+) {
+  let scratch = map.get(owner)
+  if (!scratch) {
+    scratch =
+      typeof OffscreenCanvas !== 'undefined'
+        ? new OffscreenCanvas(w, h)
+        : Object.assign(document.createElement('canvas'), { width: w, height: h })
+    map.set(owner, scratch)
+  }
+  if (scratch.width !== w || scratch.height !== h) {
+    scratch.width = w
+    scratch.height = h
+  }
+  return scratch
+}
+
+/**
+ * Vẽ ảnh / video của lớp nổi. Có xóa phông hoặc bộ lọc thì xử lý ở canvas nháp: xóa phông trước
+ * (màu cần xóa không bị bộ lọc làm lệch), rồi bộ lọc màu, rồi trả lại đúng phần trong suốt.
+ */
+function drawMedia(ctx: Ctx, media: FrameSource, o: Overlay, w: number, h: number, frame: number) {
   const full = [0, 0, media.width, media.height] as const
-  if (!o.keyColor) {
+  const look = o.look ? lookLayers(o.look) : null
+  if (!o.keyColor && !look) {
     media.draw(ctx, ...full, -w / 2, -h / 2, w, h)
     return
   }
   const scale = Math.min(1, KEY_MAX / Math.max(w, h, 1))
   const sw = Math.max(1, Math.round(w * scale))
   const sh = Math.max(1, Math.round(h * scale))
-  let scratch = keyScratch.get(ctx.canvas)
-  if (!scratch) {
-    scratch =
-      typeof OffscreenCanvas !== 'undefined'
-        ? new OffscreenCanvas(sw, sh)
-        : Object.assign(document.createElement('canvas'), { width: sw, height: sh })
-    keyScratch.set(ctx.canvas, scratch)
-  }
-  if (scratch.width !== sw || scratch.height !== sh) {
-    scratch.width = sw
-    scratch.height = sh
-  }
-  const sctx = scratch.getContext('2d', { willReadFrequently: true }) as Ctx | null
+  const scratch = scratchFor(keyScratch, ctx.canvas, sw, sh)
+  const sctx = scratch.getContext('2d', { willReadFrequently: !!o.keyColor }) as Ctx | null
   if (!sctx) return
   sctx.clearRect(0, 0, sw, sh)
   media.draw(sctx, ...full, 0, 0, sw, sh)
-  try {
-    const pixels = sctx.getImageData(0, 0, sw, sh)
-    chromaKey(pixels.data, o.keyColor, o.keyStrength)
-    sctx.putImageData(pixels, 0, 0)
-  } catch {
-    // Nguồn khác gốc (không đọc được điểm ảnh): vẽ nguyên bản thay vì bỏ trống.
+  if (o.keyColor) {
+    try {
+      const pixels = sctx.getImageData(0, 0, sw, sh)
+      chromaKey(pixels.data, o.keyColor, o.keyStrength)
+      sctx.putImageData(pixels, 0, 0)
+    } catch {
+      // Nguồn khác gốc (không đọc được điểm ảnh): vẽ nguyên bản thay vì bỏ trống.
+    }
+  }
+  if (look) {
+    // Bản sao trước khi lọc: vừa làm nguồn cho bộ lọc CSS, vừa làm mặt nạ độ trong suốt.
+    const mask = scratchFor(maskScratch, ctx.canvas, sw, sh)
+    const mctx = mask.getContext('2d') as Ctx | null
+    if (mctx) {
+      mctx.globalCompositeOperation = 'copy'
+      mctx.drawImage(scratch, 0, 0)
+      sctx.save()
+      sctx.globalCompositeOperation = 'copy'
+      sctx.filter = look.css
+      sctx.drawImage(mask, 0, 0)
+      sctx.restore()
+      applyLookLayers(sctx, look, { x: 0, y: 0, width: sw, height: sh }, frame)
+      sctx.save()
+      sctx.globalCompositeOperation = 'destination-in'
+      sctx.drawImage(mask, 0, 0)
+      sctx.restore()
+    }
   }
   ctx.drawImage(scratch, -w / 2, -h / 2, w, h)
 }

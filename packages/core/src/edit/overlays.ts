@@ -1,5 +1,6 @@
 import { dragRegion } from './effects'
 import type { AudioClip } from './audio-clips'
+import { isDefaultLook, parseLook, type Look } from './look'
 
 /**
  * Lớp nổi trên video (kiểu CapCut "Văn bản" / "Nhãn dán" / "Lớp phủ"): chữ, emoji, ảnh/GIF và
@@ -44,6 +45,8 @@ export interface Overlay {
   /** Xóa phông (chroma key): màu nền cần xóa ('' = không xóa) và độ mạnh 0..1. */
   keyColor: string
   keyStrength: number
+  /** Bộ lọc màu / điều chỉnh của ảnh / video (không có = giữ nguyên). */
+  look?: Look
 }
 
 /** Màu phông có sẵn để xóa: xanh lá (phổ biến nhất ở video meme), xanh dương, đen, trắng. */
@@ -183,6 +186,8 @@ export function parseOverlays(value: unknown): Overlay[] {
     if ((kind === 'image' || kind === 'video') && !file) return []
     const sourceDuration = num(o.sourceDuration, 0, 0, 24 * 3600_000)
     if (kind === 'video' && sourceDuration <= 0) return []
+    const look =
+      (kind === 'image' || kind === 'video') && o.look !== undefined ? parseLook(o.look) : undefined
     return [
       {
         id: o.id,
@@ -210,6 +215,7 @@ export function parseOverlays(value: unknown): Overlay[] {
             ? o.keyColor.toLowerCase()
             : '',
         keyStrength: num(o.keyStrength, 0.4, 0, 1),
+        ...(look && !isDefaultLook(look) ? { look } : {}),
       },
     ]
   })

@@ -9,6 +9,8 @@ import { parseAudioClips, type AudioClip } from './audio-clips'
 import { DEFAULT_AUDIO_FX, parseAudioFx, type AudioFx } from './audio-fx'
 import { NO_BEAUTY, parseBeauty, type BeautyStyle } from './beauty'
 import { parseEffects, type EffectRegion } from './effects'
+import { DEFAULT_LOOK, isDefaultLook, parseLook, type Look } from './look'
+import { parseClipTransform } from './orient'
 import { parseOverlays, type Overlay } from './overlays'
 import { parseTransitions, pruneTransitions, type Transition } from './transitions'
 import {
@@ -20,7 +22,14 @@ import {
   type Corner,
   type Resolution,
 } from './layout'
-import { initialClips, MIN_CLIP_MS, sourceDuration, type Clip, parseClipAudio } from './timeline'
+import {
+  FREEZE_MAX_MS,
+  initialClips,
+  MIN_CLIP_MS,
+  sourceDuration,
+  type Clip,
+  parseClipAudio,
+} from './timeline'
 import { normalizeZooms, type ZoomRegion } from './zoom'
 
 export const EDIT_FILE = 'edit.json'
@@ -128,6 +137,8 @@ export interface EditState {
   effects: EffectRegion[]
   /** Chữ, sticker và ảnh meme nổi trên video. */
   overlays: Overlay[]
+  /** Bộ lọc màu / điều chỉnh cho cả video (clip có `look` riêng thì dùng của clip). */
+  look: Look
   export: ExportSettings
   captions: CaptionsState
 }
@@ -188,6 +199,7 @@ export function createDefaultEdit(
     transitions: [],
     effects: [],
     overlays: [],
+    look: { ...DEFAULT_LOOK, adjust: { ...DEFAULT_LOOK.adjust } },
     export: { resolution: 1080, fps: project.fps >= 60 ? 60 : 30, format: 'mp4' },
     captions: { ...DEFAULT_CAPTIONS, lines: [] },
   }
@@ -261,14 +273,21 @@ export function parseEditState(
         if (!isObj(c)) return []
         const start = num(c.sourceStart, NaN, 0, duration)
         const end = num(c.sourceEnd, NaN, 0, duration)
-        if (!Number.isFinite(start) || !Number.isFinite(end) || end - start < MIN_CLIP_MS) return []
+        const freeze = num(c.freeze, NaN, MIN_CLIP_MS, FREEZE_MAX_MS)
+        if (!Number.isFinite(start) || !Number.isFinite(end)) return []
+        if (!Number.isFinite(freeze) && end - start < MIN_CLIP_MS) return []
+        const look = c.look === undefined ? undefined : parseLook(c.look)
+        const transform = parseClipTransform(c.transform)
         return [
           {
             id: typeof c.id === 'string' ? c.id : `c${i}`,
             sourceStart: start,
-            sourceEnd: end,
-            speed: num(c.speed, 1, 0.25, 16),
+            sourceEnd: Number.isFinite(freeze) ? start : end,
+            speed: Number.isFinite(freeze) ? 1 : num(c.speed, 1, 0.25, 16),
             ...(c.audio === undefined ? {} : { audio: parseClipAudio(c.audio) }),
+            ...(look && !isDefaultLook(look) ? { look } : {}),
+            ...(transform ? { transform } : {}),
+            ...(Number.isFinite(freeze) ? { freeze } : {}),
           },
         ]
       })
@@ -364,6 +383,7 @@ export function parseEditState(
     transitions: pruneTransitions(clips, parseTransitions(input.transitions)),
     effects: parseEffects(input.effects),
     overlays: parseOverlays(input.overlays),
+    look: parseLook(input.look),
     export: {
       resolution: pick(RESOLUTIONS, e.resolution, base.export.resolution),
       fps: pick([30, 60] as const, e.fps, base.export.fps),

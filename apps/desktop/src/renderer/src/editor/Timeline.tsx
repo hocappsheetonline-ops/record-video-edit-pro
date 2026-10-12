@@ -12,7 +12,9 @@ import {
   Layers,
   Music2,
   Redo2,
+  Palette,
   Scissors,
+  Snowflake,
   Sparkles,
   Trash2,
   Undo2,
@@ -26,6 +28,7 @@ import {
   clipDuration,
   cutPoints,
   clipPositions,
+  lookLayers,
   normalizeZooms,
   outputDuration,
   outputToSource,
@@ -133,6 +136,12 @@ function TimelineToolbar({ zoom, setZoom }: { zoom: number; setZoom: (z: number)
         shortcut="D"
         onClick={() => s.trimAtPlayhead('right')}
         testId="trim-right"
+      />
+      <ToolButton
+        icon={Snowflake}
+        label={t('editor.freeze.add')}
+        onClick={() => s.freezeAtPlayhead()}
+        testId="freeze"
       />
       <ToolButton
         icon={Trash2}
@@ -448,12 +457,15 @@ export function Timeline() {
               <div className="relative flex-1 py-1" onPointerDown={seekAndDeselect}>
                 {clipPositions(edit.clips).map(({ clip, outputStart }, i) => {
                   const selected = selection?.kind === 'clip' && selection.id === clip.id
+                  // Dải phim hiện đúng màu của bộ lọc (của clip, hoặc của cả video).
+                  const tint = lookLayers(clip.look ?? edit.look)?.css
                   return (
                     <button
                       key={clip.id}
                       type="button"
                       data-testid="timeline-clip"
                       data-selected={selected}
+                      data-freeze={clip.freeze ? true : undefined}
                       onPointerDown={(e) => {
                         e.stopPropagation()
                         store().select({ kind: 'clip', id: clip.id })
@@ -468,22 +480,34 @@ export function Timeline() {
                       }}
                     >
                       {/* Kiểu CapCut: dải ảnh thu nhỏ ở trên, dạng sóng âm thanh ở dưới. */}
-                      <div className="relative min-h-0 flex-1 bg-accent/25">
+                      <div
+                        className={`relative min-h-0 flex-1 ${clip.freeze ? 'bg-sky-500/25' : 'bg-accent/25'}`}
+                      >
                         {filmstrip && folder && (
-                          <ClipFilmstrip
-                            clip={clip}
-                            filmstrip={filmstrip}
-                            folder={folder}
-                            height={FILM_H}
-                          />
+                          <div className="absolute inset-0" style={{ filter: tint ?? 'none' }}>
+                            <ClipFilmstrip
+                              clip={clip}
+                              filmstrip={filmstrip}
+                              folder={folder}
+                              height={FILM_H}
+                            />
+                          </div>
                         )}
-                        <span className="absolute left-1 top-1 rounded bg-black/60 px-1.5 text-[11px] font-medium text-white">
+                        <span className="absolute left-1 top-1 flex items-center gap-1 rounded bg-black/60 px-1.5 text-[11px] font-medium text-white">
                           {i + 1}
-                          {clip.speed !== 1 && ` · ${clip.speed}×`}
+                          {clip.speed !== 1 && !clip.freeze && ` · ${clip.speed}×`}
+                          {clip.freeze && (
+                            <Snowflake size={11} aria-hidden data-testid="clip-freeze-badge" />
+                          )}
+                          {clip.look && (
+                            <Palette size={11} aria-hidden data-testid="clip-look-badge" />
+                          )}
                         </span>
                       </div>
                       <div className="relative h-4 shrink-0 bg-black/40 text-accent">
-                        {waveform && <ClipWaveform clip={clip} waveform={waveform} />}
+                        {waveform && !clip.freeze && (
+                          <ClipWaveform clip={clip} waveform={waveform} />
+                        )}
                       </div>
                     </button>
                   )

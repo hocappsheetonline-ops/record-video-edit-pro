@@ -9,6 +9,13 @@ import {
   fillBaseView,
   fillViewRect,
   frameLayout,
+  clampCenter,
+  isDefaultTransform,
+  lookLayers,
+  orientedSize,
+  orientPoint,
+  outputToSource,
+  unorientRect,
   viewRect,
   effectsAt,
   overlaysAt,
@@ -17,7 +24,9 @@ import {
   type ActiveTransition,
   type Background,
   type BeautyStyle,
+  type ClipTransform,
   type CursorTrack,
+  type LookLayers,
   type EditState,
   type Rect,
   type Size,
@@ -26,6 +35,8 @@ import type { OverlayItem } from './overlay-draw'
 
 /** Mọi thứ cần vẽ cho một khung hình, tính bằng pixel của video xuất. */
 export interface FrameScene {
+  /** Thời điểm trên video xuất (ms). */
+  time: number
   width: number
   height: number
   background: Background
@@ -33,8 +44,17 @@ export interface FrameScene {
   content: Rect
   radius: number
   shadow: number
-  /** Phần video màn hình đang hiện (chuẩn hóa 0..1) — nhỏ hơn toàn bộ khi đang zoom. */
+  /**
+   * Phần video màn hình đang hiện (chuẩn hóa 0..1, trong khung đã cắt / lật / xoay của clip) — nhỏ
+   * hơn toàn bộ khi đang zoom.
+   */
   view: Rect
+  /** Vùng của video gốc cần lấy điểm ảnh để vẽ (bằng `view` nếu clip không biến đổi). */
+  source: Rect
+  /** Lật / xoay của clip đang phát (null nếu không có). */
+  orient: Pick<ClipTransform, 'flipH' | 'flipV' | 'rotate'> | null
+  /** Bộ lọc màu / điều chỉnh cho video màn hình và webcam (null nếu không có). */
+  look: LookLayers | null
   cursor: { x: number; y: number; size: number; opacity: number } | null
   ripple: { x: number; y: number; radius: number; opacity: number } | null
   /** Webcam: bong bóng nổi (`circle`/`rounded`/`square`) hoặc dải ngang (`strip`, không bo góc). */
@@ -79,27 +99,37 @@ export interface SceneInput {
 
 /** Tính bố cục một khung hình. Hàm thuần: cùng đầu vào luôn ra cùng kết quả (xem trước = xuất). */
 export function computeScene(input: SceneInput): FrameScene {
-  const { edit, output, video, source } = input
+  const { edit, output, source } = input
   const fill = edit.frame.fill
   const showCamera = input.hasCamera && edit.camera.visible
+  // Clip đang phát: bộ lọc riêng và cắt / lật / xoay (khung hình theo tỉ lệ video sau biến đổi).
+  const clip = outputToSource(edit.clips, input.time)?.position.clip
+  const tf = clip?.transform && !isDefaultTransform(clip.transform) ? clip.transform : null
+  const video = tf ? orientedSize(input.video, tf) : input.video
+  const orient = (p: { x: number; y: number }) => (tf ? orientPoint(p, tf) : p)
   const layout = frameLayout(output, video, edit.frame, showCamera ? edit.camera : null)
   const content = layout.content
   // Lấp đầy: khung nhìn có đúng tỉ lệ vùng hiển thị và đi theo con trỏ (đã làm mượt) cả khi không zoom.
   const base = fill ? fillBaseView(video, content) : { width: 1, height: 1 }
   const rest = (fill && input.follow ? cursorAt(input.follow, source) : null) ?? { x: 0.5, y: 0.5 }
-  const camera = cameraAt(
-    edit.zooms,
-    source,
-    input.follow,
-    rest,
-    base,
-    edit.motion.zoomTransitionMs,
-  )
+  const raw = cameraAt(edit.zooms, source, input.follow, rest, base, edit.motion.zoomTransitionMs)
+  // Tâm khung nhìn tính theo video gốc → đổi sang khung đã biến đổi rồi giữ trong mép.
+  const centre = orient(raw)
+  const camera = tf
+    ? {
+        scale: raw.scale,
+        x: clampCenter(centre.x, raw.scale, base.width),
+        y: clampCenter(centre.y, raw.scale, base.height),
+      }
+    : raw
   const view = fill ? fillViewRect(camera, video, content) : viewRect(camera)
-  const toOutput = (p: { x: number; y: number }) => ({
-    x: content.x + ((p.x - view.x) / view.width) * content.width,
-    y: content.y + ((p.y - view.y) / view.height) * content.height,
-  })
+  const toOutput = (point: { x: number; y: number }) => {
+    const p = orient(point)
+    return {
+      x: content.x + ((p.x - view.x) / view.width) * content.width,
+      y: content.y + ((p.y - view.y) / view.height) * content.height,
+    }
+  }
 
   let cursor: FrameScene['cursor'] = null
   let ripple: FrameScene['ripple'] = null
@@ -155,6 +185,7 @@ export function computeScene(input: SceneInput): FrameScene {
       local: input.time - overlay.start,
     })),
     captions,
+    time: input.time,
     width: output.width,
     height: output.height,
     background: edit.frame.background,
@@ -162,6 +193,9 @@ export function computeScene(input: SceneInput): FrameScene {
     radius: fill ? 0 : edit.frame.radius * Math.min(content.width, content.height),
     shadow: fill ? 0 : edit.frame.shadow,
     view,
+    source: tf ? unorientRect(view, tf) : view,
+    orient: tf ? { flipH: tf.flipH, flipV: tf.flipV, rotate: tf.rotate } : null,
+    look: lookLayers(clip?.look ?? edit.look),
     cursor,
     ripple,
     camera: !showCamera ? null : cameraScene(edit.camera, output, layout.strip),
