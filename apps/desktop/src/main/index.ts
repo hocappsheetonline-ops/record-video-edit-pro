@@ -31,6 +31,7 @@ import {
 import { loadFilmstrip } from './projects/filmstrip'
 import { importImageFile, MEDIA_EXTENSIONS, MemeLibrary } from './projects/images'
 import { clearDirs, dirSize } from './content/cache'
+import { RnnoiseDenoiser } from './audio/denoise'
 import { AudioProcessor } from './audio/process'
 import { OnlineService } from './content/online'
 import { PACK_EXTENSION } from './projects/share'
@@ -168,10 +169,15 @@ if (!app.requestSingleInstanceLock()) {
       return r.canceled ? [] : r.filePaths
     }
     const memes = new MemeLibrary(join(userData, 'memes'), runFfmpeg)
-    // Model AI lọc tạp âm nằm ngoài gói asar để FFmpeg đọc được.
+    // Lọc tạp âm AI bằng RNNoise (WebAssembly, chạy ở luồng phụ) — cùng kết quả trên mọi máy.
     const audioProcessor = new AudioProcessor(
       runFfmpeg,
-      join(__dirname, '../../resources/rnnoise/sh.rnnn').replace('app.asar', 'app.asar.unpacked'),
+      new RnnoiseDenoiser(
+        join(__dirname, '../../resources/rnnoise/rnnoise.wasm').replace(
+          'app.asar',
+          'app.asar.unpacked',
+        ),
+      ),
     )
     const cacheDirs = [join(userData, 'cache'), join(userData, 'sounds')]
     const online = new OnlineService({

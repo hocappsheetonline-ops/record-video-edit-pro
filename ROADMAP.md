@@ -266,7 +266,8 @@ export interface AudioFx {
 export const DEFAULT_AUDIO_FX: AudioFx
 export function parseAudioFx(v: unknown): AudioFx
 export function audioFxKey(fx: AudioFx): string // hash ổn định để đặt tên cache
-export function audioFxFilter(fx: AudioFx, modelPath: string | null): string[] // chuỗi bộ lọc FFmpeg
+export function needsAiDenoise(fx: AudioFx): boolean // mức vừa / mạnh cần RNNoise
+export function audioFxFilters(fx: AudioFx, aiDone: boolean): string[] // chuỗi bộ lọc FFmpeg
 ```
 
 - `EditState.audio` thành `{ mic: number; system: number; micFx: AudioFx; systemFx: AudioFx }`; `AudioClip` và `Overlay` (video) thêm `fx: AudioFx` (bỏ fadeIn/fadeOut trùng lặp? **Không**: giữ fade của AudioClip, trong `AudioFx` của clip chỉ dùng noise/enhance/normalize/voice/pitch).
@@ -275,8 +276,8 @@ export function audioFxFilter(fx: AudioFx, modelPath: string | null): string[] /
 #### 2.2 Xử lý (main) — `main/audio/process.ts`
 
 - Bộ lọc FFmpeg (đã xác nhận có trong `ffmpeg-static`):
-  - noise light: `afftdn=nf=-25:nt=w`; medium: `arnndn=m=<model>`; strong: `arnndn=m=<model>,afftdn=nf=-20`.
-  - Model rnnoise: bundle `resources/rnnoise/sh.rnnn` (từ `github.com/GregorR/rnnoise-models`, giấy phép BSD) → thêm vào `electron-builder.yml` `extraResources`, ghi `THIRD_PARTY.md`. Đường dẫn qua `process.resourcesPath` khi đóng gói, `resources/` khi dev.
+  - noise light: `afftdn=nf=-25:nt=w`; medium: RNNoise; strong: RNNoise rồi `afftdn=nf=-20:nt=w`.
+  - **Không dùng bộ lọc `arnndn` của FFmpeg**: nó đọc lố mảng trên stack (hàm `dct` đọc 24 phần tử của mảng 22), trên Windows rác có thể là NaN nên kết quả lọc ngẫu nhiên (đã đo: cùng file lúc -50 dB lúc -34 dB). Thay bằng RNNoise WebAssembly (`resources/rnnoise/rnnoise.wasm`, bản dựng của `@jitsi/rnnoise-wasm`) chạy ở worker thread trong `main/audio/denoise.ts`: FFmpeg giải mã ra PCM f32 mono 48 kHz → RNNoise từng khung 480 mẫu (bù trễ 1 khung) → FFmpeg mã hóa kèm các bộ lọc còn lại.
   - enhance: `highpass=f=80,deesser=i=0.4,acompressor=threshold=-18dB:ratio=3:attack=5:release=60:makeup=2`.
   - normalize: `loudnorm=I=-16:TP=-1.5:LRA=11`.
   - voice chipmunk: `rubberband=pitch=1.5`; deep: `rubberband=pitch=0.7`; robot: `afftfilt=real='hypot(re,im)*sin(0)':imag='hypot(re,im)*cos(0)':win_size=512:overlap=0.75`; echo: `aecho=0.8:0.88:60:0.4`; radio: `highpass=f=300,lowpass=f=3000,acompressor=ratio=4,volume=1.5`; megaphone: `highpass=f=500,lowpass=f=2500,acrusher=bits=8:mix=0.3,volume=1.4`; pitch n bán cung: `rubberband=pitch=2^(n/12)`.
@@ -483,7 +484,7 @@ Mọi lời gọi mạng đi qua main process, có timeout, mã lỗi chuẩn, v
 
 ### 4.3 Tài nguyên bundle (ghi vào `THIRD_PARTY.md`)
 
-- rnnoise model `sh.rnnn` — BSD-3 (GregorR/rnnoise-models).
+- RNNoise WebAssembly `rnnoise.wasm` — RNNoise BSD-3-Clause, bản dựng Jitsi Apache-2.0.
 - MediaPipe tasks-vision + `selfie_segmenter.tflite` — Apache-2.0.
 - Font OFL: Be Vietnam Pro, Inter, Montserrat, Oswald, Anton, Bangers, Lobster, Pacifico, Roboto Mono, Playfair Display.
 - lucide-react — ISC.

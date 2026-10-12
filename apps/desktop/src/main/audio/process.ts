@@ -1,8 +1,14 @@
-import { copyFile, rename, rm, stat } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { rename, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
-import { audioFxFilters, isDefaultFx, processedFileName, type AudioFx } from '@lumora/core'
+import {
+  audioFxFilters,
+  isDefaultFx,
+  needsAiDenoise,
+  processedFileName,
+  type AudioFx,
+} from '@lumora/core'
 import type { FfmpegRunner } from '../ffmpeg/runner'
+import type { Denoiser } from './denoise'
 
 const exists = (p: string) =>
   stat(p).then(
@@ -10,14 +16,7 @@ const exists = (p: string) =>
     () => false,
   )
 
-/**
- * Viết đường dẫn model vào chuỗi bộ lọc FFmpeg: đặt trong nháy đơn, thoát dấu hai chấm (ổ đĩa
- * Windows `C:`). Đường dẫn có dấu nháy đơn thì không viết an toàn được → null.
- */
-export function filterPath(path: string): string | null {
-  if (path.includes("'")) return null
-  return `'${path.replace(/\\/g, '/').replace(/:/g, '\\:')}'`
-}
+const TIMEOUT_MS = 30 * 60_000
 
 /**
  * Xử lý âm thanh (lọc tạp âm, hiệu ứng giọng) thành file `fx-….m4a` trong thư mục dự án. Mỗi
@@ -28,19 +27,9 @@ export class AudioProcessor {
 
   constructor(
     private readonly run: FfmpegRunner,
-    /** Model rnnoise (AI lọc tạp âm); null thì dùng lọc phổ. */
-    private readonly modelPath: string | null,
+    /** Lọc tạp âm AI (RNNoise); null thì mức vừa / mạnh dùng lọc phổ. */
+    private readonly denoiser: Denoiser | null,
   ) {}
-
-  private async model(): Promise<string | null> {
-    if (!this.modelPath || !(await exists(this.modelPath))) return null
-    const direct = filterPath(this.modelPath)
-    if (direct) return direct
-    // Đường dẫn có ký tự khó viết vào bộ lọc: chép model ra thư mục tạm.
-    const copy = join(tmpdir(), 'lumora-rnnoise.rnnn')
-    if (!(await exists(copy))) await copyFile(this.modelPath, copy)
-    return filterPath(copy)
-  }
 
   /** Trả về tên file đã xử lý (hoặc tên gốc nếu không có hiệu ứng). */
   process(projectDir: string, file: string, fx: AudioFx | undefined): Promise<string> {
@@ -61,7 +50,20 @@ export class AudioProcessor {
     const target = join(projectDir, output)
     if (await exists(target)) return output
     const tmp = join(projectDir, `.${output}.part.m4a`)
-    const filters = audioFxFilters(fx, await this.model())
+    const source = join(projectDir, file)
+    if (this.denoiser && needsAiDenoise(fx)) {
+      try {
+        await this.denoiser.render(source, tmp, audioFxFilters(fx, true), TIMEOUT_MS)
+      } catch (error) {
+        await rm(tmp, { force: true })
+        throw error instanceof Error && error.message.startsWith('audio_fx_failed')
+          ? error
+          : new Error(`audio_fx_failed: ${String(error)}`)
+      }
+      await rename(tmp, target)
+      return output
+    }
+    const filters = audioFxFilters(fx, false)
     const r = await this.run(
       [
         '-hide_banner',
@@ -69,7 +71,7 @@ export class AudioProcessor {
         'error',
         '-y',
         '-i',
-        join(projectDir, file),
+        source,
         '-vn',
         '-af',
         filters.join(','),
@@ -81,7 +83,7 @@ export class AudioProcessor {
         '192k',
         tmp,
       ],
-      30 * 60_000,
+      TIMEOUT_MS,
     )
     if (r.code !== 0) {
       await rm(tmp, { force: true })

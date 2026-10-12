@@ -6,9 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DEFAULT_AUDIO_FX, type AudioFx } from '@lumora/core'
 import { runFfmpeg } from '../ffmpeg/runner'
 import { importVoiceover } from '../projects/assets'
-import { AudioProcessor, filterPath } from './process'
+import { RnnoiseDenoiser } from './denoise'
+import { AudioProcessor } from './process'
 
-const MODEL = resolve(__dirname, '../../../resources/rnnoise/sh.rnnn')
+const AI = new RnnoiseDenoiser(resolve(__dirname, '../../../resources/rnnoise/rnnoise.wasm'))
 
 let dir: string
 beforeEach(async () => {
@@ -59,7 +60,7 @@ const fx = (patch: Partial<AudioFx>): AudioFx => ({ ...DEFAULT_AUDIO_FX, ...patc
 
 describe('AudioProcessor (FFmpeg thật)', () => {
   it('lọc tạp âm AI: đoạn chỉ có tạp âm nhỏ đi rõ rệt, giọng gần như giữ nguyên, độ dài không đổi', async () => {
-    const audio = new AudioProcessor(runFfmpeg, MODEL)
+    const audio = new AudioProcessor(runFfmpeg, AI)
     const out = await audio.process(dir, 'seg0-mic.webm', fx({ noise: 'medium' }))
     expect(out).toBe('fx-seg0-mic-n2.m4a')
     const noiseBefore = await mean('seg0-mic.webm', 0.2, 1.6)
@@ -74,11 +75,11 @@ describe('AudioProcessor (FFmpeg thật)', () => {
   }, 60_000)
 
   it('mức mạnh lọc nhiều hơn mức nhẹ; không có model thì vẫn lọc bằng lọc phổ', async () => {
-    const audio = new AudioProcessor(runFfmpeg, MODEL)
+    const audio = new AudioProcessor(runFfmpeg, AI)
     const light = await audio.process(dir, 'seg0-mic.webm', fx({ noise: 'light' }))
     const strong = await audio.process(dir, 'seg0-mic.webm', fx({ noise: 'strong' }))
     expect(await mean(strong, 0.2, 1.6)).toBeLessThan((await mean(light, 0.2, 1.6)) - 10)
-    const noModel = new AudioProcessor(runFfmpeg, join(dir, 'missing.rnnn'))
+    const noModel = new AudioProcessor(runFfmpeg, null)
     const fallback = await noModel.process(dir, 'seg0-mic.webm', fx({ noise: 'medium' }))
     expect(await mean(fallback, 0.2, 1.6)).toBeLessThan((await mean('seg0-mic.webm', 0.2, 1.6)) - 6)
   }, 60_000)
@@ -113,10 +114,46 @@ describe('AudioProcessor (FFmpeg thật)', () => {
     await expect(audio.process(dir, '../evil', a)).rejects.toThrow('audio_unreadable')
   }, 60_000)
 
-  it('đường dẫn model trong bộ lọc: thoát dấu hai chấm (ổ đĩa Windows), từ chối nháy đơn', () => {
-    expect(filterPath('C:\\Users\\An\\sh.rnnn')).toBe("'C\\:/Users/An/sh.rnnn'")
-    expect(filterPath("/a/it's/sh.rnnn")).toBeNull()
-  })
+  it('lọc tạp âm AI cho cùng kết quả mỗi lần chạy, không lệch thời gian, kèm bộ lọc phía sau', async () => {
+    const pcm = async (file: string) => {
+      const out = join(dir, `${file}.f32`)
+      const r = await runFfmpeg(
+        ['-y', '-i', join(dir, file), '-ac', '1', '-ar', '48000'].concat(['-f', 'f32le', out]),
+      )
+      if (r.code !== 0) throw new Error(r.stderr)
+      const { readFile } = await import('node:fs/promises')
+      const b = await readFile(out)
+      return new Float32Array(b.buffer, b.byteOffset, b.byteLength / 4)
+    }
+    const a = await AI.render(join(dir, 'seg0-mic.webm'), join(dir, 'a.m4a'), [], 60_000)
+    const b = await AI.render(join(dir, 'seg0-mic.webm'), join(dir, 'b.m4a'), [], 60_000)
+    expect(a).toBeUndefined()
+    expect(b).toBeUndefined()
+    const x = await pcm('a.m4a')
+    const y = await pcm('b.m4a')
+    expect(x.length).toBe(y.length)
+    expect(x.every((v, i) => v === y[i])).toBe(true)
+    // Giọng bắt đầu ở giây thứ 2: đã bù độ trễ một khung (10 ms) của RNNoise; còn lại chỉ là lúc
+    // mạng nơ-ron mở dần âm lượng (~10 ms). Không bù thì ra ~2.020 s.
+    const onset = x.findIndex((v) => Math.abs(v) > 0.1) / 48_000
+    expect(onset).toBeGreaterThan(1.995)
+    expect(onset).toBeLessThan(2.015)
+    // Bộ lọc FFmpeg phía sau vẫn được áp dụng (đổi cao độ).
+    await AI.render(
+      join(dir, 'seg0-mic.webm'),
+      join(dir, 'c.m4a'),
+      ['rubberband=pitch=1.5'],
+      60_000,
+    )
+    const band = (f: number) => mean('c.m4a', 2.2, 1.6, `bandpass=f=${f}:w=30`)
+    expect(await band(270)).toBeGreaterThan((await band(180)) + 10)
+    // File vào hỏng: báo lỗi, không treo.
+    const { writeFile } = await import('node:fs/promises')
+    await writeFile(join(dir, 'bad.webm'), new Uint8Array(400))
+    await expect(AI.render(join(dir, 'bad.webm'), join(dir, 'd.m4a'), [], 60_000)).rejects.toThrow(
+      'audio_fx_failed',
+    )
+  }, 60_000)
 })
 
 describe('lồng tiếng', () => {

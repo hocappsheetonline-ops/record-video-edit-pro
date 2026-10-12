@@ -66,16 +66,21 @@ export function processedFileName(file: string, fx: AudioFx): string {
   return `fx-${file.replace(/\.[^.]+$/, '')}-${audioFxKey(fx)}.m4a`
 }
 
+/** Mức lọc tạp âm cần mạng nơ-ron RNNoise (chạy trước các bộ lọc FFmpeg). */
+export function needsAiDenoise(fx: AudioFx): boolean {
+  return fx.noise === 'medium' || fx.noise === 'strong'
+}
+
 /**
- * Chuỗi bộ lọc FFmpeg cho bộ hiệu ứng. `model`: đường dẫn model rnnoise (đã thoát ký tự cho bộ lọc);
- * null thì mức vừa / mạnh dùng lọc phổ thay cho AI. Không đổi độ dài âm thanh (giữ khớp timeline).
+ * Chuỗi bộ lọc FFmpeg cho bộ hiệu ứng. `aiDone`: âm thanh đã qua RNNoise (xem `needsAiDenoise`);
+ * false thì mức vừa / mạnh dùng lọc phổ thay cho AI. Không đổi độ dài âm thanh (giữ khớp timeline).
  */
-export function audioFxFilters(fx: AudioFx, model: string | null): string[] {
+export function audioFxFilters(fx: AudioFx, aiDone: boolean): string[] {
   const filters: string[] = []
-  const ai = model ? `arnndn=m=${model}` : 'afftdn=nf=-25:nr=30:nt=w'
   if (fx.noise === 'light') filters.push('afftdn=nf=-25:nt=w')
-  if (fx.noise === 'medium') filters.push(ai)
-  if (fx.noise === 'strong') filters.push(ai, 'afftdn=nf=-20:nt=w')
+  if (fx.noise === 'medium' && !aiDone) filters.push('afftdn=nf=-25:nr=30:nt=w')
+  if (fx.noise === 'strong')
+    filters.push(...(aiDone ? [] : ['afftdn=nf=-25:nr=30:nt=w']), 'afftdn=nf=-20:nt=w')
   if (fx.enhance)
     filters.push(
       'highpass=f=80',

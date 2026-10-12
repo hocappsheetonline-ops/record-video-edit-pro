@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   audioFxFilters,
+  needsAiDenoise,
+  type AudioFx,
   audioFxKey,
   DEFAULT_AUDIO_FX,
   isDefaultFx,
@@ -45,14 +47,12 @@ describe('audio-fx', () => {
   })
 
   it('chuỗi bộ lọc theo thứ tự: tạp âm → giọng → hiệu ứng → chuẩn hóa', () => {
-    expect(audioFxFilters(DEFAULT_AUDIO_FX, 'm.rnnn')).toEqual([])
-    expect(
-      audioFxFilters(
-        { noise: 'strong', enhance: true, normalize: true, voice: 'chipmunk', pitch: 0 },
-        'm.rnnn',
-      ),
-    ).toEqual([
-      'arnndn=m=m.rnnn',
+    expect(audioFxFilters(DEFAULT_AUDIO_FX, true)).toEqual([])
+    const strong = { noise: 'strong', enhance: true, normalize: true, voice: 'chipmunk', pitch: 0 }
+    expect(needsAiDenoise(strong as AudioFx)).toBe(true)
+    expect(needsAiDenoise({ ...DEFAULT_AUDIO_FX, noise: 'light' })).toBe(false)
+    // Đã lọc bằng RNNoise: mức mạnh chỉ thêm lọc phổ nhẹ phía sau.
+    expect(audioFxFilters(strong as AudioFx, true)).toEqual([
       'afftdn=nf=-20:nt=w',
       'highpass=f=80',
       'deesser=i=0.4',
@@ -61,11 +61,12 @@ describe('audio-fx', () => {
       'loudnorm=I=-16:TP=-1.5:LRA=11',
       'aresample=48000',
     ])
-    // Không có model AI thì dùng lọc phổ.
-    expect(audioFxFilters({ ...DEFAULT_AUDIO_FX, noise: 'medium' }, null)).toEqual([
+    // Không chạy được AI thì dùng lọc phổ.
+    expect(audioFxFilters({ ...DEFAULT_AUDIO_FX, noise: 'medium' }, false)).toEqual([
       'afftdn=nf=-25:nr=30:nt=w',
     ])
-    expect(audioFxFilters({ ...DEFAULT_AUDIO_FX, pitch: 12 }, null)).toEqual([
+    expect(audioFxFilters({ ...DEFAULT_AUDIO_FX, noise: 'medium' }, true)).toEqual([])
+    expect(audioFxFilters({ ...DEFAULT_AUDIO_FX, pitch: 12 }, false)).toEqual([
       'rubberband=pitch=2.00000',
     ])
   })
