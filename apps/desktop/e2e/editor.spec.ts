@@ -220,7 +220,13 @@ test('timeline hiện dạng sóng âm thanh của bản quay trong clip video',
   expect(JSON.parse(readFileSync(join(projectDir, 'waveform.json'), 'utf8')).bucketMs).toBe(20)
   // Dải ảnh thu nhỏ kiểu CapCut ở trên, sóng âm ở dưới.
   await expect(page.getByTestId('filmstrip-tile').first()).toBeVisible({ timeout: 30_000 })
-  expect(await page.getByTestId('filmstrip-tile').count()).toBeGreaterThan(5)
+  // Số ô vừa đủ phủ chiều rộng clip (phụ thuộc kích thước cửa sổ của máy chạy test).
+  const clipBox = (await page.getByTestId('clip-filmstrip').boundingBox())!
+  const tileBox = (await page.getByTestId('filmstrip-tile').first().boundingBox())!
+  expect(await page.getByTestId('filmstrip-tile').count()).toBe(
+    Math.ceil(clipBox.width / tileBox.width - 0.01),
+  )
+  expect(tileBox.width).toBeGreaterThan(40)
   expect(await page.getByTestId('filmstrip-tile').first().getAttribute('style')).toContain(
     'filmstrip-0.jpg',
   )

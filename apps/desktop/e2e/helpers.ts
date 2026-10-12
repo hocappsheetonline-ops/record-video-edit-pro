@@ -29,8 +29,15 @@ export function createTestDirs(): TestDirs {
   return {
     userData,
     projects,
-    cleanup: () =>
-      rmSync(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 }),
+    cleanup: () => {
+      try {
+        rmSync(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 })
+      } catch (error) {
+        // Thư mục tạm: nếu Windows còn giữ file (app chưa tắt hẳn sau một lỗi) thì bỏ qua,
+        // để lỗi thật của bài test không bị che bởi lỗi dọn dẹp.
+        if ((error as NodeJS.ErrnoException).code !== 'EBUSY') throw error
+      }
+    },
   }
 }
 
