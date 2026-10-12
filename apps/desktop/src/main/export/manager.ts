@@ -2,7 +2,10 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, open, rename, rm, type FileHandle } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
+  LOUDNESS_SPECS,
+  loudnormFilter,
   outputDuration,
+  parseLoudnormJson,
   planAudio,
   overlayAudioClips,
   planAudioClips,
@@ -10,7 +13,7 @@ import {
   type Project,
   applyTrackState,
 } from '@lumora/core'
-import { buildExportMuxArgs, buildGifArgs } from '../ffmpeg/args'
+import { buildExportMuxArgs, buildGifArgs, buildLoudnessMeasureArgs } from '../ffmpeg/args'
 import type { FfmpegRunner } from '../ffmpeg/runner'
 import { AudioProcessor } from '../audio/process'
 import { ClipReverser } from '../clips/reverse'
@@ -130,9 +133,13 @@ export class ExportManager {
         })),
       )
       const pieces = [...recorded, ...added]
+      const loudnorm =
+        edit.export.loudness !== 'off' && edit.export.format === 'mp4' && pieces.length > 0
+          ? await this.measureLoudness(pieces, durationS, edit.export.loudness)
+          : null
       const tmpOut = join(job.dir, `.mux-${id}.mp4`)
       const muxed = await this.run(
-        buildExportMuxArgs({ video: job.tmpPath, pieces, durationS, output: tmpOut }),
+        buildExportMuxArgs({ video: job.tmpPath, pieces, durationS, output: tmpOut, loudnorm }),
         600_000,
       )
       if (muxed.code !== 0) throw new Error(`Ghép âm thanh thất bại: ${muxed.stderr.slice(-400)}`)
@@ -150,6 +157,20 @@ export class ExportManager {
     } finally {
       await rm(job.tmpPath, { force: true })
     }
+  }
+
+  /**
+   * Chuẩn hóa độ to hai lượt (chính xác như công cụ chuyên nghiệp): đo bản trộn trước, rồi trả về
+   * bộ lọc chỉnh tuyến tính theo số đo. Đo lỗi thì chuẩn hóa một lượt; im lặng thì bỏ qua (null).
+   */
+  private async measureLoudness(
+    pieces: Parameters<typeof buildLoudnessMeasureArgs>[0]['pieces'],
+    durationS: number,
+    target: keyof typeof LOUDNESS_SPECS,
+  ): Promise<string | null> {
+    const spec = LOUDNESS_SPECS[target]
+    const measured = await this.run(buildLoudnessMeasureArgs({ pieces, durationS, spec }), 600_000)
+    return loudnormFilter(spec, measured.code === 0 ? parseLoudnormJson(measured.stderr) : null)
   }
 
   async cancel(id: string): Promise<void> {

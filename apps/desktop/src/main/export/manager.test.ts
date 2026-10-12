@@ -96,6 +96,58 @@ describe('ExportManager', () => {
     expect((await readdir(join(dir, 'exports'))).filter((f) => f.startsWith('.'))).toEqual([])
   }, 60_000)
 
+  it('chuẩn hóa độ to chuẩn YouTube: giọng nhỏ (-30 LUFS) được kéo lên gần -14 LUFS', async () => {
+    // Giọng rất nhỏ: sine biên độ ~0.03 (khoảng -33 LUFS).
+    await ffmpeg([
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=300:duration=4,volume=0.03',
+      '-c:a',
+      'libopus',
+      join(dir, 'seg0-mic.webm'),
+    ])
+    const rendered = join(dir, 'rendered.mp4')
+    await ffmpeg([
+      '-f',
+      'lavfi',
+      '-i',
+      'testsrc=size=320x240:rate=30:duration=4',
+      '-pix_fmt',
+      'yuv420p',
+      '-c:v',
+      'libx264',
+      rendered,
+    ])
+    const measure = async (file: string) => {
+      const r = await runFfmpeg([
+        '-hide_banner',
+        '-nostats',
+        '-i',
+        file,
+        '-af',
+        'loudnorm=print_format=json',
+        '-f',
+        'null',
+        '-',
+      ])
+      return Number(/"input_i" : "(-?[\d.]+)"/.exec(r.stderr)?.[1])
+    }
+    const exportWith = async (loudness: 'off' | 'youtube') => {
+      const manager = new ExportManager(runFfmpeg)
+      const id = await manager.start(dir)
+      await manager.write(id, 0, await readFile(rendered))
+      const edit = createDefaultEdit(project)
+      edit.export.loudness = loudness
+      return manager.finish(id, project, edit, dir, `Loud ${loudness}`)
+    }
+    const before = await measure((await exportWith('off')).path)
+    expect(before).toBeLessThan(-25)
+    const after = await measure((await exportWith('youtube')).path)
+    expect(after).toBeGreaterThan(-15.5)
+    expect(after).toBeLessThan(-12.5)
+  }, 60_000)
+
   it('nhạc nền lặp lại có fade vào/ra và hiệu ứng âm thanh được trộn đúng vị trí', async () => {
     const rendered = join(dir, 'rendered.mp4')
     await ffmpeg([

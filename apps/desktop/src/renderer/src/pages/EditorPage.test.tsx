@@ -111,13 +111,13 @@ describe('EditorPage', () => {
     await screen.findByTestId('editor-title')
     const strips = await screen.findAllByTestId('clip-filmstrip')
     expect(strips).toHaveLength(2)
-    // Ô rộng 128/72 × 44 ≈ 78px → 4 ô cho 300px.
+    // Ô rộng 128/72 × 46 ≈ 82px → 4 ô cho 300px.
     const tiles = strips[0]!.querySelectorAll<HTMLElement>('[data-testid="filmstrip-tile"]')
     expect(tiles).toHaveLength(4)
     expect(tiles[0]!.style.backgroundImage).toContain('filmstrip-0.jpg')
     expect(tiles[0]!.style.backgroundPosition).toBe('0px 0px')
     // Ô cuối của clip 1 (5 giây) rơi vào ảnh thứ 4 hoặc 5.
-    expect(tiles[3]!.style.backgroundPosition).toMatch(/^-(23[0-9]|31[0-9])\.\d+px 0px$/)
+    expect(tiles[3]!.style.backgroundPosition).toMatch(/^-(24[0-9]|32[0-9])\.\d+px 0px$/)
     const second = strips[1]!.querySelectorAll<HTMLElement>('[data-testid="filmstrip-tile"]')
     expect(second[0]!.style.backgroundImage).toContain('filmstrip-1.jpg')
   })
@@ -358,6 +358,36 @@ describe('EditorPage', () => {
     // Đóng hộp thoại bằng Esc.
     await userEvent.keyboard('{Escape}')
     expect(screen.getByTestId('export-dialog').parentElement).not.toBeVisible()
+  })
+
+  it('chuẩn hóa âm lượng chuẩn YouTube khi xuất; GIF không có tiếng thì ẩn', async () => {
+    setup()
+    await screen.findByTestId('editor')
+    await userEvent.click(screen.getByTestId('export-open'))
+    expect(screen.getByTestId('loudness-off')).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(screen.getByTestId('loudness-youtube'))
+    expect(useEditorStore.getState().edit!.export.loudness).toBe('youtube')
+    expect(screen.getByTestId('loudness-hint')).toHaveTextContent('-14 LUFS')
+    await userEvent.click(screen.getByTestId('format-gif'))
+    expect(screen.queryByTestId('loudness-youtube')).not.toBeInTheDocument()
+  })
+
+  it('clip tắt tiếng thì dạng sóng mờ đi kèm biểu tượng loa tắt', async () => {
+    const api = setup()
+    api.getWaveform.mockResolvedValue({ bucketMs: 20, peaks: new Array(350).fill(200) })
+    await screen.findByTestId('editor-title')
+    await screen.findAllByTestId('clip-waveform')
+    expect(screen.queryByTestId('clip-waveform-muted')).not.toBeInTheDocument()
+    const first = useEditorStore.getState().edit!.clips[0]!
+    act(() =>
+      useEditorStore.getState().change((e) => ({
+        ...e,
+        clips: e.clips.map((c) =>
+          c.id === first.id ? { ...c, audio: { mic: 1, system: 1, muted: true } } : c,
+        ),
+      })),
+    )
+    expect(await screen.findAllByTestId('clip-waveform-muted')).toHaveLength(1)
   })
 
   it('tự lưu bản chỉnh sửa sau khi thay đổi', async () => {

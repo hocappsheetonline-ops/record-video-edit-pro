@@ -59,8 +59,8 @@ import { MarkerFlags, TrackControls } from './TimelineMarkers'
 import { formatTimecode, laneCount, tickInterval, zoomOutputIntervals } from './timeline-math'
 
 const HEADER_W = 148
-/** Chiều cao dải ảnh thu nhỏ trong clip (px): clip cao 64px − viền 4px − dải sóng 16px. */
-const FILM_H = 44
+/** Chiều cao dải ảnh thu nhỏ trong clip (px): clip cao 72px − viền 4px − dải sóng 22px. */
+const FILM_H = 46
 const MAX_ZOOM = 24
 
 type Drag = { id: string; mode: 'move' | 'start' | 'end'; originX: number; origin: ZoomRegion }
@@ -387,7 +387,7 @@ export function Timeline() {
     overlays: laneCount(edit.overlays) * LANE.overlays + 4,
     captions: edit.captions.lines.length > 0 ? 30 : 0,
     zoom: 32,
-    clips: 72,
+    clips: 80,
     audio:
       laneCount(edit.audioClips.map((c) => ({ start: c.start, end: c.start + c.duration }))) *
         LANE.audio +
@@ -715,7 +715,7 @@ export function Timeline() {
                           ? openContextMenu(e, emptyMenu(t))
                           : openContextMenu(e, clipMenu(t, clip.id))
                       }
-                      className={`absolute top-1 flex h-16 flex-col overflow-hidden rounded-md border-2 bg-surface-2 text-left ${
+                      className={`absolute top-1 flex h-[72px] flex-col overflow-hidden rounded-md border-2 bg-surface-2 text-left ${
                         selected ? 'border-white' : 'border-transparent hover:border-white/40'
                       }`}
                       style={{
@@ -757,7 +757,11 @@ export function Timeline() {
                           )}
                         </span>
                       </div>
-                      <div className="relative h-4 shrink-0 bg-black/40 text-accent">
+                      <div
+                        className={`relative h-[22px] shrink-0 border-t border-black/40 ${
+                          clip.freeze ? 'bg-black/40' : 'bg-teal-950 text-teal-300/90'
+                        }`}
+                      >
                         {waveform && !clip.freeze && (
                           <ClipWaveform clip={clip} waveform={waveform} />
                         )}

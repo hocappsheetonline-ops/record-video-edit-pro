@@ -813,6 +813,16 @@ export const vi = {
       format: 'Định dạng',
       resolution: 'Độ phân giải',
       fps: 'Số khung hình/giây',
+      loudness: 'Chuẩn hóa âm lượng',
+      loudnessOff: 'Tắt',
+      loudnessYoutube: 'YouTube',
+      loudnessPodcast: 'Podcast',
+      loudnessHint: {
+        off: 'Giữ nguyên độ to như khi chỉnh sửa.',
+        youtube:
+          'Đưa cả video (giọng, nhạc, hiệu ứng) về -14 LUFS, đỉnh -1 dBTP: nghe to rõ ngang video khác, YouTube không phải giảm âm lượng.',
+        podcast: 'Đưa cả video về -16 LUFS, đỉnh -1.5 dBTP (Spotify, Apple Podcasts).',
+      },
       start: 'Xuất video',
       rendering: 'Đang dựng hình… {{percent}}%',
       muxing: 'Đang ghép âm thanh…',

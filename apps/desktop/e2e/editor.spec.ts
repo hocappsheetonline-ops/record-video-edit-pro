@@ -221,7 +221,8 @@ test('timeline hiện dạng sóng âm thanh của bản quay trong clip video',
   await openEditor(page)
   const wave = page.getByTestId('clip-waveform')
   await expect(wave).toHaveCount(1, { timeout: 30_000 })
-  // Bản mẫu có micro (sine 440 Hz) suốt 4 giây: mọi cột đều có độ cao đáng kể.
+  // Bản mẫu có micro (sine 440 Hz) suốt 4 giây: mọi cột đều có độ cao đáng kể (cột mọc từ đáy,
+  // cao 0..100).
   const heights = await wave
     .locator('path')
     .evaluate((p) =>

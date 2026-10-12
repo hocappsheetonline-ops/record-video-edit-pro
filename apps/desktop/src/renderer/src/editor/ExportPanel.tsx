@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { outputSize, RESOLUTIONS, type Resolution } from '@lumora/core'
+import { LOUDNESS_TARGETS, outputSize, RESOLUTIONS, type Resolution } from '@lumora/core'
 import type { ExportResult } from '@shared/ipc'
 import { lumora } from '../api'
 import { ipcErrorMessage } from '../lib/prefs'
@@ -115,6 +115,35 @@ export function ExportPanel() {
           ))}
         </div>
       </div>
+      {edit.export.format === 'mp4' && (
+        <div className="flex flex-col gap-1.5 text-sm">
+          <span className="text-muted">{t('editor.export.loudness')}</span>
+          <div className="flex gap-1">
+            {LOUDNESS_TARGETS.map((loudness) => (
+              <button
+                key={loudness}
+                type="button"
+                data-testid={`loudness-${loudness}`}
+                aria-pressed={edit.export.loudness === loudness}
+                disabled={busy}
+                onClick={() => setExport({ loudness })}
+                className={segmented(edit.export.loudness === loudness)}
+              >
+                {t(
+                  loudness === 'off'
+                    ? 'editor.export.loudnessOff'
+                    : loudness === 'youtube'
+                      ? 'editor.export.loudnessYoutube'
+                      : 'editor.export.loudnessPodcast',
+                )}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-muted" data-testid="loudness-hint">
+            {t(`editor.export.loudnessHint.${edit.export.loudness}`)}
+          </p>
+        </div>
+      )}
       <p className="text-xs text-muted" data-testid="export-size">
         {size.width} × {size.height}
       </p>

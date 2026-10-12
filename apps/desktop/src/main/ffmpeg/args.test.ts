@@ -129,6 +129,49 @@ describe('xuất video: ghép âm thanh', () => {
     expect(args.join(' ')).toContain('-map 0:v -map [aout] -c:v copy -c:a aac')
     expect(args.slice(-4)).toEqual(['+faststart', '-t', '3', 'o.mp4'])
   })
+
+  it('chuẩn hóa độ to: lượt 1 chỉ đo bản trộn, lượt 2 thêm loudnorm vào cuối bản trộn', async () => {
+    const { buildExportMuxArgs, buildLoudnessMeasureArgs } = await import('./args')
+    const pieces = [
+      { path: 'mic.webm', mediaStart: 0, duration: 2, outputStart: 0, speed: 1, volume: 1 },
+      {
+        path: 'song.mp3',
+        mediaStart: 0,
+        duration: 3,
+        outputStart: 0,
+        speed: 1,
+        volume: 0.3,
+        loop: true,
+      },
+    ]
+    const measure = buildLoudnessMeasureArgs({
+      pieces,
+      durationS: 3,
+      spec: { i: -14, tp: -1, lra: 11 },
+    })
+    expect(measure.slice(0, 4)).toEqual(['-hide_banner', '-nostats', '-loglevel', 'info'])
+    expect(measure.slice(4, 10)).toEqual(['-i', 'mic.webm', '-stream_loop', '-1', '-i', 'song.mp3'])
+    const graph = measure[measure.indexOf('-filter_complex') + 1]!.split(';')
+    expect(graph[0]).toBe('[0:a]anull[f0_0]')
+    expect(graph.at(-1)).toBe(
+      '[p0][p1]amix=inputs=2:duration=longest:normalize=0,apad=whole_dur=3,asetpts=N/SR/TB,' +
+        'loudnorm=I=-14:TP=-1:LRA=11:print_format=json[aout]',
+    )
+    expect(measure.slice(-5)).toEqual(['-t', '3', '-f', 'null', '-'])
+
+    const mux = buildExportMuxArgs({
+      video: 'v.mp4',
+      pieces,
+      durationS: 3,
+      output: 'o.mp4',
+      loudnorm: 'loudnorm=I=-14:TP=-1:LRA=11',
+    })
+    const muxGraph = mux[mux.indexOf('-filter_complex') + 1]!.split(';')
+    expect(muxGraph[0]).toBe('[1:a]anull[f0_0]')
+    expect(muxGraph.at(-1)).toMatch(
+      /asetpts=N\/SR\/TB,loudnorm=I=-14:TP=-1:LRA=11,aresample=48000\[aout\]$/,
+    )
+  })
 })
 
 describe('livestream', () => {

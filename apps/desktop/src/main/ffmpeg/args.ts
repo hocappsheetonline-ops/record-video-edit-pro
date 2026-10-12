@@ -1,4 +1,4 @@
-import type { Rect } from '@lumora/core'
+import type { LoudnessSpec, Rect } from '@lumora/core'
 
 export type CaptureBackend = 'ddagrab' | 'gdigrab' | 'x11grab'
 export type VideoEncoder = 'h264_nvenc' | 'h264_amf' | 'h264_qsv' | 'libx264'
@@ -206,20 +206,15 @@ export interface MuxAudioPiece {
 const sec = (n: number) => Number(n.toFixed(6))
 
 /**
- * Ghép video đã dựng (chưa có tiếng) với âm thanh: cắt từng mảnh, đổi tốc độ, chỉnh âm lượng,
- * đặt đúng vị trí rồi trộn lại. Video được chép nguyên, không mã hóa lại.
+ * Đồ thị lọc trộn âm thanh khi xuất: cắt từng mảnh, đổi tốc độ, chỉnh âm lượng, đặt đúng vị trí
+ * rồi trộn lại thành `[aout]`. `first`: số thứ tự của file âm thanh đầu tiên trong danh sách `-i`.
  */
-export function buildExportMuxArgs(options: {
-  video: string
-  pieces: readonly MuxAudioPiece[]
-  durationS: number
-  output: string
-}): string[] {
-  const { video, pieces, durationS, output } = options
-  const head = ['-hide_banner', '-loglevel', 'error', '-y', '-i', video]
-  const tail = ['-movflags', '+faststart', '-t', String(sec(durationS)), output]
-  if (pieces.length === 0) return [...head, '-map', '0:v', '-c:v', 'copy', '-an', ...tail]
-
+function exportAudioGraph(
+  pieces: readonly MuxAudioPiece[],
+  durationS: number,
+  first: number,
+  tail: readonly string[],
+): { inputs: string[]; graph: string } {
   const files = [...new Set(pieces.map((p) => p.path))]
   // File cần lặp được mở với -stream_loop -1; atrim phía sau giới hạn độ dài.
   const inputs = files.flatMap((f) =>
@@ -233,8 +228,8 @@ export function buildExportMuxArgs(options: {
     labels.set(file, outs)
     filters.push(
       count === 1
-        ? `[${i + 1}:a]anull[${outs[0]}]`
-        : `[${i + 1}:a]asplit=${count}${outs.map((o) => `[${o}]`).join('')}`,
+        ? `[${i + first}:a]anull[${outs[0]}]`
+        : `[${i + first}:a]asplit=${count}${outs.map((o) => `[${o}]`).join('')}`,
     )
   })
   const used = new Map<string, number>()
@@ -264,13 +259,45 @@ export function buildExportMuxArgs(options: {
     // mãi (bỏ qua -t, ngốn RAM) khi hai mảnh liền nhau cùng lấy từ một file.
     // asetpts=N/SR/TB đánh lại mốc thời gian liền mạch: mảnh bị cắt đầu (atrim start > 0) làm amix
     // ra mốc thời gian lệch, trình ghép MP4 bỏ hết phần tiếng phía sau (video xuất bị câm).
-    `${mixed.join('')}amix=inputs=${mixed.length}:duration=longest:normalize=0,apad=whole_dur=${sec(durationS)},asetpts=N/SR/TB[aout]`,
+    [
+      `${mixed.join('')}amix=inputs=${mixed.length}:duration=longest:normalize=0`,
+      `apad=whole_dur=${sec(durationS)}`,
+      'asetpts=N/SR/TB',
+      ...tail,
+    ].join(',') + '[aout]',
+  )
+  return { inputs, graph: filters.join(';') }
+}
+
+/**
+ * Ghép video đã dựng (chưa có tiếng) với âm thanh: cắt từng mảnh, đổi tốc độ, chỉnh âm lượng,
+ * đặt đúng vị trí rồi trộn lại. Video được chép nguyên, không mã hóa lại.
+ * `loudnorm`: bộ lọc chuẩn hóa độ to cho cả bản trộn (chuẩn YouTube…), không có thì giữ nguyên.
+ */
+export function buildExportMuxArgs(options: {
+  video: string
+  pieces: readonly MuxAudioPiece[]
+  durationS: number
+  output: string
+  loudnorm?: string | null
+}): string[] {
+  const { video, pieces, durationS, output, loudnorm } = options
+  const head = ['-hide_banner', '-loglevel', 'error', '-y', '-i', video]
+  const tail = ['-movflags', '+faststart', '-t', String(sec(durationS)), output]
+  if (pieces.length === 0) return [...head, '-map', '0:v', '-c:v', 'copy', '-an', ...tail]
+
+  // loudnorm đổi tần số lấy mẫu lên 192 kHz: đưa về 48 kHz.
+  const { inputs, graph } = exportAudioGraph(
+    pieces,
+    durationS,
+    1,
+    loudnorm ? [loudnorm, 'aresample=48000'] : [],
   )
   return [
     ...head,
     ...inputs,
     '-filter_complex',
-    filters.join(';'),
+    graph,
     '-map',
     '0:v',
     '-map',
@@ -282,6 +309,37 @@ export function buildExportMuxArgs(options: {
     '-b:a',
     '192k',
     ...tail,
+  ]
+}
+
+/**
+ * Lượt 1 của chuẩn hóa độ to: trộn âm thanh y như khi xuất rồi chỉ đo (không ghi file).
+ * `loudnorm` in kết quả dạng JSON ở cuối stderr (cần mức log `info`).
+ */
+export function buildLoudnessMeasureArgs(options: {
+  pieces: readonly MuxAudioPiece[]
+  durationS: number
+  spec: LoudnessSpec
+}): string[] {
+  const { pieces, durationS, spec } = options
+  const { inputs, graph } = exportAudioGraph(pieces, durationS, 0, [
+    `loudnorm=I=${spec.i}:TP=${spec.tp}:LRA=${spec.lra}:print_format=json`,
+  ])
+  return [
+    '-hide_banner',
+    '-nostats',
+    '-loglevel',
+    'info',
+    ...inputs,
+    '-filter_complex',
+    graph,
+    '-map',
+    '[aout]',
+    '-t',
+    String(sec(durationS)),
+    '-f',
+    'null',
+    '-',
   ]
 }
 

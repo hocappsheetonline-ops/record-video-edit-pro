@@ -13,7 +13,7 @@ describe('edit-state', () => {
     const edit = createDefaultEdit(project)
     expect(edit.clips).toHaveLength(1)
     expect(edit.cursor.visible).toBe(true)
-    expect(edit.export).toEqual({ resolution: 1080, fps: 60, format: 'mp4' })
+    expect(edit.export).toEqual({ resolution: 1080, fps: 60, format: 'mp4', loudness: 'off' })
     expect(createDefaultEdit({ ...project, cursorHidden: false }).cursor.visible).toBe(false)
   })
 
@@ -51,7 +51,7 @@ describe('edit-state', () => {
     expect(parsed.cursor.size).toBe(0.5)
     expect(parsed.camera.position).toBe('bottom-right')
     expect(parsed.camera).toMatchObject({ x: 1, y: 1, zoom: 1, border: 0 })
-    expect(parsed.export).toEqual({ resolution: 1080, fps: 60, format: 'mp4' })
+    expect(parsed.export).toEqual({ resolution: 1080, fps: 60, format: 'mp4', loudness: 'off' })
   })
 
   it('webcam: bản cũ chỉ có góc → vị trí tự do đúng góc; giá trị tự do được giữ và kẹp', () => {

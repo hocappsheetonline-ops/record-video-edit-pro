@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computePeaks, parseWaveform, waveformSlice } from './waveform'
+import { computePeaks, parseWaveform, waveLevel, waveformSlice } from './waveform'
 
 /** 1 giây im lặng, 1 giây sóng sine biên độ 0.5, 1 giây tiếng nhỏ 0.1 (8 kHz). */
 function samples(): Int16Array {
@@ -35,9 +35,10 @@ describe('waveformSlice', () => {
     expect(bars).toHaveLength(30)
     expect(bars.slice(0, 10).every((b) => b === 0)).toBe(true)
     expect(Math.max(...bars.slice(10, 20))).toBe(1)
+    // Tiếng nhỏ hơn 5 lần (-14 dB) theo thang dB vẫn cao gần nửa cột, nhưng thấp hơn tiếng to.
     const quiet = Math.max(...bars.slice(20))
-    expect(quiet).toBeGreaterThan(0.15)
-    expect(quiet).toBeLessThan(0.3)
+    expect(quiet).toBeGreaterThan(0.4)
+    expect(quiet).toBeLessThan(0.6)
   })
 
   it('chỉ lấy phần của clip (đã cắt), nhiều cột hơn số khoảng vẫn đúng', () => {
@@ -56,6 +57,19 @@ describe('waveformSlice', () => {
     expect(Math.max(...waveformSlice({ bucketMs: 20, peaks: [2, 3, 2] }, 0, 60, 3))).toBeLessThan(
       0.2,
     )
+  })
+})
+
+describe('waveLevel', () => {
+  it('thang dB: to nhất = 1, nhỏ dần đều, tạp âm dưới -45 dBFS = 0', () => {
+    expect(waveLevel(200, 200)).toBe(1)
+    expect(waveLevel(0, 200)).toBe(0)
+    expect(waveLevel(1, 200)).toBe(0)
+    const half = waveLevel(100, 200)
+    const tenth = waveLevel(20, 200)
+    expect(half).toBeGreaterThan(0.7)
+    expect(tenth).toBeGreaterThan(0.3)
+    expect(tenth).toBeLessThan(half)
   })
 })
 

@@ -12,6 +12,7 @@ import { parseAudioClips, type AudioClip } from './audio-clips'
 import { DEFAULT_AUDIO_FX, parseAudioFx, type AudioFx } from './audio-fx'
 import { NO_BEAUTY, parseBeauty, type BeautyStyle } from './beauty'
 import { parseEffects, type EffectRegion } from './effects'
+import { LOUDNESS_TARGETS, type LoudnessTarget } from './loudness'
 import { DEFAULT_LOOK, isDefaultLook, parseLook, type Look } from './look'
 import { parseClipTransform } from './orient'
 import { parseSpeedCurve } from './speed-curve'
@@ -144,6 +145,8 @@ export interface ExportSettings {
   resolution: Resolution
   fps: 30 | 60
   format: 'mp4' | 'gif'
+  /** Chuẩn hóa độ to của cả video khi xuất (YouTube -14 LUFS, podcast -16 LUFS). */
+  loudness: LoudnessTarget
 }
 
 export interface EditState {
@@ -231,7 +234,12 @@ export function createDefaultEdit(
     effects: [],
     overlays: [],
     look: { ...DEFAULT_LOOK, adjust: { ...DEFAULT_LOOK.adjust } },
-    export: { resolution: 1080, fps: project.fps >= 60 ? 60 : 30, format: 'mp4' },
+    export: {
+      resolution: 1080,
+      fps: project.fps >= 60 ? 60 : 30,
+      format: 'mp4',
+      loudness: 'off',
+    },
     captions: { ...DEFAULT_CAPTIONS, lines: [] },
     markers: [],
     tracks: DEFAULT_TRACKS,
@@ -435,6 +443,7 @@ export function parseEditState(
       resolution: pick(RESOLUTIONS, e.resolution, base.export.resolution),
       fps: pick([30, 60] as const, e.fps, base.export.fps),
       format: e.format === 'gif' ? 'gif' : 'mp4',
+      loudness: pick(LOUDNESS_TARGETS, e.loudness, base.export.loudness),
     },
     captions: parseCaptions(input.captions, duration),
     markers: parseMarkers(input.markers, Number.POSITIVE_INFINITY),

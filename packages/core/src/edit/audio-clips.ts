@@ -1,4 +1,5 @@
 import { parseAudioFx, type AudioFx } from './audio-fx'
+import { loudestPeak, waveLevel } from './waveform'
 
 /** Một đoạn âm thanh thêm vào video: nhạc nền hoặc hiệu ứng âm thanh (kiểu CapCut). */
 export interface AudioClip {
@@ -197,11 +198,11 @@ export function audioClipBars(
   bars: number,
 ): number[] {
   const n = Math.max(0, Math.floor(bars))
-  const loudest = Math.max(24, ...wave.peaks)
+  const loudest = loudestPeak(wave.peaks)
   return Array.from({ length: n }, (_, i) => {
     const t = clip.start + ((i + 0.5) * clip.duration) / n
     const at = audioClipMediaTime(clip, t)
     if (at === null) return 0
-    return Math.min(1, (wave.peaks[Math.floor(at / wave.bucketMs)] ?? 0) / loudest)
+    return waveLevel(wave.peaks[Math.floor(at / wave.bucketMs)] ?? 0, loudest)
   })
 }

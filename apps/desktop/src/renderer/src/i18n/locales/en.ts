@@ -822,6 +822,17 @@ export const en: Messages = {
       format: 'Format',
       resolution: 'Resolution',
       fps: 'Frame rate',
+      loudness: 'Normalize loudness',
+      loudnessOff: 'Off',
+      loudnessYoutube: 'YouTube',
+      loudnessPodcast: 'Podcast',
+      loudnessHint: {
+        off: 'Keeps loudness as edited.',
+        youtube:
+          'Brings the whole video (voice, music, effects) to -14 LUFS with -1 dBTP peaks, so it sounds as loud as other videos and YouTube does not turn it down.',
+        podcast:
+          'Brings the whole video to -16 LUFS with -1.5 dBTP peaks (Spotify, Apple Podcasts).',
+      },
       start: 'Export video',
       rendering: 'Rendering… {{percent}}%',
       muxing: 'Adding audio…',
