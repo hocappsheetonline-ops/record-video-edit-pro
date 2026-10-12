@@ -43,6 +43,9 @@ export const IPC = {
   projectsGet: 'projects:get',
   projectsDelete: 'projects:delete',
   projectsRename: 'projects:rename',
+  projectsLock: 'projects:lock',
+  projectsUnlock: 'projects:unlock',
+  logRenderer: 'log:renderer',
   projectsDuplicate: 'projects:duplicate',
   projectsReveal: 'projects:reveal',
   projectsGetEdit: 'projects:get-edit',
@@ -353,6 +356,11 @@ export interface LumoraApi {
 
   listProjects(): Promise<ProjectSummary[]>
   getProject(folder: string): Promise<Project | null>
+  /** Đánh dấu dự án đang mở; `recovered` khi lần trước app tắt đột ngột lúc đang chỉnh sửa. */
+  lockProject(folder: string): Promise<{ recovered: boolean }>
+  unlockProject(folder: string): Promise<void>
+  /** Ghi lỗi giao diện vào nhật ký (main.log). */
+  reportError(message: string): Promise<void>
   /** Đổi tên hiển thị của dự án. */
   renameProject(folder: string, name: string): Promise<Project>
   /** Nhân đôi dự án; trả về thư mục của bản sao. */

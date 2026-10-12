@@ -110,6 +110,8 @@ export const en: Messages = {
     cursorHidden: 'Cursor recorded separately',
   },
   editor: {
+    recovered:
+      'Lumora closed unexpectedly last time. Your latest autosaved edit has been restored.',
     title: 'Editor',
     description: 'Auto-zoom, smooth cursor, backgrounds, webcam, timeline and export.',
     empty: 'No project open. Pick a recording in',
@@ -294,6 +296,8 @@ export const en: Messages = {
       resize: 'Drag to resize the timeline',
     },
     player: {
+      zoom: 'Preview zoom',
+      fit: 'Fit',
       guides: {
         none: 'Show guides',
         thirds: 'Rule of thirds (click for TikTok safe area)',

@@ -45,6 +45,7 @@ import {
   duplicateProject,
   renameProject,
 } from './projects/library'
+import { acquireLock, releaseLock } from './projects/session-lock'
 import { exportPack, importPack, packFileName } from './projects/share'
 import type { SecretStore } from './secret-store'
 import type { OnlineService } from './content/online'
@@ -138,6 +139,8 @@ export interface IpcDeps {
   updates: Pick<UpdateService, 'state' | 'check' | 'install'>
   memes: MemesIpc
   openLogs(): Promise<void>
+  /** Ghi lỗi của giao diện (renderer) vào main.log. */
+  logRendererError?(message: string): void
 }
 
 function assertSecretKey(value: unknown) {
@@ -176,6 +179,15 @@ function assertFolder(folder: unknown): string {
 }
 
 /** Đăng ký các handler IPC. Dữ liệu từ giao diện luôn được kiểm tra lại ở đây. */
+/** Dự án đang mở trong trình chỉnh sửa (để gỡ khóa khi thoát app bình thường). */
+const locked = new Set<string>()
+
+/** Gỡ khóa mọi dự án đang mở (gọi khi app thoát bình thường). */
+export async function releaseAllLocks(): Promise<void> {
+  await Promise.all([...locked].map((dir) => releaseLock(dir).catch(() => undefined)))
+  locked.clear()
+}
+
 export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): void {
   const { settings, secrets, recording, projects } = deps
 
@@ -184,6 +196,20 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
   ipcMain.handle(IPC.updateCheck, () => deps.updates.check())
   ipcMain.handle(IPC.updateInstall, () => deps.updates.install())
   ipcMain.handle(IPC.openLogs, () => deps.openLogs())
+  ipcMain.handle(IPC.logRenderer, (_event, message: unknown) => {
+    if (typeof message === 'string' && message) deps.logRendererError?.(message.slice(0, 4000))
+  })
+  // Khóa phiên chỉnh sửa: phát hiện app bị tắt đột ngột lần trước (bản tự lưu được mở lại).
+  ipcMain.handle(IPC.projectsLock, async (_event, folder: unknown) => {
+    const dir = await projectDir(folder)
+    locked.add(dir)
+    return acquireLock(dir)
+  })
+  ipcMain.handle(IPC.projectsUnlock, async (_event, folder: unknown) => {
+    const dir = await projectDir(folder)
+    locked.delete(dir)
+    await releaseLock(dir)
+  })
   ipcMain.handle(IPC.settingsGet, () => settings.get())
   ipcMain.handle(IPC.settingsUpdate, (_event, patch: unknown) =>
     settings.update(

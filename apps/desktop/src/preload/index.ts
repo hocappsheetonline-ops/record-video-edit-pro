@@ -40,6 +40,9 @@ const api: LumoraApi = {
   onRecordingError: (listener) => subscribe(EVENTS.recordingError, listener),
 
   listProjects: () => ipcRenderer.invoke(IPC.projectsList),
+  lockProject: (folder) => ipcRenderer.invoke(IPC.projectsLock, folder),
+  unlockProject: (folder) => ipcRenderer.invoke(IPC.projectsUnlock, folder),
+  reportError: (message) => ipcRenderer.invoke(IPC.logRenderer, message),
   renameProject: (folder, name) => ipcRenderer.invoke(IPC.projectsRename, folder, name),
   duplicateProject: (folder, suffix) => ipcRenderer.invoke(IPC.projectsDuplicate, folder, suffix),
   getProject: (folder) => ipcRenderer.invoke(IPC.projectsGet, folder),

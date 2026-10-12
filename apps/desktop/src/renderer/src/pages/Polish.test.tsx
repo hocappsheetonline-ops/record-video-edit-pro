@@ -131,6 +131,34 @@ describe('hoàn thiện (v0.9)', () => {
   })
 })
 
+describe('ổn định (v0.9.1)', () => {
+  it('mở dự án thì khóa phiên; lần trước tắt đột ngột thì báo đã khôi phục; rời đi thì gỡ khóa', async () => {
+    const fake = createFakeApi()
+    fake.api.lockProject.mockResolvedValueOnce({ recovered: true })
+    window.lumora = fake.api
+    useAppStore.setState({
+      page: 'editor',
+      editorFolder: sampleSummary.folder,
+      settings: { ...DEFAULT_SETTINGS, onboardingDone: true },
+    })
+    const view = render(<EditorPage />)
+    await screen.findByTestId('editor-title')
+    expect(fake.api.lockProject).toHaveBeenCalledWith(sampleSummary.folder)
+    expect(await screen.findByTestId('toast')).toHaveTextContent('tắt đột ngột')
+    view.unmount()
+    expect(fake.api.unlockProject).toHaveBeenCalledWith(sampleSummary.folder)
+  })
+
+  it('tỉ lệ xem trước: chọn 50% / Vừa khung', async () => {
+    await setup()
+    await userEvent.selectOptions(screen.getByTestId('preview-zoom'), '50')
+    expect(s().previewZoom).toBe(50)
+    expect(screen.getByTestId('player-area').className).toContain('overflow-auto')
+    await userEvent.selectOptions(screen.getByTestId('preview-zoom'), 'fit')
+    expect(s().previewZoom).toBe('fit')
+  })
+})
+
 describe('cài đặt và dự án', () => {
   it('cài đặt trình chỉnh sửa: chất lượng xem trước, mẫu dự án, xem lại hướng dẫn', async () => {
     const fake = createFakeApi()

@@ -105,6 +105,7 @@ export const vi = {
     cursorHidden: 'Con trỏ được ghi riêng',
   },
   editor: {
+    recovered: 'Lần trước app tắt đột ngột khi đang chỉnh sửa. Đã mở lại bản tự lưu gần nhất.',
     title: 'Trình chỉnh sửa',
     description: 'Tự động zoom, con trỏ mượt, nền, webcam, timeline và xuất video.',
     empty: 'Chưa mở dự án nào. Hãy chọn một bản quay trong',
@@ -287,6 +288,8 @@ export const vi = {
       resize: 'Kéo để đổi chiều cao timeline',
     },
     player: {
+      zoom: 'Tỉ lệ xem trước',
+      fit: 'Vừa khung',
       guides: {
         none: 'Hiện đường gióng',
         thirds: 'Đường chia ba (bấm để đổi sang vùng an toàn TikTok)',

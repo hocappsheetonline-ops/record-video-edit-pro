@@ -141,6 +141,7 @@ function readHeight(): number {
 function PlayerBar({ onFullscreen }: { onFullscreen: () => void }) {
   const { t } = useTranslation()
   const guides = useEditorStore((s) => s.guides)
+  const zoom = useEditorStore((s) => s.previewZoom)
   const lowPreview = useEditorStore((s) => s.lowPreview)
   const time = useEditorStore((s) => s.time)
   const playing = useEditorStore((s) => s.playing)
@@ -218,7 +219,7 @@ function PlayerBar({ onFullscreen }: { onFullscreen: () => void }) {
           <SkipForward size={16} aria-hidden />
         </button>
       </div>
-      <div className="flex w-56 items-center justify-end gap-1">
+      <div className="flex w-72 items-center justify-end gap-1">
         {lowPreview && (
           <span
             data-testid="preview-low"
@@ -228,6 +229,23 @@ function PlayerBar({ onFullscreen }: { onFullscreen: () => void }) {
             {t('editor.player.low')}
           </span>
         )}
+        <select
+          value={String(zoom)}
+          aria-label={t('editor.player.zoom')}
+          data-tooltip={t('editor.player.zoom')}
+          data-testid="preview-zoom"
+          onChange={(e) =>
+            s.setPreviewZoom(e.target.value === 'fit' ? 'fit' : Number(e.target.value))
+          }
+          className="rounded-md border border-border bg-surface-2 px-1.5 py-1 text-xs"
+        >
+          <option value="fit">{t('editor.player.fit')}</option>
+          {[25, 50, 75, 100, 150, 200].map((z) => (
+            <option key={z} value={z}>
+              {z}%
+            </option>
+          ))}
+        </select>
         <button
           type="button"
           className={`${iconButton} ${guides !== 'none' ? 'text-accent' : ''}`}
@@ -334,6 +352,7 @@ export function EditorPage() {
   const loadError = useEditorStore((s) => s.loadError)
   const [exporting, setExporting] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const previewZoom = useEditorStore((s) => s.previewZoom)
   // Phím ? mở bảng phím tắt.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -353,7 +372,14 @@ export function EditorPage() {
 
   useEffect(() => {
     if (folder) void useEditorStore.getState().load(folder)
-    return () => useEditorStore.getState().setPlaying(false)
+    return () => {
+      useEditorStore.getState().setPlaying(false)
+      // Rời trình chỉnh sửa bình thường: gỡ khóa (không phải tắt đột ngột).
+      if (folder)
+        void lumora()
+          .unlockProject(folder)
+          .catch(() => undefined)
+    }
   }, [folder])
 
   if (!folder) {
@@ -445,7 +471,12 @@ export function EditorPage() {
         <section className="flex min-w-0 flex-1 flex-col" aria-label={t('editor.player.title')}>
           <div
             ref={playerRef}
-            className="relative flex min-h-0 flex-1 items-center justify-center bg-[#050507] p-4"
+            data-testid="player-area"
+            className={`relative flex min-h-0 flex-1 bg-[#050507] p-4 ${
+              previewZoom === 'fit'
+                ? 'items-center justify-center'
+                : 'items-[safe_center] justify-[safe_center] overflow-auto'
+            }`}
           >
             <PreviewCanvas project={project} folder={folder} />
           </div>

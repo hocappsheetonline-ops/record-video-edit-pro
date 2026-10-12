@@ -23,6 +23,34 @@ Kế hoạch đầy đủ nằm trong [PLAN.md](PLAN.md).
 3. Giải nén rồi chạy `Lumora-Setup-x.y.z.exe`.
 4. Nếu Windows hiện "Windows protected your PC", bấm **More info** rồi **Run anyway**. Cảnh báo này xuất hiện vì app chưa được ký số.
 
+## Hướng dẫn sử dụng nhanh
+
+1. **Quay**: trang Quay → chọn Toàn màn hình / Một vùng / Cửa sổ, webcam, micro → **Bắt đầu quay** (Ctrl+Shift+R để dừng).
+
+   ![Trang Quay](docs/images/record.jpg)
+
+2. **Chỉnh sửa**: Dự án → chọn bản quay → **Chỉnh sửa**. Bên trái là thư viện (meme, âm thanh, chữ, nhãn dán, hiệu ứng, bộ lọc, chuyển cảnh, phụ đề, AI), giữa là khung xem trước, phải là thuộc tính, dưới là timeline. Lần đầu mở có hướng dẫn 5 bước; bấm **?** để xem phím tắt.
+
+   ![Trình chỉnh sửa](docs/images/editor.jpg)
+
+3. **Chữ và hình**: thư viện Văn bản có 24 mẫu; chọn lớp chữ để đổi phông, màu, viền, bóng, nền, hiệu ứng chữ, hoặc cho giọng AI đọc.
+
+   ![Bảng chữ](docs/images/text.jpg)
+
+4. **Timeline**: kéo khối để dời (tự hít dính), kéo mép để đổi độ dài, chuột phải để sao chép / nhân đôi / xóa dồn / đưa lên lớp trên; M thêm marker.
+
+   ![Menu chuột phải trên timeline](docs/images/timeline-menu.jpg)
+
+5. **Phụ đề**: thư viện Phụ đề → **Tạo phụ đề** (cần key ElevenLabs) → chọn mẫu (ví dụ TikTok), dịch hoặc song ngữ (cần key Claude).
+
+   ![Phụ đề kiểu TikTok](docs/images/captions.jpg)
+
+6. **Xuất**: nút **Xuất** → MP4 hoặc GIF, 720p–4K, 30/60 fps. Đóng hộp thoại vẫn chỉnh sửa được; tiến độ ở nút Việc đang làm.
+
+   ![Xuất video](docs/images/export.jpg)
+
+Các thay đổi theo từng phiên bản: [CHANGELOG.md](CHANGELOG.md).
+
 ## Quay video
 
 1. Mở tab **Quay** và chọn **Toàn màn hình**, **Một vùng** hoặc **Cửa sổ**.
@@ -90,6 +118,7 @@ Tính năng:
 - **Việc chạy nền**: xuất video, nhập video, ghép bản quay, đọc kịch bản AI, tạo phụ đề hiện ở nút **Việc đang làm** trên đầu trình chỉnh sửa (tiến độ, hủy). Xuất dùng bản chụp lúc bấm nên đóng hộp thoại xuất là chỉnh sửa tiếp được; xong có thông báo kèm nút mở thư mục.
 - **Lịch sử chỉnh sửa** (nút đồng hồ trên thanh công cụ timeline): danh sách từng bước ("Thêm lớp phủ", "Sửa webcam"…), bấm để quay về hoặc tới bước bất kỳ; chú thích nút Hoàn tác / Làm lại ghi rõ bước sẽ hoàn tác.
 - **Đường gióng xem trước**: chia ba, hoặc vùng an toàn TikTok / Shorts (vùng bị chữ và nút của ứng dụng che). Khung xem trước tự hạ xuống 540p khi máy chậm (nhãn "Xem trước nhẹ"); chỉnh trong Cài đặt → Trình chỉnh sửa.
+- **An toàn dữ liệu**: bản chỉnh sửa tự lưu liên tục; nếu app tắt đột ngột (mất điện, treo máy), lần mở sau báo đã khôi phục bản tự lưu. Lỗi giao diện được ghi vào nhật ký để báo lỗi. **Tỉ lệ xem trước** Vừa khung hoặc 25–200 %.
 - **Hướng dẫn lần đầu** 5 bước khi mở trình chỉnh sửa (xem lại trong Cài đặt), bảng **phím tắt** (phím ? hoặc nút bàn phím).
 - **Dự án**: đổi tên, nhân đôi (không chép video đã xuất); **mẫu cho bản quay mới** trong Cài đặt: hướng dẫn 16:9, TikTok / Shorts 9:16 (phủ kín khung, phụ đề kiểu TikTok), vuông 1:1.
 - **Phím tắt**: Space phát/dừng · S tách · **A xóa phần bên trái đầu phát** · **D xóa phần bên phải đầu phát** · Delete xóa mục đang chọn · Shift+Delete xóa dồn · Ctrl+C / X / V / D / A · M marker · N hít dính · Esc bỏ chọn · Home/End về đầu/cuối · ←/→ lùi/tới 1 giây · Ctrl+Z / Ctrl+Y.

@@ -21,4 +21,20 @@ if (view === 'bar' || view === 'region') {
   root = view === 'bar' ? <RecordingBar /> : <RegionPicker />
 }
 
+// Lỗi không bắt được trong giao diện: ghi vào nhật ký (Cài đặt → Mở thư mục nhật ký) để báo lỗi.
+const report = (message: string) => {
+  try {
+    void window.lumora?.reportError(message).catch(() => undefined)
+  } catch {
+    // Cửa sổ chưa có cầu nối (khi chạy test): bỏ qua.
+  }
+}
+window.addEventListener('error', (e) =>
+  report(`${e.message} @ ${e.filename}:${e.lineno}:${e.colno}\n${e.error?.stack ?? ''}`),
+)
+window.addEventListener('unhandledrejection', (e) => {
+  const r = e.reason as { stack?: string; message?: string } | undefined
+  report(`unhandled rejection: ${r?.stack ?? r?.message ?? String(e.reason)}`)
+})
+
 createRoot(document.getElementById('root')!).render(root)

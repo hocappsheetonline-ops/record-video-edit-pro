@@ -324,6 +324,9 @@ export function createFakeApi(
       async (_folder, file) => `fx-${file.replace(/\.[^.]+$/, '')}-test.m4a`,
     ),
     importVideo: vi.fn<LumoraApi['importVideo']>(async () => null),
+    lockProject: vi.fn<LumoraApi['lockProject']>(async () => ({ recovered: false })),
+    unlockProject: vi.fn<LumoraApi['unlockProject']>(async () => {}),
+    reportError: vi.fn<LumoraApi['reportError']>(async () => {}),
     renameProject: vi.fn<LumoraApi['renameProject']>(async (_folder, name) => ({
       ...sampleProject,
       name,

@@ -13,7 +13,7 @@ import { EVENTS } from '@shared/ipc'
 import { AiService } from './ai/service'
 import { ExportManager } from './export/manager'
 import { runFfmpeg } from './ffmpeg/runner'
-import { registerIpc } from './ipc'
+import { registerIpc, releaseAllLocks } from './ipc'
 import { LiveController } from './live/controller'
 import { Logger, loggingIpc } from './logger'
 import { UpdateService, type UpdaterLike } from './updater'
@@ -167,7 +167,10 @@ if (!app.requestSingleInstanceLock()) {
       send: (channel, payload) => mainWindow?.webContents.send(channel, payload),
       elevenLabsKey: () => secrets.get('elevenlabs'),
     })
-    app.on('before-quit', () => void live.shutdown())
+    app.on('before-quit', () => {
+      void live.shutdown()
+      void releaseAllLocks()
+    })
 
     const updates = new UpdateService({
       // Lỗi khi nạp bộ cập nhật không được làm hỏng việc mở app.
@@ -224,6 +227,7 @@ if (!app.requestSingleInstanceLock()) {
         useInProject: (file, dir) => memes.useInProject(file, dir),
       },
       updates,
+      logRendererError: (message: string) => logger.error('renderer', message),
       openLogs: async () => {
         await shell.openPath(dirname(logger.file))
       },

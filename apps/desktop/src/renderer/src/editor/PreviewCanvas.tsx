@@ -83,8 +83,17 @@ export function PreviewCanvas({ project, folder }: { project: Project; folder: s
   const drag = useRef<Drag | null>(null)
   const [box, setBox] = useState<Box | null>(null)
   /** Vị trí / tỉ lệ thu nhỏ của canvas trên màn hình (để đặt khung chọn). */
-  const [metrics, setMetrics] = useState({ left: 0, top: 0, scale: 0, width: 0, height: 0 })
+  const [metrics, setMetrics] = useState({
+    left: 0,
+    top: 0,
+    scale: 0,
+    width: 0,
+    height: 0,
+    canvasW: 0,
+    canvasH: 0,
+  })
   const guides = useEditorStore((s) => s.guides)
+  const zoom = useEditorStore((s) => s.previewZoom)
   const [hover, setHover] = useState(false)
   const [dragging, setDragging] = useState(false)
 
@@ -107,6 +116,8 @@ export function PreviewCanvas({ project, folder }: { project: Project; folder: s
         scale: canvas.width > 0 ? canvas.offsetWidth / canvas.width : 0,
         width: canvas.offsetWidth,
         height: canvas.offsetHeight,
+        canvasW: canvas.width,
+        canvasH: canvas.height,
       })
     }
     update()
@@ -116,7 +127,9 @@ export function PreviewCanvas({ project, folder }: { project: Project; folder: s
         s.selection !== prev.selection ||
         s.time !== prev.time ||
         s.videoSize !== prev.videoSize ||
-        s.guides !== prev.guides
+        s.guides !== prev.guides ||
+        s.previewZoom !== prev.previewZoom ||
+        s.lowPreview !== prev.lowPreview
       )
         update()
     })
@@ -296,8 +309,20 @@ export function PreviewCanvas({ project, folder }: { project: Project; folder: s
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerCancel={endDrag}
-        style={{ cursor: dragging ? 'grabbing' : hover ? 'move' : 'default' }}
-        className="max-h-full max-w-full touch-none bg-black object-contain shadow-[0_8px_40px_rgba(0,0,0,0.6)]"
+        data-zoom={zoom}
+        style={{
+          cursor: dragging ? 'grabbing' : hover ? 'move' : 'default',
+          // Tỉ lệ cố định: cỡ theo khung hình xem trước 720p (100% = 1 điểm ảnh khung / 1px).
+          ...(zoom !== 'fit' && metrics.canvasW > 0
+            ? {
+                width: (metrics.canvasW * zoom) / 100,
+                height: (metrics.canvasH * zoom) / 100,
+                maxWidth: 'none',
+                maxHeight: 'none',
+              }
+            : {}),
+        }}
+        className="max-h-full max-w-full shrink-0 touch-none bg-black object-contain shadow-[0_8px_40px_rgba(0,0,0,0.6)]"
       />
       {box && scale > 0 && (
         <div

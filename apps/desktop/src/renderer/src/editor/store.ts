@@ -77,6 +77,8 @@ import {
 } from '@lumora/core'
 import type { AudioAsset, MediaAsset } from '@shared/ipc'
 import { lumora } from '../api'
+import i18n from '../i18n'
+import { useJobs } from './jobs'
 import { useAppStore } from '../store/app'
 
 /** Mục chọn được nhiều cùng lúc (Ctrl+click, kéo khung chọn, Ctrl+A). */
@@ -140,6 +142,8 @@ interface EditorStore {
   clipboard: ClipboardData | null
   /** Xem trước đang ở chất lượng nhẹ (540p) vì máy chậm hoặc do cài đặt. */
   lowPreview: boolean
+  /** Tỉ lệ khung xem trước: vừa khung, hoặc phần trăm cỡ thật (25–200). */
+  previewZoom: 'fit' | number
   /** Đường gióng trên khung xem trước. */
   guides: 'none' | 'thirds' | 'safe'
   /** Hít dính khi kéo trên timeline (phím N). */
@@ -179,6 +183,7 @@ interface EditorStore {
   rippleDeleteSelection(): void
   setSnapping(on: boolean): void
   setGuides(mode: EditorStore['guides']): void
+  setPreviewZoom(zoom: EditorStore['previewZoom']): void
   setSnapLine(t: number | null): void
   /** Đổi thứ tự vẽ của lớp phủ (lên / xuống một lớp, lên trên cùng, xuống dưới cùng). */
   reorderOverlay(id: string, to: 'up' | 'down' | 'top' | 'bottom'): void
@@ -312,6 +317,7 @@ const initial = {
   selected: [] as SelItem[],
   clipboard: null as ClipboardData | null,
   guides: 'none' as EditorStore['guides'],
+  previewZoom: 'fit' as EditorStore['previewZoom'],
   lowPreview: false,
   snapping: true,
   snapLine: null as number | null,
@@ -474,6 +480,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       )
     }
     const rect = project.source.captureRect
+    // Đánh dấu đang chỉnh sửa; lần trước app tắt đột ngột thì báo đã mở lại bản tự lưu.
+    void api
+      .lockProject(folder)
+      .then((r) => {
+        if (r.recovered && get().folder === folder)
+          useJobs.getState().toast({ kind: 'info', text: i18n.t('editor.recovered') }, 8000)
+      })
+      .catch(() => undefined)
     set({
       project,
       events,
@@ -670,6 +684,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       audioClips: rippleDeleteAudio(e.audioClips, ids('audio')),
     }))
     set({ selection: null, selected: [] })
+  },
+
+  setPreviewZoom(zoom) {
+    set({ previewZoom: zoom })
   },
 
   setGuides(mode) {

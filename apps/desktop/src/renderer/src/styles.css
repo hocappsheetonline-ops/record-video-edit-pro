@@ -67,3 +67,19 @@ html.transparent-window body {
   background: transparent;
   overflow: hidden;
 }
+
+/* Điều hướng bằng bàn phím (Tab): viền màu nhấn rõ ràng trên mọi nút / ô nhập. */
+:where(
+  button,
+  a,
+  input,
+  select,
+  textarea,
+  [tabindex],
+  [role='tab'],
+  [role='menuitem']
+):focus-visible {
+  outline: 2px solid var(--lm-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
