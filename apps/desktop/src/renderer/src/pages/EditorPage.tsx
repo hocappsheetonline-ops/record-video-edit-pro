@@ -29,9 +29,20 @@ import { JobsButton, ToastLayer } from '../editor/JobsUi'
 import { useEditorStore } from '../editor/store'
 import { Timeline } from '../editor/Timeline'
 import { formatTimecode } from '../editor/timeline-math'
+import { Splitter } from '../editor/ui'
 import { useAppStore } from '../store/app'
 
-const TIMELINE_KEY = 'lumora.timelineHeight'
+/** Kích thước các bảng (px): mặc định, giới hạn và khóa lưu trong localStorage. */
+const PANES = {
+  library: { key: 'lumora.libraryWidth', size: 360, min: 280, max: 640 },
+  props: { key: 'lumora.propsWidth', size: 300, min: 240, max: 560 },
+  timeline: { key: 'lumora.timelineHeight', size: 300, min: 200 },
+} as const
+/** Thanh chia rộng 6px; khung xem trước luôn giữ ít nhất 360px khi cửa sổ còn đủ chỗ. */
+const SPLITTER = 6
+const PLAYER_MIN = 360
+
+type Panes = { library: number; props: number }
 const iconButton =
   'flex size-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-text/8 hover:text-text disabled:opacity-40'
 
@@ -145,12 +156,93 @@ function useShortcuts() {
   }, [])
 }
 
-function readHeight(): number {
+function readSize(pane: { key: string; size: number; min: number }): number {
   try {
-    const v = Number(localStorage.getItem(TIMELINE_KEY))
-    return Number.isFinite(v) && v >= 200 ? v : 300
+    const v = Number(localStorage.getItem(pane.key))
+    return Number.isFinite(v) && v >= pane.min ? v : pane.size
   } catch {
-    return 300
+    return pane.size
+  }
+}
+
+function saveSize(key: string, v: number) {
+  try {
+    localStorage.setItem(key, String(Math.round(v)))
+  } catch {
+    // Không lưu được (chế độ riêng tư…) thì chỉ giữ trong phiên này.
+  }
+}
+
+/** Chỗ còn lại cho một bảng bên sau khi trừ bảng bên kia, hai thanh chia và khung xem trước. */
+const sideRoom = (other: number) => window.innerWidth - other - 2 * SPLITTER - PLAYER_MIN
+const clampLibrary = (w: number, props: number) =>
+  Math.max(PANES.library.min, Math.min(PANES.library.max, sideRoom(props), w))
+const clampProps = (w: number, library: number) =>
+  Math.max(PANES.props.min, Math.min(PANES.props.max, sideRoom(library), w))
+const clampTimeline = (h: number) =>
+  Math.max(PANES.timeline.min, Math.min(window.innerHeight * 0.6, h))
+
+/** Cửa sổ hẹp: thư viện nhường chỗ trước, rồi tới bảng thuộc tính. */
+function fitPanes(p: Panes): Panes {
+  const library = clampLibrary(p.library, p.props)
+  const props = clampProps(p.props, library)
+  return library === p.library && props === p.props ? p : { library, props }
+}
+
+const readPanes = (): Panes =>
+  fitPanes({ library: readSize(PANES.library), props: readSize(PANES.props) })
+const readTimelineHeight = () => clampTimeline(readSize(PANES.timeline))
+
+/**
+ * Chiều rộng hai bảng bên và chiều cao timeline: kéo thanh chia để đổi, nhấp đúp để về
+ * mặc định, nhớ cho lần sau. Độ lệch kéo tính từ lúc bắt đầu bấm nên nhớ giá trị lúc đó.
+ */
+function usePaneSizes() {
+  const [panes, setPanes] = useState(readPanes)
+  const [timelineHeight, setTimelineHeight] = useState(readTimelineHeight)
+  const start = useRef<{ panes: Panes; timeline: number } | null>(null)
+  useEffect(() => {
+    saveSize(PANES.library.key, panes.library)
+    saveSize(PANES.props.key, panes.props)
+  }, [panes])
+  useEffect(() => saveSize(PANES.timeline.key, timelineHeight), [timelineHeight])
+  // Cửa sổ thu nhỏ: kẹp lại để khung xem trước không bị bóp.
+  useEffect(() => {
+    const fit = () => {
+      setPanes(fitPanes)
+      setTimelineHeight(clampTimeline)
+    }
+    window.addEventListener('resize', fit)
+    return () => window.removeEventListener('resize', fit)
+  }, [])
+  const begin = () => (start.current ??= { panes, timeline: timelineHeight })
+  const end = () => {
+    start.current = null
+  }
+  return {
+    panes,
+    timelineHeight,
+    library: {
+      onDelta: (d: number) => {
+        const s = begin().panes
+        setPanes({ ...s, library: clampLibrary(s.library + d, s.props) })
+      },
+      onEnd: end,
+      onReset: () => setPanes((p) => fitPanes({ ...p, library: PANES.library.size })),
+    },
+    props: {
+      onDelta: (d: number) => {
+        const s = begin().panes
+        setPanes({ ...s, props: clampProps(s.props - d, s.library) })
+      },
+      onEnd: end,
+      onReset: () => setPanes((p) => fitPanes({ ...p, props: PANES.props.size })),
+    },
+    timeline: {
+      onDelta: (d: number) => setTimelineHeight(clampTimeline(begin().timeline - d)),
+      onEnd: end,
+      onReset: () => setTimelineHeight(clampTimeline(PANES.timeline.size)),
+    },
   }
 }
 
@@ -405,9 +497,8 @@ export function EditorPage() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
-  const [timelineHeight, setTimelineHeight] = useState(readHeight)
+  const sizes = usePaneSizes()
   const playerRef = useRef<HTMLDivElement>(null)
-  const resizing = useRef<{ y: number; h: number } | null>(null)
   const closeExport = useCallback(() => setExporting(false), [])
   const openExport = useCallback(() => {
     useEditorStore.getState().setPlaying(false)
@@ -453,14 +544,6 @@ export function EditorPage() {
       </p>
     )
   if (!project || !edit) return <p className="p-8 text-muted">{t('editor.loading')}</p>
-
-  const saveHeight = (h: number) => {
-    try {
-      localStorage.setItem(TIMELINE_KEY, String(Math.round(h)))
-    } catch {
-      // Không lưu được (chế độ riêng tư…) thì chỉ giữ trong phiên này.
-    }
-  }
 
   return (
     <div className="flex h-full flex-col bg-bg" data-testid="editor">
@@ -513,9 +596,19 @@ export function EditorPage() {
       </InTitleBar>
 
       <div className="flex min-h-0 flex-1">
-        <aside className="w-[330px] shrink-0 border-r border-border bg-surface xl:w-[420px]">
+        <aside
+          data-testid="pane-library"
+          className="min-w-0 shrink-0 overflow-hidden border-r border-border bg-surface"
+          style={{ width: sizes.panes.library }}
+        >
           <MediaBrowser />
         </aside>
+        <Splitter
+          orientation="vertical"
+          label={t('editor.panes.resizeLibrary')}
+          testId="pane-resize-library"
+          {...sizes.library}
+        />
         <section className="flex min-w-0 flex-1 flex-col" aria-label={t('editor.player.title')}>
           <div className="flex h-9 shrink-0 items-center border-b border-border bg-surface px-3 text-xs font-medium text-muted">
             {t('editor.player.title')}
@@ -533,31 +626,28 @@ export function EditorPage() {
           </div>
           <PlayerBar onFullscreen={() => void playerRef.current?.requestFullscreen?.()} />
         </section>
-        <aside className="w-[280px] shrink-0 border-l border-border bg-surface xl:w-[320px]">
+        <Splitter
+          orientation="vertical"
+          label={t('editor.panes.resizeProps')}
+          testId="pane-resize-props"
+          {...sizes.props}
+        />
+        <aside
+          data-testid="pane-props"
+          className="min-w-0 shrink-0 overflow-hidden border-l border-border bg-surface"
+          style={{ width: sizes.panes.props }}
+        >
           <PropertiesPanel />
         </aside>
       </div>
 
-      <div
-        role="separator"
-        aria-orientation="horizontal"
-        aria-label={t('editor.timeline.resize')}
-        className="h-1.5 shrink-0 cursor-row-resize border-t border-border bg-surface transition-colors hover:bg-accent/40"
-        onPointerDown={(e) => {
-          ;(e.target as Element).setPointerCapture(e.pointerId)
-          resizing.current = { y: e.clientY, h: timelineHeight }
-        }}
-        onPointerMove={(e) => {
-          if (!resizing.current) return
-          const h = resizing.current.h - (e.clientY - resizing.current.y)
-          setTimelineHeight(Math.max(200, Math.min(window.innerHeight * 0.6, h)))
-        }}
-        onPointerUp={() => {
-          resizing.current = null
-          saveHeight(timelineHeight)
-        }}
+      <Splitter
+        orientation="horizontal"
+        label={t('editor.timeline.resize')}
+        testId="pane-resize-timeline"
+        {...sizes.timeline}
       />
-      <div className="shrink-0 bg-surface" style={{ height: timelineHeight }}>
+      <div className="shrink-0 bg-surface" style={{ height: sizes.timelineHeight }}>
         <Timeline />
       </div>
       <ExportDialog open={exporting} onClose={closeExport} />

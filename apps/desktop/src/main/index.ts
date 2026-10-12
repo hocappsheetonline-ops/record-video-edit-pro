@@ -157,8 +157,14 @@ if (!app.requestSingleInstanceLock()) {
 
     // File của AI xóa phông (MediaPipe + model): chỉ phục vụ đúng các file này.
     const aiFiles = aiAssetFiles()
+    // Thư viện chung (meme, nhạc): cho giao diện xem trước / nghe thử trước khi thêm vào dự án.
+    const memesDir = join(userData, 'memes')
+    const musicDir = join(userData, 'music')
     protocol.handle(MEDIA_SCHEME, async (request) =>
-      handleMediaRequest(request, await projectsDir(), aiFiles),
+      handleMediaRequest(request, await projectsDir(), aiFiles, {
+        memes: memesDir,
+        music: musicDir,
+      }),
     )
 
     const recording = new RecordingController({ mainWindow: () => mainWindow, projectsDir })
@@ -202,8 +208,8 @@ if (!app.requestSingleInstanceLock()) {
         : await dialog.showOpenDialog({ ...options, properties: [...options.properties] })
       return r.canceled ? [] : r.filePaths
     }
-    const memes = new MemeLibrary(join(userData, 'memes'), runFfmpeg)
-    const music = new MusicLibrary(join(userData, 'music'), runFfmpeg)
+    const memes = new MemeLibrary(memesDir, runFfmpeg)
+    const music = new MusicLibrary(musicDir, runFfmpeg)
     // Lọc tạp âm AI bằng RNNoise (WebAssembly, chạy ở luồng phụ) — cùng kết quả trên mọi máy.
     const audioProcessor = new AudioProcessor(
       runFfmpeg,

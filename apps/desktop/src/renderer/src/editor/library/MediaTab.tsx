@@ -1,8 +1,9 @@
-import { useEffect, useState, type DragEvent } from 'react'
+import { useEffect, useState, type DragEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Clapperboard,
   Combine,
+  Eye,
   Film,
   FolderPlus,
   ImagePlus,
@@ -17,8 +18,91 @@ import { runJob, useJobs } from '../jobs'
 import { dragProps } from '../library-drag'
 import { useEditorStore } from '../store'
 import { ghostButton, primaryButton } from '../ui'
-import { EmptyState, ErrorNote, formatDuration, SubNav, useErrorText } from './common'
+import { libraryUrl } from '../../lib/media'
+import {
+  EmptyState,
+  ErrorNote,
+  formatDuration,
+  SubNav,
+  useErrorText,
+  usePreviewHover,
+} from './common'
 import { OnlineGrid } from './OnlineGrid'
+
+/** Ô meme: rê chuột là xem thử ngay trên khung xem trước (ảnh / GIF / video), bấm để thêm. */
+function MemeCard({
+  meme: m,
+  busy,
+  onUse,
+  children,
+}: {
+  meme: MemeItem
+  busy: boolean
+  onUse: () => void
+  children?: ReactNode
+}) {
+  const { t } = useTranslation()
+  const hover = usePreviewHover(() => ({
+    kind: 'overlay',
+    overlay: {
+      kind: m.kind,
+      file: libraryUrl('memes', m.file),
+      text: m.name,
+      aspect: m.width / Math.max(1, m.height),
+      sourceDuration: m.kind === 'video' ? m.durationMs : 0,
+      hasAudio: m.hasAudio,
+    },
+  }))
+  return (
+    <div className="group relative">
+      <button
+        type="button"
+        data-testid="meme-item"
+        data-kind={m.kind}
+        {...dragProps({ kind: 'meme', file: m.file })}
+        {...hover.props}
+        data-tooltip={t('editor.library.clickToAdd')}
+        disabled={busy}
+        onClick={() => {
+          hover.stop()
+          onUse()
+        }}
+        className="flex w-full flex-col gap-1 rounded-lg p-1 text-left hover:bg-surface-2"
+      >
+        <span className="relative block aspect-video w-full overflow-hidden rounded-md bg-black">
+          {m.thumb && (
+            <img
+              src={m.thumb}
+              alt={m.name}
+              className="h-full w-full object-contain"
+              draggable={false}
+            />
+          )}
+          {m.kind === 'video' && (
+            <span className="absolute bottom-1 right-1 flex items-center gap-1 rounded bg-black/70 px-1 text-[10px] font-medium tabular-nums text-white">
+              {m.hasAudio && <Volume2 size={10} aria-hidden />}
+              {formatDuration(m.durationMs)}
+            </span>
+          )}
+          <span className="absolute inset-0 hidden items-center justify-center bg-black/40 group-hover:flex">
+            <span className="rounded-full bg-accent p-1.5 text-accent-fg shadow-lg">
+              <Plus size={16} aria-hidden />
+            </span>
+          </span>
+          <span
+            className="absolute left-1 top-1 hidden items-center gap-0.5 rounded bg-black/60 px-1 py-0.5 text-[9px] font-medium text-white group-hover:flex"
+            aria-hidden
+          >
+            <Eye size={9} />
+            {t('editor.library.previewing')}
+          </span>
+        </span>
+        <span className="truncate px-0.5 text-[11px] text-muted">{m.name}</span>
+      </button>
+      {children}
+    </div>
+  )
+}
 
 /** Thư viện ảnh / GIF / video ngắn của riêng bạn (kéo thả để thêm), dùng làm lớp phủ. */
 function MyLibrary() {
@@ -145,40 +229,7 @@ function MyLibrary() {
       ) : (
         <div className="grid grid-cols-2 gap-2">
           {shown.map((m) => (
-            <div key={m.file} className="group relative">
-              <button
-                type="button"
-                data-testid="meme-item"
-                data-kind={m.kind}
-                {...dragProps({ kind: 'meme', file: m.file })}
-                data-tooltip={t('editor.library.clickToAdd')}
-                disabled={busy}
-                onClick={() => use(m)}
-                className="flex w-full flex-col gap-1 rounded-lg p-1 text-left hover:bg-surface-2"
-              >
-                <span className="relative block aspect-video w-full overflow-hidden rounded-md bg-black">
-                  {m.thumb && (
-                    <img
-                      src={m.thumb}
-                      alt={m.name}
-                      className="h-full w-full object-contain"
-                      draggable={false}
-                    />
-                  )}
-                  {m.kind === 'video' && (
-                    <span className="absolute bottom-1 right-1 flex items-center gap-1 rounded bg-black/70 px-1 text-[10px] font-medium tabular-nums text-white">
-                      {m.hasAudio && <Volume2 size={10} aria-hidden />}
-                      {formatDuration(m.durationMs)}
-                    </span>
-                  )}
-                  <span className="absolute inset-0 hidden items-center justify-center bg-black/40 group-hover:flex">
-                    <span className="rounded-full bg-accent p-1.5 text-accent-fg shadow-lg">
-                      <Plus size={16} aria-hidden />
-                    </span>
-                  </span>
-                </span>
-                <span className="truncate px-0.5 text-[11px] text-muted">{m.name}</span>
-              </button>
+            <MemeCard key={m.file} meme={m} busy={busy} onUse={() => use(m)}>
               <button
                 type="button"
                 aria-label={t('editor.library.remove')}
@@ -188,7 +239,7 @@ function MyLibrary() {
               >
                 <X size={12} aria-hidden />
               </button>
-            </div>
+            </MemeCard>
           ))}
         </div>
       )}

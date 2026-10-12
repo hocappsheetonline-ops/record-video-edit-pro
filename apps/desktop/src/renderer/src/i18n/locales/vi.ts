@@ -233,6 +233,9 @@ export const vi = {
       empty:
         'Kéo thả ảnh / GIF hoặc video ngắn (MP4, MOV, WEBM…) vào đây. Thêm một lần, dùng lại ở mọi dự án. Bấm một mục để đặt lên video tại đầu phát.',
       clickToAdd: 'Bấm để thêm vào đầu phát',
+      previewing: 'Xem thử',
+      audition: 'Nghe thử',
+      previewHint: 'Rê chuột lên một mục để xem thử trên khung xem trước, bấm để thêm.',
       remove: 'Xóa khỏi thư viện',
       tips: 'Mẹo: video phông xanh → chọn "Xóa phông" ở bảng bên phải. Lumora không kèm sẵn nội dung có bản quyền; hãy dùng ảnh / video bạn có quyền sử dụng.',
       drop: 'Thả để thêm vào thư viện',
@@ -294,6 +297,10 @@ export const vi = {
       zoomIn: 'Phóng to timeline',
       zoomOut: 'Thu nhỏ timeline',
       resize: 'Kéo để đổi chiều cao timeline',
+    },
+    panes: {
+      resizeLibrary: 'Kéo để đổi chiều rộng thư viện (nhấp đúp để đặt lại)',
+      resizeProps: 'Kéo để đổi chiều rộng bảng thuộc tính (nhấp đúp để đặt lại)',
     },
     player: {
       zoom: 'Tỉ lệ xem trước',
@@ -365,7 +372,7 @@ export const vi = {
       dragHint: 'Kéo trên khung xem trước để dời; kéo góc để đổi cỡ, nút tròn để xoay.',
     },
     effects: {
-      hint: 'Bấm để thêm hiệu ứng tại đầu phát (2 giây). Kéo trên hàng Hiệu ứng để dời, kéo mép để đổi độ dài.',
+      hint: 'Rê chuột để xem thử, bấm để thêm hiệu ứng tại đầu phát (2 giây). Kéo trên hàng Hiệu ứng để dời, kéo mép để đổi độ dài.',
       intensity: 'Độ mạnh',
       kind: 'Loại hiệu ứng',
       dragHint: 'kéo trên timeline để đổi vị trí, độ dài',

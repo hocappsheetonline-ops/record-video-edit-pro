@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from 'react'
+import { useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { RotateCcw } from 'lucide-react'
 
@@ -299,3 +299,77 @@ export const ghostButton =
 /** Nút chính (màu nhấn, viên bo tròn). */
 export const primaryButton =
   'inline-flex items-center justify-center gap-1.5 rounded-lg bg-accent px-3.5 py-1.5 text-sm font-semibold text-accent-fg shadow-sm transition-[filter,transform] hover:brightness-110 active:scale-[0.98] disabled:opacity-40'
+
+/** Mỗi lần bấm mũi tên trên thanh chia dời bao nhiêu điểm ảnh. */
+const SPLITTER_STEP = 16
+/** Phím mũi tên của từng hướng và chiều dời (âm = về trái / lên trên). */
+const SPLITTER_KEYS: Record<'vertical' | 'horizontal', Record<string, number | undefined>> = {
+  vertical: { ArrowLeft: -1, ArrowRight: 1 },
+  horizontal: { ArrowUp: -1, ArrowDown: 1 },
+}
+
+/**
+ * Thanh chia kéo được giữa hai bảng (như CapCut). `vertical` là cột 6px đổi chiều rộng,
+ * `horizontal` là hàng 6px đổi chiều cao. Khi kéo, `onDelta` nhận độ lệch (px) so với
+ * lúc bắt đầu bấm; thả ra gọi `onEnd`; nhấp đúp gọi `onReset`. Mũi tên trái / phải
+ * (hoặc lên / xuống) dời từng 16px rồi gọi `onEnd` ngay.
+ */
+export function Splitter({
+  orientation,
+  onDelta,
+  onEnd,
+  onReset,
+  label,
+  testId,
+}: {
+  orientation: 'vertical' | 'horizontal'
+  onDelta: (px: number) => void
+  onEnd?: () => void
+  onReset?: () => void
+  label: string
+  testId?: string
+}) {
+  const vertical = orientation === 'vertical'
+  const origin = useRef<{ x: number; y: number } | null>(null)
+  const [active, setActive] = useState(false)
+  const finish = () => {
+    if (!origin.current) return
+    origin.current = null
+    setActive(false)
+    onEnd?.()
+  }
+  return (
+    <div
+      role="separator"
+      aria-orientation={orientation}
+      aria-label={label}
+      tabIndex={0}
+      data-testid={testId}
+      data-active={active || undefined}
+      className={`shrink-0 touch-none select-none bg-surface transition-colors outline-none hover:bg-accent/40 focus-visible:bg-accent/40 data-active:bg-accent/40 ${
+        vertical ? 'w-1.5 cursor-col-resize' : 'h-1.5 cursor-row-resize border-t border-border'
+      }`}
+      onPointerDown={(e) => {
+        if (e.button !== 0) return
+        // jsdom không có setPointerCapture.
+        ;(e.target as Element).setPointerCapture?.(e.pointerId)
+        origin.current = { x: e.clientX, y: e.clientY }
+        setActive(true)
+      }}
+      onPointerMove={(e) => {
+        if (!origin.current) return
+        onDelta(vertical ? e.clientX - origin.current.x : e.clientY - origin.current.y)
+      }}
+      onPointerUp={finish}
+      onPointerCancel={finish}
+      onDoubleClick={() => onReset?.()}
+      onKeyDown={(e) => {
+        const dir = SPLITTER_KEYS[orientation][e.key]
+        if (dir === undefined) return
+        e.preventDefault()
+        onDelta(dir * SPLITTER_STEP)
+        onEnd?.()
+      }}
+    />
+  )
+}

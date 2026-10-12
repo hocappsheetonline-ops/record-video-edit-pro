@@ -242,6 +242,9 @@ export const en: Messages = {
       empty:
         'Drag and drop images / GIFs or short videos (MP4, MOV, WEBM…) here. Add once, reuse in every project. Click an item to place it on the video at the playhead.',
       clickToAdd: 'Click to add at the playhead',
+      previewing: 'Preview',
+      audition: 'Listen',
+      previewHint: 'Hover an item to preview it in the player; click to add.',
       remove: 'Remove from library',
       tips: 'Tip: green-screen video → pick "Remove background" in the right panel. Lumora does not bundle copyrighted content; use images / videos you have the right to use.',
       drop: 'Drop to add to your library',
@@ -302,6 +305,10 @@ export const en: Messages = {
       zoomIn: 'Zoom timeline in',
       zoomOut: 'Zoom timeline out',
       resize: 'Drag to resize the timeline',
+    },
+    panes: {
+      resizeLibrary: 'Drag to resize the library (double-click to reset)',
+      resizeProps: 'Drag to resize the properties panel (double-click to reset)',
     },
     player: {
       zoom: 'Preview zoom',
@@ -374,7 +381,7 @@ export const en: Messages = {
       dragHint: 'Drag on the preview to move; drag a corner to resize, the round knob to rotate.',
     },
     effects: {
-      hint: 'Click to add an effect at the playhead (2 s). Drag on the Effects row to move it, drag its edges to resize.',
+      hint: 'Hover to preview, click to add an effect at the playhead (2 s). Drag on the Effects row to move it, drag its edges to resize.',
       intensity: 'Intensity',
       kind: 'Effect type',
       dragHint: 'drag on the timeline to move or resize',

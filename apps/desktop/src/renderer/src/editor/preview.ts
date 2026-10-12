@@ -29,6 +29,7 @@ import { OverlayImages } from './overlay-images'
 import { computeScene } from './scene'
 import { useAppStore } from '../store/app'
 import { fxKeyOf, revKeyOf, useEditorStore } from './store'
+import { withPreview, type TryPreview } from './try-preview'
 
 type MediaEl = HTMLVideoElement | HTMLAudioElement
 const RESYNC_S = 0.25
@@ -128,8 +129,62 @@ export class PreviewEngine {
   private drawn: unknown[] = []
   private changedSinceDraw(): boolean {
     const s = useEditorStore.getState()
-    const deps = [s.edit, s.time, s.videoSize, s.cursor, s.follow, s.selection, s.playing]
+    const deps = [
+      s.edit,
+      s.time,
+      s.videoSize,
+      s.cursor,
+      s.follow,
+      s.selection,
+      s.playing,
+      s.preview,
+    ]
     return deps.some((d, i) => d !== this.drawn[i])
+  }
+
+  /** Bản chỉnh sửa đang vẽ: có mục xem thử thì ghép vào (nhớ lại để không tạo mới mỗi khung). */
+  private previewed: {
+    base: EditState
+    preview: TryPreview
+    start: number
+    out: EditState
+  } | null = null
+  private editToDraw(): EditState | null {
+    const s = useEditorStore.getState()
+    if (!s.edit) return null
+    if (!s.preview) {
+      this.previewed = null
+      return s.edit
+    }
+    const start = s.previewWindow?.start ?? s.time
+    const p = this.previewed
+    if (p && p.base === s.edit && p.preview === s.preview && p.start === start) return p.out
+    const out = withPreview(s.edit, s.preview, start)
+    this.previewed = { base: s.edit, preview: s.preview, start, out }
+    return out
+  }
+
+  /** Nghe thử nhạc trong kho (rê / bấm ở thư viện): phát lặp, tắt khi thôi. */
+  private audition: HTMLAudioElement | null = null
+  private syncAudition(preview: TryPreview | null) {
+    const url = preview?.kind === 'music' ? preview.url : null
+    if (!url) {
+      if (this.audition && !this.audition.paused) this.audition.pause()
+      return
+    }
+    if (!this.audition) {
+      this.audition = document.createElement('audio')
+      this.audition.preload = 'auto'
+      this.audition.loop = true
+      this.audition.volume = 0.8
+    }
+    const el = this.audition
+    if (el.dataset.src !== url) {
+      el.dataset.src = url
+      el.src = url
+      el.currentTime = 0
+    }
+    if (el.paused) safePlay(el)
   }
 
   /** File cần phát: bản đã lọc tạp âm / hiệu ứng nếu đã xử lý xong (và không giữ "nghe bản gốc"). */
@@ -165,14 +220,20 @@ export class PreviewEngine {
     if (this.disposed) return
     const store = useEditorStore.getState()
     const { playing } = store
+    this.syncAudition(store.preview)
     // Hàng bị ẩn / tắt tiếng trên timeline: không vẽ / không phát (giống khi xuất).
-    const edit = store.edit && applyTrackState(store.edit)
+    const drawn = this.editToDraw()
+    const edit = drawn && applyTrackState(drawn)
     if (edit) {
       if (playing) {
         const dt = this.lastTick ? now - this.lastTick : 0
         const duration = outputDuration(edit.clips)
         const next = store.time + dt
-        if (next >= duration) {
+        const loop = store.previewWindow
+        if (loop && next >= loop.end) {
+          // Đang xem thử: phát lặp trong khoảng xem thử.
+          store.setTime(loop.start)
+        } else if (next >= duration) {
           store.setTime(duration)
           store.setPlaying(false)
         } else store.setTime(next)
@@ -389,6 +450,7 @@ export class PreviewEngine {
       store.follow,
       store.selection,
       store.playing,
+      store.preview,
     ]
     const hit = outputToSource(edit.clips, time)
     const source = hit?.source ?? 0
@@ -562,6 +624,11 @@ export class PreviewEngine {
   dispose() {
     this.disposed = true
     cancelAnimationFrame(this.frame)
+    if (this.audition) {
+      this.audition.pause()
+      this.audition.removeAttribute('src')
+      this.audition = null
+    }
     for (const el of this.media.values()) {
       el.pause()
       el.removeAttribute('src')

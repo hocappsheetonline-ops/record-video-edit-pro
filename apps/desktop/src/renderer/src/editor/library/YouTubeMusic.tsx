@@ -6,6 +6,8 @@ import {
   ExternalLink,
   Loader2,
   Music2,
+  Pause,
+  Play,
   Plus,
   Upload,
   X,
@@ -13,6 +15,7 @@ import {
 } from 'lucide-react'
 import type { MusicTrack, RecentDownload } from '@shared/ipc'
 import { lumora } from '../../api'
+import { libraryUrl } from '../../lib/media'
 import { useEditorStore } from '../store'
 import { ghostButton, primaryButton } from '../ui'
 import { EmptyState, ErrorNote, formatDuration, SearchBox, useErrorText } from './common'
@@ -82,8 +85,20 @@ export function YouTubeMusic() {
       if (newest && folder) await useEditorStore.getState().addMusicFromLibrary(newest.file)
     })
 
-  const pickTrack = (track: MusicTrack) =>
-    folder && void run(track.file, () => useEditorStore.getState().addMusicFromLibrary(track.file))
+  const pickTrack = (track: MusicTrack) => {
+    useEditorStore.getState().endPreview()
+    if (folder)
+      void run(track.file, () => useEditorStore.getState().addMusicFromLibrary(track.file))
+  }
+  // Nghe thử: bấm nút ▶ trên bài (bấm lại hoặc rời mục này thì dừng).
+  const preview = useEditorStore((s) => s.preview)
+  const auditioning = preview?.kind === 'music' ? preview.url : null
+  const audition = (track: MusicTrack) => {
+    const url = libraryUrl('music', track.file)
+    if (auditioning === url) useEditorStore.getState().endPreview()
+    else useEditorStore.getState().tryPreview({ kind: 'music', url, name: track.name })
+  }
+  useEffect(() => () => useEditorStore.getState().endPreview(), [])
 
   const onDrop = (e: DragEvent) => {
     e.preventDefault()
@@ -206,7 +221,30 @@ export function YouTubeMusic() {
         ) : (
           <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
             {shown.map((m) => (
-              <li key={m.file} className="group flex items-center gap-2 px-2 py-1.5 text-xs">
+              <li
+                key={m.file}
+                className="group flex items-center gap-2 px-2 py-1.5 text-xs"
+                data-auditioning={auditioning === libraryUrl('music', m.file) || undefined}
+              >
+                <button
+                  type="button"
+                  data-testid="music-audition"
+                  aria-pressed={auditioning === libraryUrl('music', m.file)}
+                  aria-label={t('editor.library.audition')}
+                  data-tooltip={t('editor.library.audition')}
+                  onClick={() => audition(m)}
+                  className={`shrink-0 rounded-full p-1 ${
+                    auditioning === libraryUrl('music', m.file)
+                      ? 'bg-accent text-accent-fg'
+                      : 'bg-surface-2 text-muted hover:text-text'
+                  }`}
+                >
+                  {auditioning === libraryUrl('music', m.file) ? (
+                    <Pause size={11} aria-hidden />
+                  ) : (
+                    <Play size={11} aria-hidden />
+                  )}
+                </button>
                 <button
                   type="button"
                   data-testid="music-item"

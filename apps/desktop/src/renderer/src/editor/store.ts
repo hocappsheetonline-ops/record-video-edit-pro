@@ -21,7 +21,6 @@ import {
   type Project,
   type Size,
   type AudioClip,
-  DEFAULT_OVERLAY_MS,
   newOverlayId,
   templateStyle,
   addMarker,
@@ -64,7 +63,6 @@ import {
   DEFAULT_LOOK,
   type Clip,
   type Look,
-  DEFAULT_ANIM,
   NO_ANIM,
   editPose,
   overlayPose,
@@ -105,6 +103,13 @@ import i18n from '../i18n'
 import { loadPrefs, savePrefs } from '../lib/prefs'
 import { useJobs } from './jobs'
 import { useAppStore } from '../store/app'
+import {
+  buildOverlay,
+  previewWindow,
+  samePreview,
+  type PreviewWindow,
+  type TryPreview,
+} from './try-preview'
 
 /** Mục chọn được nhiều cùng lúc (Ctrl+click, kéo khung chọn, Ctrl+A). */
 export type MultiKind = 'overlay' | 'effect' | 'audio'
@@ -171,6 +176,12 @@ interface EditorStore {
   previewZoom: 'fit' | number
   /** Đường gióng trên khung xem trước. */
   guides: 'none' | 'thirds' | 'safe'
+  /** Mục đang xem thử (rê chuột trong thư viện): vẽ lên khung xem trước, không lưu vào dự án. */
+  preview: TryPreview | null
+  /** Khoảng phát thử (lặp lại); null khi chỉ nghe thử nhạc. */
+  previewWindow: PreviewWindow | null
+  /** Đầu phát và trạng thái phát trước khi xem thử (trả lại khi thôi). */
+  previewReturn: { time: number; playing: boolean } | null
   /** Hít dính khi kéo trên timeline (phím N). */
   snapping: boolean
   /** Vạch hít dính đang hiện (ms), null nếu không hít. */
@@ -222,6 +233,14 @@ interface EditorStore {
   setSnapping(on: boolean): void
   setGuides(mode: EditorStore['guides']): void
   setPreviewZoom(zoom: EditorStore['previewZoom']): void
+  /**
+   * Xem thử một mục thư viện (như CapCut): hiệu ứng / bộ lọc / chuyển cảnh / lớp thì phát thử
+   * một đoạn ngắn từ đầu phát rồi lặp; nhạc thì nghe thử (timeline dừng). Gọi lại với cùng mục
+   * thì giữ nguyên.
+   */
+  tryPreview(preview: TryPreview): void
+  /** Thôi xem thử: trả đầu phát và trạng thái phát về như trước. */
+  endPreview(): void
   setSnapLine(t: number | null): void
   /** Đổi thứ tự vẽ của lớp phủ (lên / xuống một lớp, lên trên cùng, xuống dưới cùng). */
   reorderOverlay(id: string, to: 'up' | 'down' | 'top' | 'bottom'): void
@@ -556,6 +575,9 @@ const initial = {
   selected: [] as SelItem[],
   clipboard: null as ClipboardData | null,
   guides: 'none' as EditorStore['guides'],
+  preview: null as TryPreview | null,
+  previewWindow: null as PreviewWindow | null,
+  previewReturn: null as { time: number; playing: boolean } | null,
   previewZoom: 'fit' as EditorStore['previewZoom'],
   lowPreview: false,
   snapping: true,
@@ -838,6 +860,29 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   setPlaying(playing) {
     set({ playing })
+  },
+
+  tryPreview(preview) {
+    const { edit } = get()
+    if (!edit || samePreview(get().preview, preview)) return
+    // Lần xem thử đầu tiên ghi lại chỗ đang đứng; đổi mục khác vẫn trả về chỗ đó.
+    const back = get().previewReturn ?? { time: get().time, playing: get().playing }
+    const window = previewWindow(edit, preview, back.time)
+    set({ preview, previewWindow: window, previewReturn: back })
+    if (window) {
+      get().setTime(window.start)
+      set({ playing: true })
+    } else set({ playing: false })
+  },
+
+  endPreview() {
+    const back = get().previewReturn
+    if (!get().preview && !back) return
+    set({ preview: null, previewWindow: null, previewReturn: null })
+    if (back) {
+      get().setTime(back.time)
+      set({ playing: back.playing })
+    }
   },
 
   select(selection) {
@@ -1312,45 +1357,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   addOverlay(init) {
     const { edit, time } = get()
     if (!edit) return
-    const total = outputDuration(edit.clips)
-    const start = Math.min(time, Math.max(0, total - 200))
-    const video = init.kind === 'video'
-    // Video meme dài đúng bằng phần còn lại của file (không vượt cuối video).
-    const length = video
-      ? Math.max(200, (init.sourceDuration ?? 0) - (init.mediaOffset ?? 0))
-      : DEFAULT_OVERLAY_MS
-    const overlay: Overlay = {
-      id: newOverlayId(),
-      start,
-      end: Math.min(total, start + length),
-      x: 0.5,
-      y: init.kind === 'text' ? 0.15 : 0.5,
-      size: video
-        ? (init.aspect ?? 1) < 1
-          ? 0.7
-          : 0.45
-        : init.kind === 'image'
-          ? 0.35
-          : init.kind === 'emoji'
-            ? 0.18
-            : init.kind === 'shape'
-              ? 0.14
-              : 0.09,
-      rotation: 0,
-      anim: video ? { ...NO_ANIM } : { ...DEFAULT_ANIM },
-      text: '',
-      style: 'meme',
-      color: '#ffffff',
-      file: '',
-      aspect: 1,
-      mediaOffset: 0,
-      sourceDuration: 0,
-      hasAudio: false,
-      volume: 1,
-      keyColor: '',
-      keyStrength: 0.4,
-      ...init,
-    }
+    const overlay = buildOverlay(init, time, outputDuration(edit.clips))
     get().change((e) => ({ ...e, overlays: [...e.overlays, overlay] }))
     get().select({ kind: 'overlay', id: overlay.id })
   },

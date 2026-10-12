@@ -1088,4 +1088,51 @@ describe('EditorPage', () => {
     await userEvent.click(screen.getByTestId('overlay-ai-key'))
     expect(edit().overlays[0]).not.toHaveProperty('aiKey')
   })
+
+  it('kéo thanh chia đổi chiều rộng hai bảng bên và chiều cao timeline; nhấp đúp đặt lại; mũi tên dời 16px', async () => {
+    localStorage.clear()
+    // jsdom rộng 1024px: nới ra để đủ chỗ cho khung xem trước 360px.
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1600 })
+    setup()
+    await screen.findByTestId('editor')
+    const library = screen.getByTestId('pane-library')
+    const props = screen.getByTestId('pane-props')
+    expect(library.style.width).toBe('360px')
+    expect(props.style.width).toBe('300px')
+
+    const libraryHandle = screen.getByTestId('pane-resize-library')
+    expect(libraryHandle).toHaveAttribute('aria-orientation', 'vertical')
+    fireEvent.pointerDown(libraryHandle, { clientX: 360, clientY: 100, pointerId: 1 })
+    fireEvent.pointerMove(libraryHandle, { clientX: 440, clientY: 100, pointerId: 1 })
+    fireEvent.pointerUp(libraryHandle, { pointerId: 1 })
+    expect(library.style.width).toBe('440px')
+    expect(localStorage.getItem('lumora.libraryWidth')).toBe('440')
+
+    // Kéo thanh bên phải sang trái thì bảng thuộc tính rộng ra.
+    const propsHandle = screen.getByTestId('pane-resize-props')
+    fireEvent.pointerDown(propsHandle, { clientX: 1300, clientY: 100, pointerId: 1 })
+    fireEvent.pointerMove(propsHandle, { clientX: 1260, clientY: 100, pointerId: 1 })
+    fireEvent.pointerUp(propsHandle, { pointerId: 1 })
+    expect(props.style.width).toBe('340px')
+    expect(localStorage.getItem('lumora.propsWidth')).toBe('340')
+
+    fireEvent.doubleClick(libraryHandle)
+    expect(library.style.width).toBe('360px')
+    libraryHandle.focus()
+    await userEvent.keyboard('{ArrowRight}')
+    expect(library.style.width).toBe('376px')
+    expect(localStorage.getItem('lumora.libraryWidth')).toBe('376')
+
+    // Timeline: kéo lên thì cao hơn, nhấp đúp về 300px.
+    const timelineHandle = screen.getByTestId('pane-resize-timeline')
+    expect(timelineHandle).toHaveAttribute('aria-orientation', 'horizontal')
+    fireEvent.pointerDown(timelineHandle, { clientX: 10, clientY: 500, pointerId: 1 })
+    fireEvent.pointerMove(timelineHandle, { clientX: 10, clientY: 460, pointerId: 1 })
+    fireEvent.pointerUp(timelineHandle, { pointerId: 1 })
+    expect(screen.getByTestId('timeline').parentElement!.style.height).toBe('340px')
+    expect(localStorage.getItem('lumora.timelineHeight')).toBe('340')
+    fireEvent.doubleClick(timelineHandle)
+    expect(screen.getByTestId('timeline').parentElement!.style.height).toBe('300px')
+    localStorage.clear()
+  })
 })

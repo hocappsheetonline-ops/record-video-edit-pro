@@ -25,7 +25,7 @@ import {
 import { useEditorStore } from '../store'
 import { ghostButton, Segmented } from '../ui'
 import { dragProps } from '../library-drag'
-import { Card } from './common'
+import { Card, usePreviewHover } from './common'
 import { ShapesGrid } from '../TextPanels'
 
 const EFFECT_ICONS: Record<EffectKind, LucideIcon> = {
@@ -54,22 +54,35 @@ const EFFECT_TILES: Record<EffectKind, string> = {
   confetti: 'from-pink-400 to-violet-600',
 }
 
-function EmojiGrid() {
+function EmojiButton({ emoji, index }: { emoji: string; index: number }) {
   const addOverlay = useEditorStore((s) => s.addOverlay)
+  const hover = usePreviewHover(() => ({
+    kind: 'overlay',
+    overlay: { kind: 'emoji', text: emoji },
+  }))
+  return (
+    <button
+      type="button"
+      data-testid={`emoji-${index}`}
+      {...dragProps({ kind: 'emoji', text: emoji })}
+      {...hover.props}
+      aria-label={emoji}
+      onClick={() => {
+        hover.stop()
+        addOverlay({ kind: 'emoji', text: emoji })
+      }}
+      className="flex aspect-square items-center justify-center rounded-lg hover:scale-110 hover:bg-surface-2"
+    >
+      {emoji}
+    </button>
+  )
+}
+
+function EmojiGrid() {
   return (
     <div className="grid grid-cols-6 gap-1 text-2xl">
       {EMOJI_STICKERS.map((e, i) => (
-        <button
-          key={e}
-          type="button"
-          data-testid={`emoji-${i}`}
-          {...dragProps({ kind: 'emoji', text: e })}
-          aria-label={e}
-          onClick={() => addOverlay({ kind: 'emoji', text: e })}
-          className="flex aspect-square items-center justify-center rounded-lg hover:scale-110 hover:bg-surface-2"
-        >
-          {e}
-        </button>
+        <EmojiButton key={e} emoji={e} index={i} />
       ))}
     </div>
   )
@@ -110,6 +123,7 @@ export function EffectsTab() {
               testId={`effect-add-${kind}`}
               drag={{ kind: 'effect', id: kind }}
               title={t('editor.library.clickToAdd')}
+              preview={() => ({ kind: 'effect', effect: kind })}
               onClick={() => addEffect(kind)}
             >
               <span
@@ -155,7 +169,12 @@ export function TransitionsTab() {
       </p>
       <div className="grid grid-cols-3 gap-2">
         {TRANSITION_KINDS.map((kind) => (
-          <Card key={kind} testId={`lib-transition-${kind}`} onClick={() => apply(kind)}>
+          <Card
+            key={kind}
+            testId={`lib-transition-${kind}`}
+            preview={() => ({ kind: 'transition', transition: kind, afterClip: target })}
+            onClick={() => apply(kind)}
+          >
             <span className="flex aspect-square items-center justify-center rounded-md bg-gradient-to-br from-blue-600 to-violet-700 text-white">
               <ArrowLeftRight size={20} aria-hidden />
             </span>

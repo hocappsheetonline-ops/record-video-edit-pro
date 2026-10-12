@@ -4,7 +4,14 @@ import { Check, CloudOff, Download, KeyRound, Loader2, Play } from 'lucide-react
 import type { MemeItem, OnlineItem, OnlineSearch, OnlineSource } from '@shared/ipc'
 import { lumora } from '../../api'
 import { useAppStore } from '../../store/app'
-import { EmptyState, ErrorNote, formatDuration, SearchBox, useErrorText } from './common'
+import {
+  EmptyState,
+  ErrorNote,
+  formatDuration,
+  SearchBox,
+  useErrorText,
+  usePreviewHover,
+} from './common'
 
 /** Từ khóa gợi ý cho từng nguồn (bấm là tìm luôn). */
 const SUGGESTIONS: Record<OnlineSource, string[]> = {
@@ -26,6 +33,18 @@ function ResultCard({
   const [hover, setHover] = useState(false)
   const playable = item.kind === 'video' && item.previewUrl !== item.thumbUrl
   const square = item.kind === 'sticker'
+  // Xem thử ngay trên khung xem trước bằng bản nhỏ (chưa tải về).
+  const tryIt = usePreviewHover(() => ({
+    kind: 'overlay',
+    overlay: {
+      kind: item.kind === 'video' ? 'video' : 'image',
+      file: item.previewUrl,
+      text: item.title,
+      aspect: item.width / Math.max(1, item.height),
+      sourceDuration: item.kind === 'video' ? item.durationMs : 0,
+      hasAudio: false,
+    },
+  }))
   return (
     <button
       type="button"
@@ -34,9 +53,20 @@ function ResultCard({
       disabled={state === 'busy'}
       data-tooltip={item.title}
       aria-label={item.title}
-      onClick={onClick}
-      onPointerEnter={() => setHover(true)}
-      onPointerLeave={() => setHover(false)}
+      onClick={() => {
+        tryIt.stop()
+        onClick()
+      }}
+      onFocus={tryIt.props.onFocus}
+      onBlur={tryIt.props.onBlur}
+      onPointerEnter={() => {
+        setHover(true)
+        tryIt.props.onPointerEnter?.()
+      }}
+      onPointerLeave={() => {
+        setHover(false)
+        tryIt.props.onPointerLeave?.()
+      }}
       className="group relative flex flex-col overflow-hidden rounded-lg bg-black/40 text-left ring-1 ring-transparent hover:ring-accent disabled:cursor-wait"
     >
       <span className={`relative block w-full ${square ? 'aspect-square' : 'aspect-video'}`}>
