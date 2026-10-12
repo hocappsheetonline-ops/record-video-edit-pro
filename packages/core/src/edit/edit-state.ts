@@ -6,6 +6,7 @@ import {
   type TranscriptWord,
 } from './captions'
 import { parseAudioClips, type AudioClip } from './audio-clips'
+import { DEFAULT_AUDIO_FX, parseAudioFx, type AudioFx } from './audio-fx'
 import { NO_BEAUTY, parseBeauty, type BeautyStyle } from './beauty'
 import { parseEffects, type EffectRegion } from './effects'
 import { parseOverlays, type Overlay } from './overlays'
@@ -99,6 +100,9 @@ export interface AudioMix {
   /** Âm lượng 0..2 (1 = giữ nguyên). */
   mic: number
   system: number
+  /** Lọc tạp âm / hiệu ứng giọng cho micro và âm thanh máy của bản quay. */
+  micFx: AudioFx
+  systemFx: AudioFx
 }
 
 export interface ExportSettings {
@@ -179,7 +183,7 @@ export function createDefaultEdit(
       beauty: { ...NO_BEAUTY },
     },
     motion: { cameraSpeed: 0.85, zoomTransitionMs: 700 },
-    audio: { mic: 1, system: 1 },
+    audio: { mic: 1, system: 1, micFx: { ...DEFAULT_AUDIO_FX }, systemFx: { ...DEFAULT_AUDIO_FX } },
     audioClips: [],
     transitions: [],
     effects: [],
@@ -350,7 +354,12 @@ export function parseEditState(
       cameraSpeed: num(m.cameraSpeed, base.motion.cameraSpeed, 0, 1),
       zoomTransitionMs: num(m.zoomTransitionMs, base.motion.zoomTransitionMs, 250, 1500),
     },
-    audio: { mic: num(a.mic, 1, 0, 2), system: num(a.system, 1, 0, 2) },
+    audio: {
+      mic: num(a.mic, 1, 0, 2),
+      system: num(a.system, 1, 0, 2),
+      micFx: parseAudioFx(a.micFx),
+      systemFx: parseAudioFx(a.systemFx),
+    },
     audioClips: parseAudioClips(input.audioClips),
     transitions: pruneTransitions(clips, parseTransitions(input.transitions)),
     effects: parseEffects(input.effects),

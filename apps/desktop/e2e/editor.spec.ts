@@ -332,7 +332,7 @@ test('nhạc nền + hiệu ứng âm thanh: thêm từ máy, xuất video có n
   await page.getByTestId('sfx-ding').click()
   await expect(page.getByTestId('timeline-audio')).toHaveCount(2)
   // Dạng sóng của nhạc hiện trên timeline.
-  await expect(page.getByTestId('timeline-audio').first().locator('svg')).toBeVisible()
+  await expect(page.getByTestId('timeline-audio').first().locator('svg[data-bars]')).toBeVisible()
 
   await openExport(page)
   await page.getByTestId('resolution-720').click()

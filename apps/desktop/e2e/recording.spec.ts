@@ -133,7 +133,15 @@ test('quay một vùng: video đúng kích thước vùng đã chọn', async ()
   await picker.mouse.down()
   await picker.mouse.move(500, 340, { steps: 5 })
   await picker.mouse.up()
-  await picker.getByTestId('region-confirm').click()
+  // Bấm xác nhận đóng luôn cửa sổ chọn vùng: chờ cửa sổ đóng thay vì chờ lượt bấm "xong"
+  // (Playwright có thể báo trang đã đóng giữa chừng). Kết quả được kiểm tra ngay bên dưới.
+  await Promise.all([
+    picker.waitForEvent('close'),
+    picker
+      .getByTestId('region-confirm')
+      .click()
+      .catch(() => undefined),
+  ])
   await expect(page.getByTestId('region-info')).toContainText('400 × 240')
 
   const bar = await startRecording(app, page)

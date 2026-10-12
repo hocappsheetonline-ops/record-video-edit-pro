@@ -1,10 +1,25 @@
-import { useEffect, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { audioClipBars, dragAudioClip, type AudioClip } from '@lumora/core'
+import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { Mic, Music2, Sparkles, type LucideIcon } from 'lucide-react'
+import {
+  audioClipBars,
+  clipBeats,
+  detectBeats,
+  dragAudioClip,
+  isDefaultFx,
+  type AudioClip,
+} from '@lumora/core'
 import { WaveBars } from './ClipWaveform'
 import { useEditorStore } from './store'
 import { assignLanes } from './timeline-math'
 
 type Drag = { id: string; mode: 'move' | 'start' | 'end'; originX: number; origin: AudioClip }
+
+/** Màu và biểu tượng từng loại: nhạc (xanh lá), hiệu ứng (xanh dương), lồng tiếng (cam). */
+const KIND: Record<AudioClip['kind'], { className: string; icon: LucideIcon }> = {
+  music: { className: 'bg-emerald-500/25 text-emerald-300', icon: Music2 },
+  sfx: { className: 'bg-sky-500/25 text-sky-300', icon: Sparkles },
+  voice: { className: 'bg-orange-500/25 text-orange-300', icon: Mic },
+}
 
 /** Hàng "Âm thanh" trên timeline: nhạc nền và hiệu ứng, kéo để di chuyển, kéo mép để cắt. */
 export function AudioTrack({
@@ -44,6 +59,13 @@ export function AudioTrack({
   }
 
   const lanes = assignLanes(clips.map((c) => ({ start: c.start, end: c.start + c.duration })))
+  // Nhịp của từng bài nhạc (tính một lần theo dạng sóng của file).
+  const beats = useMemo(() => {
+    const map: Record<string, number[]> = {}
+    for (const [file, wave] of Object.entries(peaks))
+      if (wave) map[file] = detectBeats(wave.peaks, wave.bucketMs)
+    return map
+  }, [peaks])
   return (
     <div
       className="relative h-full flex-1"
@@ -59,7 +81,9 @@ export function AudioTrack({
         const bars = wave
           ? audioClipBars(clip, wave, Math.max(4, Math.min(600, Math.ceil(clip.duration / 60))))
           : []
-        const color = clip.kind === 'music' ? 'emerald' : 'sky'
+        const kind = KIND[clip.kind]
+        const Icon = kind.icon
+        const marks = clip.kind === 'music' ? clipBeats(clip, beats[clip.file] ?? []) : []
         return (
           <div
             key={clip.id}
@@ -67,9 +91,7 @@ export function AudioTrack({
             data-kind={clip.kind}
             onPointerDown={(e) => down(e, clip, 'move')}
             className={`absolute flex cursor-grab items-center overflow-hidden rounded-md border-2 text-[11px] ${
-              color === 'emerald'
-                ? 'bg-emerald-500/25 text-emerald-300'
-                : 'bg-sky-500/25 text-sky-300'
+              kind.className
             } ${selected ? 'border-white' : 'border-transparent hover:border-white/40'}`}
             style={{
               top: lane * 40 + 2,
@@ -79,8 +101,25 @@ export function AudioTrack({
             }}
           >
             {bars.length > 0 && <WaveBars bars={bars} />}
-            <span className="relative ml-2 truncate rounded bg-black/50 px-1 text-white">
-              {clip.kind === 'music' ? '♪' : '✦'} {clip.name}
+            {marks.map((t) => (
+              <span
+                key={t}
+                data-testid="beat-mark"
+                className="pointer-events-none absolute bottom-0 h-1.5 w-px bg-white/70"
+                style={{ left: `${((t - clip.start) / clip.duration) * 100}%` }}
+              />
+            ))}
+            <span className="relative ml-2 flex min-w-0 items-center gap-1 rounded bg-black/50 px-1 text-white">
+              <Icon size={11} aria-hidden className="shrink-0" />
+              <span className="truncate">{clip.name}</span>
+              {!isDefaultFx(clip.fx) && (
+                <span
+                  className="rounded bg-white/20 px-0.5 text-[9px] uppercase"
+                  data-testid="audio-fx-badge"
+                >
+                  FX
+                </span>
+              )}
             </span>
             <span
               className="absolute inset-y-0 left-0 w-1.5 cursor-ew-resize bg-white/30"

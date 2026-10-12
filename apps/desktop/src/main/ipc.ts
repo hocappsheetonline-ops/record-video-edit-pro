@@ -12,6 +12,8 @@ import {
   type TrackKind,
   type Waveform,
   type Filmstrip,
+  parseAudioFx,
+  type AudioFx,
 } from '@lumora/core'
 import {
   IPC,
@@ -74,6 +76,8 @@ export interface ProjectsIpc {
   /** Hộp thoại chọn file nhạc rồi chép vào dự án (null nếu hủy). */
   importAudio(dir: string): Promise<AudioAsset | null>
   soundEffect(dir: string, id: string): Promise<AudioAsset>
+  voiceover(dir: string, data: Uint8Array): Promise<AudioAsset>
+  processAudio(dir: string, file: string, fx: AudioFx): Promise<string>
   assetPeaks(dir: string, file: string): Promise<Waveform | null>
   /** Hộp thoại chọn ảnh/GIF rồi chép vào dự án (null nếu hủy). */
   importImage(dir: string): Promise<MediaAsset | null>
@@ -255,6 +259,19 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
   ipcMain.handle(IPC.assetsAddAudio, async (_event, folder: unknown) =>
     projects.importAudio(await projectDir(folder)),
   )
+  ipcMain.handle(IPC.assetsVoiceover, async (_event, folder: unknown, data: unknown) => {
+    if (!(data instanceof ArrayBuffer) && !ArrayBuffer.isView(data))
+      throw new Error('audio_unreadable')
+    const bytes =
+      data instanceof ArrayBuffer
+        ? new Uint8Array(data)
+        : new Uint8Array(data.buffer, data.byteOffset, data.byteLength)
+    return projects.voiceover(await projectDir(folder), bytes)
+  })
+  ipcMain.handle(IPC.audioProcess, async (_event, folder: unknown, file: unknown, fx: unknown) => {
+    if (typeof file !== 'string' || !/^[\w.-]+$/.test(file)) throw new Error('audio_unreadable')
+    return projects.processAudio(await projectDir(folder), file, parseAudioFx(fx))
+  })
   ipcMain.handle(IPC.assetsAddSfx, async (_event, folder: unknown, id: unknown) => {
     if (typeof id !== 'string') throw new Error('sfx_unknown')
     return projects.soundEffect(await projectDir(folder), id)

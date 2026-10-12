@@ -21,10 +21,17 @@ import { GUEST_SCRIPT, guestHtml } from './live/guest-page'
 import { SignalingServer } from './live/signaling'
 import { Vault } from './vault'
 import { handleMediaRequest, MEDIA_SCHEME } from './projects/media-protocol'
-import { assetPeaks, AUDIO_EXTENSIONS, createSoundEffect, importAudioFile } from './projects/assets'
+import {
+  assetPeaks,
+  AUDIO_EXTENSIONS,
+  createSoundEffect,
+  importAudioFile,
+  importVoiceover,
+} from './projects/assets'
 import { loadFilmstrip } from './projects/filmstrip'
 import { importImageFile, MEDIA_EXTENSIONS, MemeLibrary } from './projects/images'
 import { clearDirs, dirSize } from './content/cache'
+import { AudioProcessor } from './audio/process'
 import { OnlineService } from './content/online'
 import { PACK_EXTENSION } from './projects/share'
 import { loadWaveform } from './projects/waveform'
@@ -161,6 +168,11 @@ if (!app.requestSingleInstanceLock()) {
       return r.canceled ? [] : r.filePaths
     }
     const memes = new MemeLibrary(join(userData, 'memes'), runFfmpeg)
+    // Model AI lọc tạp âm nằm ngoài gói asar để FFmpeg đọc được.
+    const audioProcessor = new AudioProcessor(
+      runFfmpeg,
+      join(__dirname, '../../resources/rnnoise/sh.rnnn').replace('app.asar', 'app.asar.unpacked'),
+    )
     const cacheDirs = [join(userData, 'cache'), join(userData, 'sounds')]
     const online = new OnlineService({
       getKey: (name) => secrets.get(name),
@@ -194,7 +206,7 @@ if (!app.requestSingleInstanceLock()) {
       online,
       cache: { size: () => dirSize(cacheDirs), clear: () => clearDirs(cacheDirs) },
       recording,
-      exports: new ExportManager(runFfmpeg),
+      exports: new ExportManager(runFfmpeg, audioProcessor),
       projects: {
         dir: projectsDir,
         waveform: (project, dir) => loadWaveform(project, dir, runFfmpeg),
@@ -221,6 +233,8 @@ if (!app.requestSingleInstanceLock()) {
           return file ? importAudioFile(file, dir, runFfmpeg) : null
         },
         soundEffect: (dir, id) => createSoundEffect(id, dir, runFfmpeg),
+        voiceover: (dir, data) => importVoiceover(dir, data, runFfmpeg),
+        processAudio: (dir, file, fx) => audioProcessor.process(dir, file, fx),
         importImage: async (dir) => {
           const file = await pickFiles(MEDIA_EXTENSIONS, false)
           return file[0] ? importImageFile(file[0], dir, runFfmpeg) : null

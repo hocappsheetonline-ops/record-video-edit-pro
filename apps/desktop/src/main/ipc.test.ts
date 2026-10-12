@@ -127,6 +127,12 @@ beforeEach(async () => {
         })),
         assetPeaks: vi.fn(async () => null),
         importImage: vi.fn(async () => null),
+        voiceover: vi.fn(async (_dir: string, data: Uint8Array) => ({
+          file: 'asset-voice-1.m4a',
+          name: 'voice',
+          durationMs: data.byteLength,
+        })),
+        processAudio: vi.fn(async (_dir: string, file: string) => `fx-${file}`),
         trash: async (path: string) => {
           trashed.push(path)
         },
@@ -348,5 +354,18 @@ describe('registerIpc', () => {
     expect(await call(IPC.aiSpeak, 'a.lumora', 'Bruh', 'v1')).toMatchObject({ name: 'Bruh' })
     await expect(call(IPC.aiSpeak, 'a.lumora', 5, 'v1')).rejects.toThrow('speech_empty')
     await expect(call(IPC.aiSpeak, '../a', 'x', 'v1')).rejects.toThrow()
+  })
+
+  it('âm thanh: lưu lồng tiếng (nhận ArrayBuffer), xử lý hiệu ứng chỉ với tên file an toàn', async () => {
+    const { mkdir: mk } = await import('node:fs/promises')
+    await mk(join(dir, 'b.lumora'))
+    expect(await call(IPC.assetsVoiceover, 'b.lumora', new ArrayBuffer(300))).toMatchObject({
+      durationMs: 300,
+    })
+    await expect(call(IPC.assetsVoiceover, 'b.lumora', 'x')).rejects.toThrow('audio_unreadable')
+    expect(await call(IPC.audioProcess, 'b.lumora', 'seg0-mic.webm', { noise: 'strong' })).toBe(
+      'fx-seg0-mic.webm',
+    )
+    await expect(call(IPC.audioProcess, 'b.lumora', '../x', {})).rejects.toThrow('audio_unreadable')
   })
 })

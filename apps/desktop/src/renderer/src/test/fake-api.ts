@@ -315,6 +315,14 @@ export function createFakeApi(
         { start: 5500, title: 'Phần 2' },
       ],
     })),
+    addVoiceover: vi.fn<LumoraApi['addVoiceover']>(async (_folder, data) => ({
+      file: 'asset-voice-1.m4a',
+      name: 'voice',
+      durationMs: Math.max(500, data.byteLength),
+    })),
+    processAudio: vi.fn<LumoraApi['processAudio']>(
+      async (_folder, file) => `fx-${file.replace(/\.[^.]+$/, '')}-test.m4a`,
+    ),
     listVoices: vi.fn<LumoraApi['listVoices']>(async () => [
       { id: 'voice-anna', name: 'Anna' },
       { id: 'voice-bao', name: 'Bao' },

@@ -2,12 +2,14 @@ import {
   audioClipGain,
   audioClipMediaTime,
   clipGain,
+  isDefaultFx,
   mediaTime,
   outputDuration,
   outputToSource,
   overlayMediaTime,
   segmentAt,
   sourceSegments,
+  type AudioFx,
   type EditState,
   type Overlay,
   type Project,
@@ -20,10 +22,19 @@ import { drawScene, videoElementSource } from './draw'
 import { imageSource } from './overlay-draw'
 import { OverlayImages } from './overlay-images'
 import { computeScene } from './scene'
-import { useEditorStore } from './store'
+import { fxKeyOf, useEditorStore } from './store'
 
 type MediaEl = HTMLVideoElement | HTMLAudioElement
 const RESYNC_S = 0.25
+
+/** Phát thẻ media, bỏ qua lỗi (trình duyệt chặn tự phát, thẻ đã bị gỡ…). */
+function safePlay(el: HTMLMediaElement) {
+  try {
+    void el.play()?.catch(() => undefined)
+  } catch {
+    // Môi trường không hỗ trợ phát (vd. khi chạy test): bỏ qua.
+  }
+}
 
 /**
  * Xem trước khi chỉnh sửa: dùng thẻ video/audio có sẵn (giải mã phần cứng, phát mượt),
@@ -32,6 +43,8 @@ const RESYNC_S = 0.25
 export class PreviewEngine {
   private readonly segments: SourceSegment[]
   private readonly media = new Map<string, MediaEl>()
+  /** File gốc của từng thẻ media (theo `${đoạn}:${track}`). */
+  private readonly mediaFiles = new Map<string, string>()
   private frame = 0
   private lastTick = 0
   private disposed = false
@@ -71,6 +84,7 @@ export class PreviewEngine {
           })
         }
         this.media.set(`${item.segment.index}:${kind}`, el)
+        this.mediaFiles.set(`${item.segment.index}:${kind}`, track.file)
       }
     }
     this.loop = this.loop.bind(this)
@@ -88,6 +102,31 @@ export class PreviewEngine {
     const s = useEditorStore.getState()
     const deps = [s.edit, s.time, s.videoSize, s.cursor, s.follow, s.selection, s.playing]
     return deps.some((d, i) => d !== this.drawn[i])
+  }
+
+  /** File cần phát: bản đã lọc tạp âm / hiệu ứng nếu đã xử lý xong (và không giữ "nghe bản gốc"). */
+  private playable(file: string, fx: AudioFx | undefined): string {
+    if (!fx || isDefaultFx(fx)) return file
+    const store = useEditorStore.getState()
+    store.ensureFx(file, fx)
+    if (store.bypassFx) return file
+    const out = store.fxFiles[fxKeyOf(file, fx)]
+    return out && out !== 'pending' && out !== 'error' ? out : file
+  }
+
+  /** Đổi nguồn của thẻ media khi cần (giữ nguyên nếu không đổi để không phát lại từ đầu). */
+  private setSource(el: MediaEl, file: string) {
+    const src = mediaUrl(this.folder, file)
+    if (el.dataset.src === src) return
+    const at = el.currentTime
+    el.dataset.src = src
+    el.src = src
+    el.currentTime = at
+    // Ghi lại các file âm thanh đang dùng (để kiểm tra / gỡ lỗi xem trước).
+    this.canvas.dataset.audio = [...this.media.values(), ...this.audioClips.values()]
+      .map((m) => m.dataset.src?.split('/').pop() ?? '')
+      .filter(Boolean)
+      .join(' ')
   }
 
   private el(segment: number, kind: TrackKind): MediaEl | undefined {
@@ -125,21 +164,33 @@ export class PreviewEngine {
     const item = hit ? segmentAt(this.segments, hit.source) : null
     for (const [key, el] of this.media) {
       const [segText, kind] = key.split(':') as [string, TrackKind]
+      // Track có lọc tạp âm / hiệu ứng: đổi sang bản đã xử lý ngay cả khi chưa tới lượt phát.
+      if (kind === 'mic' || kind === 'system') {
+        const file = this.mediaFiles.get(key)
+        if (file)
+          this.setSource(
+            el,
+            this.playable(file, kind === 'mic' ? edit.audio.micFx : edit.audio.systemFx),
+          )
+      }
       const active = item && Number(segText) === item.segment.index
       const target = active && hit ? mediaTime(item, kind, hit.source) : null
       if (target === null || target < 0 || (Number.isFinite(el.duration) && target > el.duration)) {
         if (!el.paused) el.pause()
         continue
       }
-      // Âm lượng chung × âm lượng riêng của clip (tắt tiếng clip = 0).
-      if (kind === 'mic' || kind === 'system')
-        el.volume = Math.min(1, edit.audio[kind] * clipGain(hit!.position.clip, kind))
+      // Âm lượng chung × âm lượng riêng của clip (tắt tiếng clip = 0); đang ghi lồng tiếng thì
+      // có thể tắt tiếng bản gốc.
+      if (kind === 'mic' || kind === 'system') {
+        const muted = useEditorStore.getState().muteOriginal
+        el.volume = muted ? 0 : Math.min(1, edit.audio[kind] * clipGain(hit!.position.clip, kind))
+      }
       const speed = hit!.position.clip.speed
       if (el.playbackRate !== speed) el.playbackRate = speed
       const drift = Math.abs(el.currentTime - target)
       if (playing) {
         if (drift > RESYNC_S) el.currentTime = target
-        if (el.paused) void el.play().catch(() => undefined)
+        if (el.paused) safePlay(el)
       } else {
         if (!el.paused) el.pause()
         if (drift > 0.02) el.currentTime = target
@@ -161,9 +212,9 @@ export class PreviewEngine {
       if (!el) {
         el = document.createElement('audio')
         el.preload = 'auto'
-        el.src = mediaUrl(this.folder, clip.file)
         this.audioClips.set(clip.id, el)
       }
+      this.setSource(el, this.playable(clip.file, clip.fx))
       const at = audioClipMediaTime(clip, time)
       if (!playing || at === null) {
         if (!el.paused) el.pause()
@@ -172,7 +223,7 @@ export class PreviewEngine {
       el.volume = Math.min(1, audioClipGain(clip, time))
       const target = at / 1000
       if (Math.abs(el.currentTime - target) > RESYNC_S) el.currentTime = target
-      if (el.paused) void el.play().catch(() => undefined)
+      if (el.paused) safePlay(el)
     }
   }
 
@@ -214,7 +265,7 @@ export class PreviewEngine {
       const drift = Math.abs(el.currentTime - target)
       if (playing) {
         if (drift > RESYNC_S) el.currentTime = target
-        if (el.paused) void el.play().catch(() => undefined)
+        if (el.paused) safePlay(el)
         this.needsDraw = true
       } else {
         if (!el.paused) el.pause()

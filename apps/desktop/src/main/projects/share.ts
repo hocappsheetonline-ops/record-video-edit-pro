@@ -33,6 +33,8 @@ function shareable(name: string): boolean {
     !/^filmstrip(-\d+\.jpg|\.json)$/.test(name) &&
     name !== 'waveform.json' &&
     !name.endsWith('.peaks.json') &&
+    // Âm thanh đã lọc tạp âm / hiệu ứng: máy nhận tự tạo lại.
+    !name.startsWith('fx-') &&
     !/^edit\.backup-/.test(name)
   )
 }

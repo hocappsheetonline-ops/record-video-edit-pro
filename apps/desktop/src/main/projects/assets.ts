@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto'
-import { access, copyFile, readFile, rm } from 'node:fs/promises'
+import { access, copyFile, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { basename, extname, join } from 'node:path'
 import {
   computePeaks,
@@ -217,4 +217,53 @@ export async function assetPeaks(
   } finally {
     await rm(raw, { force: true })
   }
+}
+
+/** Lồng tiếng tối đa 30 phút (khoảng 30 MB WebM / Opus). */
+export const MAX_VOICEOVER_BYTES = 64 * 1024 * 1024
+
+/**
+ * Lưu bản lồng tiếng vừa ghi (WebM / Opus từ MediaRecorder) thành `asset-voice-….m4a` trong dự án:
+ * đổi sang AAC 48 kHz để phát và trộn ổn định, đọc độ dài thật.
+ */
+export async function importVoiceover(
+  projectDir: string,
+  data: Uint8Array,
+  run: FfmpegRunner,
+): Promise<AudioAsset> {
+  if (data.byteLength < 100 || data.byteLength > MAX_VOICEOVER_BYTES)
+    throw new Error('audio_unreadable')
+  const id = randomBytes(6).toString('hex')
+  const raw = join(projectDir, `.voice-${id}.webm`)
+  const file = `asset-voice-${id}.m4a`
+  const tmp = join(projectDir, `.${file}.part.m4a`)
+  await writeFile(raw, data)
+  try {
+    const r = await run(
+      [
+        '-hide_banner',
+        '-loglevel',
+        'error',
+        '-y',
+        '-i',
+        raw,
+        '-vn',
+        '-ar',
+        '48000',
+        '-c:a',
+        'aac',
+        '-b:a',
+        '160k',
+        tmp,
+      ],
+      10 * 60_000,
+    )
+    if (r.code !== 0) throw new Error('audio_unreadable')
+    await rename(tmp, join(projectDir, file))
+  } finally {
+    await rm(raw, { force: true })
+    await rm(tmp, { force: true })
+  }
+  const durationMs = await probeDuration(join(projectDir, file), run)
+  return { file, name: 'voice', durationMs }
 }

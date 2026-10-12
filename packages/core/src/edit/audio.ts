@@ -25,7 +25,7 @@ const MIN_PIECE_S = 0.02
 export function planAudio(
   project: Pick<Project, 'segments'>,
   clips: readonly Clip[],
-  mix: AudioMix,
+  mix: Pick<AudioMix, 'mic' | 'system'>,
 ): AudioPiece[] {
   const list = sourceSegments(project.segments)
   const pieces: AudioPiece[] = []

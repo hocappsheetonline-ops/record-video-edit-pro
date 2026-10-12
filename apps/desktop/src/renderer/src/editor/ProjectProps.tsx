@@ -11,6 +11,7 @@ import {
   type Background,
   type EditState,
 } from '@lumora/core'
+import { AudioFxPanel } from './AudioFxPanel'
 import { useEditorStore } from './store'
 import { ghostButton, pct, primaryButton, Section, Segmented, SliderRow, Toggle } from './ui'
 
@@ -595,30 +596,62 @@ export function ZoomProjectProps({ edit }: { edit: EditState }) {
 export function AudioMixProps({ edit }: { edit: EditState }) {
   const { t } = useTranslation()
   const { set } = useSetters()
+  const project = useEditorStore((s) => s.project)
+  const firstFile = (kind: 'mic' | 'system') =>
+    project?.segments.find((seg) => seg.tracks[kind])?.tracks[kind]?.file ?? null
+  const micFile = firstFile('mic')
+  const systemFile = firstFile('system')
   return (
-    <Section>
-      <SliderRow
-        defaultValue={1}
-        label={t('editor.audio.mic')}
-        value={edit.audio.mic}
-        min={0}
-        max={2}
-        step={0.05}
-        format={pct}
-        onChange={(v) => set('audio', { mic: v }, 'mic')}
-        testId="audio-mic"
-      />
-      <SliderRow
-        defaultValue={1}
-        label={t('editor.audio.system')}
-        value={edit.audio.system}
-        min={0}
-        max={2}
-        step={0.05}
-        format={pct}
-        onChange={(v) => set('audio', { system: v }, 'system')}
-      />
-      <p className="text-xs text-muted">{t('editor.audio.hint')}</p>
-    </Section>
+    <>
+      <Section title={t('editor.audio.mic')}>
+        <SliderRow
+          defaultValue={1}
+          label={t('editor.music.volume')}
+          value={edit.audio.mic}
+          min={0}
+          max={2}
+          step={0.05}
+          format={pct}
+          onChange={(v) => set('audio', { mic: v }, 'mic')}
+          testId="audio-mic"
+        />
+        {micFile ? (
+          <AudioFxPanel
+            file={micFile}
+            fx={edit.audio.micFx}
+            onChange={(micFx) => set('audio', { micFx })}
+            testIdPrefix="mic-fx-"
+          />
+        ) : (
+          <p className="text-xs text-muted">{t('editor.audio.noTrack')}</p>
+        )}
+      </Section>
+      <Section title={t('editor.audio.system')}>
+        <SliderRow
+          defaultValue={1}
+          label={t('editor.music.volume')}
+          value={edit.audio.system}
+          min={0}
+          max={2}
+          step={0.05}
+          format={pct}
+          onChange={(v) => set('audio', { system: v }, 'system')}
+          testId="audio-system"
+        />
+        {systemFile ? (
+          <AudioFxPanel
+            file={systemFile}
+            fx={edit.audio.systemFx}
+            onChange={(systemFx) => set('audio', { systemFx })}
+            testIdPrefix="system-fx-"
+          />
+        ) : (
+          <p className="text-xs text-muted">{t('editor.audio.noTrack')}</p>
+        )}
+      </Section>
+      <Section>
+        <p className="text-xs text-muted">{t('editor.audio.hint')}</p>
+      </Section>
+    </>
   )
 }

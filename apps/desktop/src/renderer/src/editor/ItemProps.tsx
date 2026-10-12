@@ -7,6 +7,7 @@ import {
   Maximize,
   Minimize,
   Scissors,
+  Unlink,
   type LucideIcon,
 } from 'lucide-react'
 import {
@@ -29,6 +30,7 @@ import {
   type Overlay,
   type ZoomRegion,
 } from '@lumora/core'
+import { AudioFxPanel } from './AudioFxPanel'
 import { useEditorStore } from './store'
 import { ghostButton, pct, secs, Section, Segmented, SliderRow, Toggle } from './ui'
 
@@ -256,47 +258,56 @@ export function AudioClipProps({ clip }: { clip: AudioClip }) {
   const { t } = useTranslation()
   const { updateAudioClip } = useEditorStore.getState()
   return (
-    <Section testId="audio-clip-panel">
-      <SliderRow
-        defaultValue={1}
-        label={t('editor.music.volume')}
-        value={clip.volume}
-        min={0}
-        max={2}
-        step={0.05}
-        format={pct}
-        testId="audio-volume"
-        onChange={(v) => updateAudioClip(clip.id, { volume: v }, `vol-${clip.id}`)}
-      />
-      <SliderRow
-        defaultValue={0}
-        label={t('editor.music.fadeIn')}
-        value={clip.fadeIn}
-        min={0}
-        max={5000}
-        step={100}
-        format={secs}
-        testId="audio-fade-in"
-        onChange={(v) => updateAudioClip(clip.id, { fadeIn: v }, `fin-${clip.id}`)}
-      />
-      <SliderRow
-        defaultValue={0}
-        label={t('editor.music.fadeOut')}
-        value={clip.fadeOut}
-        min={0}
-        max={5000}
-        step={100}
-        format={secs}
-        testId="audio-fade-out"
-        onChange={(v) => updateAudioClip(clip.id, { fadeOut: v }, `fout-${clip.id}`)}
-      />
-      <Toggle
-        label={t('editor.music.loop')}
-        checked={clip.loop}
-        testId="audio-loop"
-        onChange={(v) => updateAudioClip(clip.id, { loop: v })}
-      />
-    </Section>
+    <>
+      <Section testId="audio-clip-panel">
+        <SliderRow
+          defaultValue={1}
+          label={t('editor.music.volume')}
+          value={clip.volume}
+          min={0}
+          max={2}
+          step={0.05}
+          format={pct}
+          testId="audio-volume"
+          onChange={(v) => updateAudioClip(clip.id, { volume: v }, `vol-${clip.id}`)}
+        />
+        <SliderRow
+          defaultValue={0}
+          label={t('editor.music.fadeIn')}
+          value={clip.fadeIn}
+          min={0}
+          max={5000}
+          step={100}
+          format={secs}
+          testId="audio-fade-in"
+          onChange={(v) => updateAudioClip(clip.id, { fadeIn: v }, `fin-${clip.id}`)}
+        />
+        <SliderRow
+          defaultValue={0}
+          label={t('editor.music.fadeOut')}
+          value={clip.fadeOut}
+          min={0}
+          max={5000}
+          step={100}
+          format={secs}
+          testId="audio-fade-out"
+          onChange={(v) => updateAudioClip(clip.id, { fadeOut: v }, `fout-${clip.id}`)}
+        />
+        <Toggle
+          label={t('editor.music.loop')}
+          checked={clip.loop}
+          testId="audio-loop"
+          onChange={(v) => updateAudioClip(clip.id, { loop: v })}
+        />
+      </Section>
+      <Section title={t('editor.audioFx.title')}>
+        <AudioFxPanel
+          file={clip.file}
+          fx={clip.fx}
+          onChange={(fx) => updateAudioClip(clip.id, { fx })}
+        />
+      </Section>
+    </>
   )
 }
 
@@ -529,7 +540,20 @@ export function OverlayProps({ overlay }: { overlay: Overlay }) {
       </Section>
 
       {overlay.kind === 'video' && overlay.hasAudio && (
-        <Section title={t('editor.props.audio')}>
+        <Section
+          title={t('editor.props.audio')}
+          action={
+            <button
+              type="button"
+              data-testid="overlay-detach-audio"
+              className={ghostButton}
+              onClick={() => useEditorStore.getState().detachOverlayAudio(overlay.id)}
+            >
+              <Unlink size={13} aria-hidden />
+              {t('editor.props.detachAudio')}
+            </button>
+          }
+        >
           <SliderRow
             defaultValue={1}
             label={t('editor.music.volume')}

@@ -39,6 +39,10 @@ import {
   type SoundEffectId,
   type Transcript,
   type Waveform,
+  audioFxKey,
+  isDefaultFx,
+  overlayAudioClips,
+  type AudioFx,
 } from '@lumora/core'
 import type { AudioAsset, MediaAsset } from '@shared/ipc'
 import { lumora } from '../api'
@@ -61,6 +65,15 @@ interface EditorStore {
   filmstrip: Filmstrip | null
   /** Yêu cầu mở một tab của bảng bên phải (n tăng mỗi lần yêu cầu, kể cả cùng tab). */
   tabRequest: { tab: string; n: number }
+  /**
+   * File âm thanh đã lọc tạp âm / hiệu ứng (theo `fxKeyOf`): tên file khi xong, 'pending' khi đang
+   * xử lý, 'error' khi lỗi. Xem trước dùng file đã xử lý khi có.
+   */
+  fxFiles: Record<string, string>
+  /** Giữ nút "nghe bản gốc": xem trước tạm bỏ hiệu ứng âm thanh. */
+  bypassFx: boolean
+  /** Đang ghi lồng tiếng và tắt tiếng bản gốc trong lúc ghi. */
+  muteOriginal: boolean
   /** Dạng sóng của các file nhạc/hiệu ứng đã thêm (theo tên file). */
   assetPeaks: Record<string, Waveform | null>
   cursor: CursorTrack | null
@@ -100,6 +113,14 @@ interface EditorStore {
   addSpeech(text: string, voiceId: string): Promise<void>
   updateAudioClip(id: string, patch: Partial<AudioClip>, coalesce?: string): void
   loadAssetPeaks(file: string): void
+  /** Bắt đầu xử lý hiệu ứng âm thanh cho file (nếu chưa có); an toàn khi gọi nhiều lần. */
+  ensureFx(file: string, fx: AudioFx): void
+  setBypassFx(on: boolean): void
+  setMuteOriginal(on: boolean): void
+  /** Thêm bản lồng tiếng vừa ghi tại thời điểm `at` (ms). */
+  addVoiceover(data: ArrayBuffer, at: number, name: string): Promise<void>
+  /** Tách tiếng của video meme ra thành đoạn âm thanh riêng trên hàng Âm thanh. */
+  detachOverlayAudio(id: string): void
   requestTab(tab: string): void
   /** Thêm hiệu ứng hình tại đầu phát (mặc định 2 giây) và chọn nó. */
   addEffect(kind: EffectKind): void
@@ -138,6 +159,9 @@ const initial = {
   filmstrip: null,
   assetPeaks: {},
   tabRequest: { tab: '', n: 0 },
+  fxFiles: {},
+  bypassFx: false,
+  muteOriginal: false,
   cursor: null,
   follow: null,
   videoSize: { width: 1920, height: 1080 },
@@ -150,11 +174,14 @@ const initial = {
 }
 
 /** Đặt file âm thanh vừa thêm vào timeline tại đầu phát và chọn nó. */
-function insertAudio(asset: AudioAsset, kind: AudioClip['kind']) {
+/** Khóa của một file + bộ hiệu ứng trong `fxFiles`. */
+export const fxKeyOf = (file: string, fx: AudioFx) => `${file}|${audioFxKey(fx)}`
+
+function insertAudio(asset: AudioAsset, kind: AudioClip['kind'], at?: number) {
   const { edit, time } = useEditorStore.getState()
   if (!edit) return
   const total = outputDuration(edit.clips)
-  const start = Math.min(time, Math.max(0, total - MIN_AUDIO_CLIP_MS))
+  const start = Math.min(at ?? time, Math.max(0, total - MIN_AUDIO_CLIP_MS))
   const clip: AudioClip = {
     id: newAudioClipId(),
     file: asset.file,
@@ -362,6 +389,53 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const { folder } = get()
     if (!folder) return
     insertAudio(await lumora().addSoundEffect(folder, id), 'sfx')
+  },
+
+  ensureFx(file, fx) {
+    const { folder, fxFiles } = get()
+    if (!folder || isDefaultFx(fx)) return
+    const key = fxKeyOf(file, fx)
+    if (fxFiles[key]) return
+    set({ fxFiles: { ...fxFiles, [key]: 'pending' } })
+    void lumora()
+      .processAudio(folder, file, fx)
+      .then(
+        (out) => out,
+        () => 'error',
+      )
+      .then((out) => {
+        if (get().folder === folder) set({ fxFiles: { ...get().fxFiles, [key]: out } })
+      })
+  },
+
+  setBypassFx(on) {
+    set({ bypassFx: on })
+  },
+
+  setMuteOriginal(on) {
+    set({ muteOriginal: on })
+  },
+
+  async addVoiceover(data, at, name) {
+    const { folder } = get()
+    if (!folder) return
+    const asset = await lumora().addVoiceover(folder, data)
+    insertAudio({ ...asset, name }, 'voice', at)
+  },
+
+  detachOverlayAudio(id) {
+    const { edit } = get()
+    const o = edit?.overlays.find((x) => x.id === id)
+    if (!edit || !o || o.kind !== 'video' || !o.hasAudio) return
+    const [clip] = overlayAudioClips([o])
+    if (!clip) return
+    const audio: AudioClip = { ...clip, id: newAudioClipId(), name: o.text || clip.name }
+    get().change((e) => ({
+      ...e,
+      overlays: e.overlays.map((x) => (x.id === id ? { ...x, hasAudio: false } : x)),
+      audioClips: [...e.audioClips, audio],
+    }))
+    set({ selection: { kind: 'audio', id: audio.id } })
   },
 
   async addSpeech(text, voiceId) {

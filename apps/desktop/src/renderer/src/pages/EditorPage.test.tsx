@@ -525,4 +525,131 @@ describe('EditorPage', () => {
     await userEvent.hover(screen.getByTestId('split'))
     expect(await screen.findByRole('tooltip')).toHaveTextContent('TáchS')
   })
+
+  it('lọc tạp âm micro: chọn mức AI, xử lý ở nền rồi báo đã áp dụng; hiệu ứng giọng cho đoạn âm thanh', async () => {
+    const api = setup()
+    await screen.findByTestId('editor')
+    await userEvent.click(screen.getByTestId('tab-audio'))
+    await userEvent.click(screen.getByTestId('mic-fx-noise-medium'))
+    expect(useEditorStore.getState().edit!.audio.micFx).toMatchObject({ noise: 'medium' })
+    await waitFor(() =>
+      expect(api.processAudio).toHaveBeenCalledWith(
+        sampleSummary.folder,
+        'seg0-mic.webm',
+        expect.objectContaining({ noise: 'medium' }),
+      ),
+    )
+    expect(await screen.findByText('Đã áp dụng')).toBeInTheDocument()
+    expect(useEditorStore.getState().fxFiles).toMatchObject({
+      'seg0-mic.webm|n2': 'fx-seg0-mic-test.m4a',
+    })
+    await userEvent.click(screen.getByTestId('mic-fx-enhance'))
+    expect(useEditorStore.getState().edit!.audio.micFx.enhance).toBe(true)
+    // Giữ nút "Gốc" để nghe bản gốc.
+    fireEvent.pointerDown(screen.getByTestId('mic-fx-bypass'))
+    expect(useEditorStore.getState().bypassFx).toBe(true)
+    fireEvent.pointerUp(screen.getByTestId('mic-fx-bypass'))
+    expect(useEditorStore.getState().bypassFx).toBe(false)
+
+    // Đoạn hiệu ứng âm thanh: giọng sóc chuột, cao độ ẩn khi dùng giọng có sẵn.
+    await userEvent.click(screen.getByTestId('lib-audio'))
+    await userEvent.click(screen.getByTestId('sfx-pop'))
+    await waitFor(() => expect(screen.getByTestId('fx-panel')).toBeInTheDocument())
+    expect(screen.getByTestId('fx-pitch')).toBeInTheDocument()
+    await userEvent.click(screen.getByTestId('fx-voice-chipmunk'))
+    expect(useEditorStore.getState().edit!.audioClips[0]!.fx).toMatchObject({ voice: 'chipmunk' })
+    expect(screen.queryByTestId('fx-pitch')).not.toBeInTheDocument()
+    expect(screen.getByTestId('audio-fx-badge')).toBeInTheDocument()
+  })
+
+  it('tách âm thanh của video meme thành đoạn riêng', async () => {
+    setup()
+    await screen.findByTestId('editor')
+    await userEvent.click(screen.getByTestId('media-filter-video'))
+    act(() => useEditorStore.getState().setTime(1000))
+    await userEvent.click(await screen.findByTestId('meme-item'))
+    await userEvent.click(await screen.findByTestId('overlay-detach-audio'))
+    const { overlays, audioClips } = useEditorStore.getState().edit!
+    expect(overlays[0]!.hasAudio).toBe(false)
+    expect(audioClips).toEqual([
+      expect.objectContaining({
+        file: 'asset-meme-b.mp4',
+        name: 'Bruh',
+        start: 1000,
+        offset: 0,
+        duration: 2500,
+        sourceDuration: 2500,
+      }),
+    ])
+    expect(useEditorStore.getState().selection).toMatchObject({ kind: 'audio' })
+  })
+
+  it('nhạc nền hiện vạch nhịp theo dạng sóng', async () => {
+    const api = setup()
+    api.getAssetPeaks.mockResolvedValue({
+      bucketMs: 20,
+      peaks: Array.from({ length: 300 }, (_, i) => (i % 25 === 5 ? 220 : 30)),
+    })
+    await screen.findByTestId('editor')
+    await userEvent.click(screen.getByTestId('lib-audio'))
+    await userEvent.click(screen.getByTestId('audio-section-music'))
+    await userEvent.click(screen.getByTestId('add-music'))
+    // Nhạc phủ 7 giây, nhịp mỗi 0.5 giây.
+    await waitFor(() => expect(screen.getAllByTestId('beat-mark').length).toBeGreaterThan(10))
+  })
+
+  it('lồng tiếng: ghi micro trong lúc phát, tắt tiếng bản gốc, dừng thì thêm đúng chỗ', async () => {
+    const api = setup()
+    const track = { stop: vi.fn() }
+    const stream = { getTracks: () => [track] } as unknown as MediaStream
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: {
+        enumerateDevices: async () => [
+          { kind: 'audioinput', deviceId: 'mic-1', label: 'USB Mic', groupId: 'g' },
+        ],
+        getUserMedia: vi.fn(async () => stream),
+      },
+    })
+    class FakeRecorder {
+      static isTypeSupported = () => true
+      ondataavailable: ((e: { data: Blob }) => void) | null = null
+      onstop: (() => void) | null = null
+      start = vi.fn()
+      stop() {
+        this.ondataavailable?.({ data: new Blob([new Uint8Array(1234)]) })
+        this.onstop?.()
+      }
+    }
+    vi.stubGlobal('MediaRecorder', FakeRecorder)
+    vi.stubGlobal(
+      'AudioContext',
+      class {
+        createAnalyser = () => ({ fftSize: 0, getFloatTimeDomainData: () => undefined })
+        createMediaStreamSource = () => ({ connect: () => undefined })
+        close = async () => undefined
+      },
+    )
+    await screen.findByTestId('editor')
+    act(() => useEditorStore.getState().setTime(2000))
+    await userEvent.click(screen.getByTestId('lib-audio'))
+    await userEvent.click(screen.getByTestId('audio-section-voice'))
+    expect(await screen.findByRole('option', { name: 'USB Mic' })).toBeInTheDocument()
+    await userEvent.click(screen.getByTestId('voice-countdown-toggle'))
+    await userEvent.click(screen.getByTestId('voice-record'))
+    await waitFor(() => expect(useEditorStore.getState().playing).toBe(true))
+    expect(useEditorStore.getState().muteOriginal).toBe(true)
+    await userEvent.click(await screen.findByTestId('voice-stop'))
+    await waitFor(() => expect(useEditorStore.getState().edit!.audioClips).toHaveLength(1))
+    expect(api.addVoiceover).toHaveBeenCalledWith(sampleSummary.folder, expect.any(ArrayBuffer))
+    expect(useEditorStore.getState().edit!.audioClips[0]).toMatchObject({
+      kind: 'voice',
+      name: 'Lồng tiếng 1',
+      start: 2000,
+    })
+    expect(useEditorStore.getState().playing).toBe(false)
+    expect(useEditorStore.getState().muteOriginal).toBe(false)
+    expect(track.stop).toHaveBeenCalled()
+    vi.unstubAllGlobals()
+  })
 })

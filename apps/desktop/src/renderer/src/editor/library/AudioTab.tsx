@@ -1,11 +1,22 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Loader2, MessageSquareQuote, Music2, Plus, Upload, Volume2 } from 'lucide-react'
+import {
+  Circle,
+  Loader2,
+  MessageSquareQuote,
+  Music2,
+  Plus,
+  Square,
+  Upload,
+  Volume2,
+} from 'lucide-react'
 import { SOUND_EFFECT_IDS, type SoundEffectId } from '@lumora/core'
 import { lumora } from '../../api'
+import { MicMeter } from '../../components/MicMeter'
+import { getMicStream, stopStream } from '../../lib/media'
 import { useAppStore } from '../../store/app'
 import { useEditorStore } from '../store'
-import { primaryButton, Segmented } from '../ui'
+import { primaryButton, Segmented, Toggle } from '../ui'
 import { ErrorNote, Heading, useErrorText } from './common'
 
 /** Hiệu ứng âm thanh meme (phần cuối danh sách); phần đầu là hiệu ứng cơ bản. */
@@ -165,10 +176,185 @@ function SpeechMaker({
   )
 }
 
+const COUNTDOWN_S = 3
+
+type Phase =
+  { kind: 'idle' } | { kind: 'countdown'; left: number } | { kind: 'recording'; since: number }
+
+/**
+ * Lồng tiếng: ghi micro trong khi video phát từ đầu phát (có đếm ngược, tùy chọn tắt tiếng bản
+ * gốc). Dừng lại thì bản ghi thành một đoạn "Lồng tiếng" trên hàng Âm thanh, đúng chỗ bắt đầu.
+ */
+function VoiceOver({ onError }: { onError: (e: unknown) => void }) {
+  const { t } = useTranslation()
+  const [mics, setMics] = useState<MediaDeviceInfo[]>([])
+  const [mic, setMic] = useState('')
+  const [mute, setMute] = useState(true)
+  const [countdown, setCountdown] = useState(true)
+  const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
+  const [saving, setSaving] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
+  const session = useRef<{
+    recorder: MediaRecorder
+    stream: MediaStream
+    chunks: Blob[]
+    at: number
+  } | null>(null)
+  const playing = useEditorStore((s) => s.playing)
+
+  useEffect(() => {
+    void (navigator.mediaDevices?.enumerateDevices().catch(() => []) ?? Promise.resolve([])).then(
+      (list) => {
+        const inputs = list.filter((d) => d.kind === 'audioinput' && d.deviceId)
+        setMics(inputs)
+        setMic((m) => m || inputs[0]?.deviceId || '')
+      },
+    )
+  }, [])
+
+  const stop = () => {
+    const s = session.current
+    if (!s) return
+    session.current = null
+    s.recorder.stop()
+  }
+
+  // Video phát hết (hoặc người dùng bấm dừng) thì dừng ghi.
+  useEffect(() => {
+    if (!playing && phase.kind === 'recording') stop()
+  }, [playing, phase.kind])
+
+  // Đồng hồ thời gian ghi và đếm ngược.
+  useEffect(() => {
+    if (phase.kind === 'idle') return
+    const timer = setInterval(() => {
+      if (phase.kind === 'recording') setElapsed(Date.now() - phase.since)
+    }, 200)
+    return () => clearInterval(timer)
+  }, [phase])
+
+  const begin = async () => {
+    const store = useEditorStore.getState()
+    const stream = await getMicStream(mic)
+    const type = MediaRecorder.isTypeSupported?.('audio/webm;codecs=opus')
+      ? 'audio/webm;codecs=opus'
+      : ''
+    const recorder = new MediaRecorder(stream, type ? { mimeType: type } : {})
+    const chunks: Blob[] = []
+    const at = store.time
+    recorder.ondataavailable = (e) => e.data.size > 0 && chunks.push(e.data)
+    recorder.onstop = () => {
+      stopStream(stream)
+      const s = useEditorStore.getState()
+      s.setPlaying(false)
+      s.setMuteOriginal(false)
+      setPhase({ kind: 'idle' })
+      setSaving(true)
+      const n = (s.edit?.audioClips.filter((c) => c.kind === 'voice').length ?? 0) + 1
+      void new Blob(chunks, { type: type || 'audio/webm' })
+        .arrayBuffer()
+        .then((data) => s.addVoiceover(data, at, t('editor.library.voiceName', { n })))
+        .catch(onError)
+        .finally(() => setSaving(false))
+    }
+    session.current = { recorder, stream, chunks, at }
+    recorder.start(250)
+    store.setMuteOriginal(mute)
+    store.setPlaying(true)
+    setElapsed(0)
+    setPhase({ kind: 'recording', since: Date.now() })
+  }
+
+  const start = async () => {
+    try {
+      if (countdown) {
+        for (let left = COUNTDOWN_S; left > 0; left--) {
+          setPhase({ kind: 'countdown', left })
+          await new Promise((r) => setTimeout(r, 1000))
+        }
+      }
+      await begin()
+    } catch (e) {
+      setPhase({ kind: 'idle' })
+      onError(e)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3" data-testid="voice-over">
+      <label className="flex items-center gap-2 text-xs">
+        <span className="text-muted">{t('editor.library.voiceMic')}</span>
+        <select
+          value={mic}
+          data-testid="voice-mic"
+          disabled={phase.kind !== 'idle'}
+          onChange={(e) => setMic(e.target.value)}
+          className="min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-2 py-1 text-xs"
+        >
+          {mics.map((m, i) => (
+            <option key={m.deviceId} value={m.deviceId}>
+              {m.label || `Micro ${i + 1}`}
+            </option>
+          ))}
+        </select>
+      </label>
+      {mic && <MicMeter deviceId={mic} />}
+      <Toggle
+        label={t('editor.library.voiceMute')}
+        checked={mute}
+        onChange={setMute}
+        testId="voice-mute"
+      />
+      <Toggle
+        label={t('editor.library.voiceCountdown')}
+        checked={countdown}
+        onChange={setCountdown}
+        testId="voice-countdown-toggle"
+      />
+      {phase.kind === 'recording' ? (
+        <button
+          type="button"
+          data-testid="voice-stop"
+          onClick={stop}
+          className="flex items-center justify-center gap-2 rounded-md bg-danger px-3 py-2 text-sm font-medium text-white"
+        >
+          <Square size={14} fill="currentColor" aria-hidden />
+          {t('editor.library.voiceStop')}
+          <span className="font-mono tabular-nums" data-testid="voice-elapsed">
+            {(elapsed / 1000).toFixed(1)}s
+          </span>
+        </button>
+      ) : (
+        <button
+          type="button"
+          data-testid="voice-record"
+          disabled={!mic || phase.kind === 'countdown' || saving}
+          onClick={() => void start()}
+          className="flex items-center justify-center gap-2 rounded-md border border-danger/60 px-3 py-2 text-sm font-medium text-danger hover:bg-danger/10 disabled:opacity-50"
+        >
+          {saving ? (
+            <Loader2 size={14} className="animate-spin" aria-hidden />
+          ) : (
+            <Circle size={14} fill="currentColor" aria-hidden />
+          )}
+          {phase.kind === 'countdown' ? (
+            <span data-testid="voice-countdown">{phase.left}</span>
+          ) : saving ? (
+            t('editor.library.voiceSaving')
+          ) : (
+            t('editor.library.voiceRecord')
+          )}
+        </button>
+      )}
+      <p className="text-[11px] text-muted">{t('editor.library.voiceHint')}</p>
+    </div>
+  )
+}
+
 /** Mục Âm thanh: nhạc từ máy, hiệu ứng âm thanh, âm thanh meme và giọng đọc AI. */
 export function AudioTab() {
   const { t } = useTranslation()
-  const [section, setSection] = useState<'sfx' | 'meme' | 'music'>('sfx')
+  const [section, setSection] = useState<'sfx' | 'meme' | 'music' | 'voice'>('sfx')
   const [busy, setBusy] = useState<Busy>(null)
   const [error, setError] = useState<string | null>(null)
   const errorText = useErrorText()
@@ -187,6 +373,7 @@ export function AudioTab() {
           { value: 'sfx', label: t('editor.library.audioSections.sfx') },
           { value: 'meme', label: t('editor.library.audioSections.meme') },
           { value: 'music', label: t('editor.library.audioSections.music') },
+          { value: 'voice', label: t('editor.library.audioSections.voice') },
         ]}
         value={section}
         onChange={setSection}
@@ -215,6 +402,7 @@ export function AudioTab() {
           </div>
         </>
       )}
+      {section === 'voice' && <VoiceOver onError={(e) => setError(errorText(e))} />}
       {section === 'sfx' && (
         <div className="flex flex-col">
           {BASIC_SFX.map((id) => (

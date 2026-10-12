@@ -1,0 +1,9 @@
+# Thành phần bên thứ ba đi kèm Lumora
+
+| Thành phần                                                                   | Dùng cho                                  | Giấy phép / nguồn                                                                                                              |
+| ---------------------------------------------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| FFmpeg (qua `ffmpeg-static`)                                                 | Quay, xử lý âm thanh / video, xuất        | GPL (bản dựng của ffmpeg-static)                                                                                               |
+| Model rnnoise `somnolent-hogwash` (`apps/desktop/resources/rnnoise/sh.rnnn`) | Lọc tạp âm AI                             | [GregorR/rnnoise-models](https://github.com/GregorR/rnnoise-models): model không phải tác phẩm sáng tạo, không thuộc bản quyền |
+| lucide-react                                                                 | Biểu tượng giao diện                      | ISC                                                                                                                            |
+| Tenor API (Google)                                                           | Tìm meme / sticker (key của người dùng)   | Điều khoản Tenor; hiện "Powered by Tenor"                                                                                      |
+| Pixabay API                                                                  | Video / ảnh miễn phí (key của người dùng) | Giấy phép nội dung Pixabay                                                                                                     |

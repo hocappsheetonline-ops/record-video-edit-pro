@@ -1,5 +1,6 @@
 import type {
   AppSettings,
+  AudioFx,
   Destination,
   Filmstrip,
   LiveComment,
@@ -53,6 +54,8 @@ export const IPC = {
   assetsAddSfx: 'assets:add-sfx',
   assetsPeaks: 'assets:peaks',
   assetsAddImage: 'assets:add-image',
+  assetsVoiceover: 'assets:voiceover',
+  audioProcess: 'audio:process',
   memesList: 'memes:list',
   memesImport: 'memes:import',
   memesRemove: 'memes:remove',
@@ -389,6 +392,10 @@ export interface LumoraApi {
   getTranscript(folder: string): Promise<Transcript | null>
   suggestCuts(folder: string): Promise<CutSuggestion[]>
   summarize(folder: string): Promise<AiSummary>
+  /** Lưu bản lồng tiếng vừa ghi (WebM) vào dự án. */
+  addVoiceover(folder: string, data: ArrayBuffer): Promise<AudioAsset>
+  /** Lọc tạp âm / hiệu ứng giọng cho một file trong dự án; trả về tên file đã xử lý. */
+  processAudio(folder: string, file: string, fx: AudioFx): Promise<string>
   /** Giọng đọc AI có trong tài khoản ElevenLabs. */
   listVoices(): Promise<{ id: string; name: string }[]>
   /** Đọc câu bằng giọng AI và chép vào dự án (meme sound, lời bình). */

@@ -11,6 +11,7 @@ import {
 } from '@lumora/core'
 import { buildExportMuxArgs, buildGifArgs } from '../ffmpeg/args'
 import type { FfmpegRunner } from '../ffmpeg/runner'
+import { AudioProcessor } from '../audio/process'
 
 export const EXPORTS_DIR = 'exports'
 
@@ -43,7 +44,15 @@ export function safeFileName(name: string): string {
 export class ExportManager {
   private readonly active = new Map<string, ActiveExport>()
 
-  constructor(private readonly run: FfmpegRunner) {}
+  private readonly audio: Pick<AudioProcessor, 'process'>
+
+  /** `audio`: bộ xử lý lọc tạp âm / hiệu ứng giọng (mặc định: không có model AI, dùng lọc phổ). */
+  constructor(
+    private readonly run: FfmpegRunner,
+    audio?: Pick<AudioProcessor, 'process'>,
+  ) {
+    this.audio = audio ?? new AudioProcessor(run, null)
+  }
 
   async start(projectDir: string): Promise<string> {
     const dir = join(projectDir, EXPORTS_DIR)
@@ -81,26 +90,34 @@ export class ExportManager {
       const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')
       const name = safeFileName(`${baseName} ${stamp}`)
       const mp4 = join(job.dir, `${name}.mp4`)
-      const pieces = [
-        ...planAudio(project, edit.clips, edit.audio).map((p) => ({
-          path: join(projectDir, p.file),
+      // Track có lọc tạp âm / hiệu ứng giọng: dùng file đã xử lý (xử lý ngay nếu chưa có).
+      const recorded = await Promise.all(
+        planAudio(project, edit.clips, edit.audio).map(async (p) => ({
+          path: join(
+            projectDir,
+            await this.audio.process(
+              projectDir,
+              p.file,
+              p.kind === 'mic' ? edit.audio.micFx : edit.audio.systemFx,
+            ),
+          ),
           mediaStart: p.mediaStart,
           duration: p.duration,
           outputStart: p.outputStart,
           speed: p.speed,
           volume: p.volume,
         })),
-        // Nhạc nền và hiệu ứng âm thanh thêm vào.
-        // Nhạc nền, hiệu ứng âm thanh và tiếng của video meme.
-        ...planAudioClips(
-          [...edit.audioClips, ...overlayAudioClips(edit.overlays)],
-          durationS * 1000,
-        ).map((p) => ({
+      )
+      // Nhạc nền, hiệu ứng âm thanh, lồng tiếng và tiếng của video meme.
+      const extra = [...edit.audioClips, ...overlayAudioClips(edit.overlays)]
+      const added = await Promise.all(
+        planAudioClips(extra, durationS * 1000).map(async (p) => ({
           ...p,
-          path: join(projectDir, p.file),
+          path: join(projectDir, await this.audio.process(projectDir, p.file, p.fx)),
           speed: 1,
         })),
-      ]
+      )
+      const pieces = [...recorded, ...added]
       const tmpOut = join(job.dir, `.mux-${id}.mp4`)
       const muxed = await this.run(
         buildExportMuxArgs({ video: job.tmpPath, pieces, durationS, output: tmpOut }),

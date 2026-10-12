@@ -1,10 +1,13 @@
+import { parseAudioFx, type AudioFx } from './audio-fx'
+
 /** Một đoạn âm thanh thêm vào video: nhạc nền hoặc hiệu ứng âm thanh (kiểu CapCut). */
 export interface AudioClip {
   id: string
   /** Tên file trong thư mục dự án (đã sao chép vào dự án, nên chia sẻ dự án vẫn có). */
   file: string
   name: string
-  kind: 'music' | 'sfx'
+  /** Nhạc nền, hiệu ứng âm thanh, hoặc lồng tiếng ghi trong trình chỉnh sửa. */
+  kind: 'music' | 'sfx' | 'voice'
   /** Vị trí bắt đầu trên video xuất (ms). */
   start: number
   /** Bắt đầu phát từ ms thứ mấy của file. */
@@ -20,6 +23,8 @@ export interface AudioClip {
   fadeOut: number
   /** Lặp lại file khi đoạn dài hơn file (nhạc nền). */
   loop: boolean
+  /** Lọc tạp âm / hiệu ứng giọng (không có = giữ nguyên). */
+  fx?: AudioFx
 }
 
 export const MIN_AUDIO_CLIP_MS = 200
@@ -90,6 +95,8 @@ export interface AudioClipPiece {
   fadeIn: number
   fadeOut: number
   loop: boolean
+  /** Hiệu ứng của đoạn (file sẽ được xử lý trước khi trộn). */
+  fx?: AudioFx
 }
 
 /** Các đoạn nhạc/hiệu ứng cần trộn khi xuất, cắt gọn trong độ dài video. */
@@ -114,6 +121,7 @@ export function planAudioClips(
         fadeIn: Math.min(c.fadeIn, duration / 2) / 1000,
         fadeOut: Math.min(c.fadeOut, duration / 2) / 1000,
         loop: c.loop,
+        ...(c.fx ? { fx: c.fx } : {}),
       },
     ]
   })
@@ -167,7 +175,7 @@ export function parseAudioClips(value: unknown): AudioClip[] {
         id: c.id,
         file: c.file,
         name: typeof c.name === 'string' ? c.name.slice(0, 120) : c.file,
-        kind: c.kind === 'sfx' ? 'sfx' : 'music',
+        kind: c.kind === 'sfx' || c.kind === 'voice' ? c.kind : 'music',
         start: num(c.start, 0, 0, 24 * 3600_000),
         offset: num(c.offset, 0, 0, sourceDuration),
         duration: num(c.duration, sourceDuration, MIN_AUDIO_CLIP_MS, 24 * 3600_000),
@@ -176,6 +184,7 @@ export function parseAudioClips(value: unknown): AudioClip[] {
         fadeIn: num(c.fadeIn, 0, 0, 10_000),
         fadeOut: num(c.fadeOut, 0, 0, 10_000),
         loop: c.loop === true,
+        ...(c.fx === undefined ? {} : { fx: parseAudioFx(c.fx) }),
       },
     ]
   })
