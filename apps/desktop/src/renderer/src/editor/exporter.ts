@@ -28,6 +28,7 @@ import {
 import type { ExportResult } from '@shared/ipc'
 import { lumora } from '../api'
 import { mediaUrl } from '../lib/media'
+import { OverlayImages } from './overlay-images'
 import { drawScene, type FrameSource } from './draw'
 import { computeScene } from './scene'
 
@@ -118,6 +119,10 @@ export async function exportVideo(options: {
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('Không tạo được canvas')
 
+  // Ảnh / GIF meme của lớp nổi: tải hết trước khi dựng hình.
+  const images = new OverlayImages(folder)
+  await Promise.all(edit.overlays.filter((o) => o.kind === 'image').map((o) => images.load(o.file)))
+
   const exportId = await api.startExport(folder)
   const inputs: Input[] = []
   let output: Output | null = null
@@ -194,6 +199,7 @@ export async function exportVideo(options: {
       drawScene(ctx, scene, {
         screen: screen ? sampleSource(screen) : null,
         camera: camera ? sampleSource(camera) : null,
+        overlayImage: (file, local) => images.frameAt(file, local),
       })
       await source.add(i / fps, 1 / fps)
       options.onProgress?.({ phase: 'render', progress: (i + 1) / plan.frames.length })
@@ -209,5 +215,6 @@ export async function exportVideo(options: {
     throw error
   } finally {
     for (const input of inputs) input.dispose()
+    images.dispose()
   }
 }

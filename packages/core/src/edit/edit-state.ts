@@ -8,6 +8,7 @@ import {
 import { parseAudioClips, type AudioClip } from './audio-clips'
 import { NO_BEAUTY, parseBeauty, type BeautyStyle } from './beauty'
 import { parseEffects, type EffectRegion } from './effects'
+import { parseOverlays, type Overlay } from './overlays'
 import { parseTransitions, pruneTransitions, type Transition } from './transitions'
 import { ASPECTS, CORNERS, RESOLUTIONS, type Aspect, type Corner, type Resolution } from './layout'
 import { initialClips, MIN_CLIP_MS, sourceDuration, type Clip } from './timeline'
@@ -102,6 +103,8 @@ export interface EditState {
   transitions: Transition[]
   /** Hiệu ứng hình theo khoảng thời gian (rung, glitch, VHS…). */
   effects: EffectRegion[]
+  /** Chữ, sticker và ảnh meme nổi trên video. */
+  overlays: Overlay[]
   export: ExportSettings
   captions: CaptionsState
 }
@@ -154,6 +157,7 @@ export function createDefaultEdit(
     audioClips: [],
     transitions: [],
     effects: [],
+    overlays: [],
     export: { resolution: 1080, fps: project.fps >= 60 ? 60 : 30, format: 'mp4' },
     captions: { ...DEFAULT_CAPTIONS, lines: [] },
   }
@@ -313,6 +317,7 @@ export function parseEditState(
     audioClips: parseAudioClips(input.audioClips),
     transitions: pruneTransitions(clips, parseTransitions(input.transitions)),
     effects: parseEffects(input.effects),
+    overlays: parseOverlays(input.overlays),
     export: {
       resolution: pick(RESOLUTIONS, e.resolution, base.export.resolution),
       fps: pick([30, 60] as const, e.fps, base.export.fps),

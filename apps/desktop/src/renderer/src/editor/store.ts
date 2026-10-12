@@ -21,6 +21,9 @@ import {
   type Project,
   type Size,
   type AudioClip,
+  DEFAULT_OVERLAY_MS,
+  newOverlayId,
+  type Overlay,
   DEFAULT_EFFECT_MS,
   MIN_REGION_MS,
   newEffectId,
@@ -42,7 +45,7 @@ import { lumora } from '../api'
 
 /** `transition`: id là clip đứng trước chỗ nối. */
 export type Selection = {
-  kind: 'clip' | 'zoom' | 'audio' | 'transition' | 'effect'
+  kind: 'clip' | 'zoom' | 'audio' | 'transition' | 'effect' | 'overlay'
   id: string
 } | null
 
@@ -99,6 +102,9 @@ interface EditorStore {
   /** Thêm hiệu ứng hình tại đầu phát (mặc định 2 giây) và chọn nó. */
   addEffect(kind: EffectKind): void
   updateEffect(id: string, patch: Partial<EffectRegion>, coalesce?: string): void
+  /** Thêm chữ / emoji / ảnh tại đầu phát (3 giây) và chọn nó. */
+  addOverlay(init: Partial<Overlay> & Pick<Overlay, 'kind'>): void
+  updateOverlay(id: string, patch: Partial<Overlay>, coalesce?: string): void
   deleteSelection(): void
   setClipSpeed(id: string, speed: number): void
   addZoomAtPlayhead(): void
@@ -387,6 +393,38 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     )
   },
 
+  addOverlay(init) {
+    const { edit, time } = get()
+    if (!edit) return
+    const total = outputDuration(edit.clips)
+    const start = Math.min(time, Math.max(0, total - 200))
+    const overlay: Overlay = {
+      id: newOverlayId(),
+      start,
+      end: Math.min(total, start + DEFAULT_OVERLAY_MS),
+      x: 0.5,
+      y: init.kind === 'text' ? 0.15 : 0.5,
+      size: init.kind === 'image' ? 0.35 : init.kind === 'emoji' ? 0.18 : 0.09,
+      rotation: 0,
+      animation: 'pop',
+      text: '',
+      style: 'meme',
+      color: '#ffffff',
+      file: '',
+      aspect: 1,
+      ...init,
+    }
+    get().change((e) => ({ ...e, overlays: [...e.overlays, overlay] }))
+    set({ selection: { kind: 'overlay', id: overlay.id } })
+  },
+
+  updateOverlay(id, patch, coalesce) {
+    get().change(
+      (e) => ({ ...e, overlays: e.overlays.map((o) => (o.id === id ? { ...o, ...patch } : o)) }),
+      coalesce,
+    )
+  },
+
   requestTab(tab) {
     set({ tabRequest: { tab, n: get().tabRequest.n + 1 } })
   },
@@ -406,7 +444,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   deleteSelection() {
     const { selection } = get()
     if (!selection) return
-    if (selection.kind === 'effect') {
+    if (selection.kind === 'overlay') {
+      get().change((e) => ({ ...e, overlays: e.overlays.filter((o) => o.id !== selection.id) }))
+    } else if (selection.kind === 'effect') {
       get().change((e) => ({ ...e, effects: e.effects.filter((x) => x.id !== selection.id) }))
     } else if (selection.kind === 'audio') {
       get().change((e) => ({ ...e, audioClips: e.audioClips.filter((c) => c.id !== selection.id) }))

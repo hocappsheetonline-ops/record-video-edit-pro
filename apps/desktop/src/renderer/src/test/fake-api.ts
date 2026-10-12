@@ -231,6 +231,29 @@ export function createFakeApi(
       bucketMs: 20,
       peaks: Array.from({ length: 150 }, (_, i) => (i * 7) % 255),
     })),
+    addImageFile: vi.fn<LumoraApi['addImageFile']>(async () => ({
+      file: 'asset-img.png',
+      name: 'cat',
+      width: 400,
+      height: 200,
+    })),
+    listMemes: vi.fn<LumoraApi['listMemes']>(async () => [
+      {
+        file: 'meme-a.gif',
+        name: 'Mèo cười',
+        width: 300,
+        height: 300,
+        thumb: 'data:image/jpeg;base64,',
+      },
+    ]),
+    importMemes: vi.fn<LumoraApi['importMemes']>(async () => []),
+    removeMeme: vi.fn<LumoraApi['removeMeme']>(async () => []),
+    useMeme: vi.fn<LumoraApi['useMeme']>(async (_folder, file) => ({
+      file: `asset-${file}`,
+      name: 'Mèo cười',
+      width: 300,
+      height: 300,
+    })),
     importPack: vi.fn<LumoraApi['importPack']>(async () => ({
       folder: sampleSummary.folder,
       status: 'created',

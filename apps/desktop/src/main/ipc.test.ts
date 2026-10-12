@@ -104,12 +104,24 @@ beforeEach(async () => {
           durationMs: 500,
         })),
         assetPeaks: vi.fn(async () => null),
+        importImage: vi.fn(async () => null),
         trash: async (path: string) => {
           trashed.push(path)
         },
         reveal: () => {},
       },
       updates,
+      memes: {
+        list: vi.fn(async () => []),
+        pickAndAdd: vi.fn(async () => []),
+        remove: vi.fn(async () => []),
+        useInProject: vi.fn(async (file: string) => ({
+          file: `asset-${file}`,
+          name: 'm',
+          width: 10,
+          height: 10,
+        })),
+      },
       openLogs: vi.fn(async () => {}),
       appInfo: () => ({
         name: 'Lumora',
@@ -157,6 +169,17 @@ describe('registerIpc', () => {
       file: 'asset-sfx-pop.m4a',
     })
     await expect(call(IPC.assetsPeaks, 'A.lumora', null)).rejects.toThrow('Tên file không hợp lệ')
+  })
+
+  it('meme: kiểm tra tham số, chép vào đúng dự án', async () => {
+    await expect(call(IPC.memesRemove, 5)).rejects.toThrow('Tên file không hợp lệ')
+    await expect(call(IPC.memesUse, '../x', 'meme-a.png')).rejects.toThrow(
+      'Thư mục dự án không hợp lệ',
+    )
+    expect(await call(IPC.memesUse, 'A.lumora', 'meme-a.png')).toMatchObject({
+      file: 'asset-meme-a.png',
+    })
+    expect(await call(IPC.memesList)).toEqual([])
   })
 
   it('cập nhật settings', async () => {

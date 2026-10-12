@@ -516,3 +516,108 @@ test('hiệu ứng hình: đủ 10 kiểu xuất được; đen trắng làm m�
   expect(errors).toEqual([])
   await app.close()
 })
+
+test('chữ meme + GIF meme từ thư viện: kéo đặt vị trí trên khung xem trước, xuất ra đúng chỗ, GIF chuyển động', async () => {
+  const gif = join(dirs.userData, 'dance.gif')
+  execFileSync(ffmpegPath as unknown as string, [
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+    '-f',
+    'lavfi',
+    '-i',
+    // Mỗi khung một màu khác hẳn (đỏ → xanh), 5 khung/giây.
+    "nullsrc=s=200x200:r=5:d=2,geq=r='mod(N*80\\,256)':g=40:b='255-mod(N*80\\,256)'",
+    gif,
+  ])
+  const { app, page, errors } = await launchApp(dirs.userData)
+  await app.evaluate(({ dialog }, path) => {
+    dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [path] })) as never
+  }, gif)
+  await openEditor(page)
+  await page.getByTestId('tab-export').click()
+  await page.getByTestId('resolution-720').click()
+  await page.getByTestId('export-start').click()
+  await expect(page.getByTestId('export-result')).toBeVisible({ timeout: 150_000 })
+  const plain = join(projectDir, 'exports', exported('.mp4')[0]!)
+
+  await page.getByTestId('tab-stickers').click()
+  await page.getByTestId('meme-import').click()
+  await expect(page.getByTestId('meme-item')).toHaveCount(1)
+  await page.getByTestId('meme-item').click()
+  await expect(page.getByTestId('timeline-overlay')).toHaveCount(1)
+  await page.getByTestId('anim-none').click()
+
+  // Kéo ảnh từ giữa khung tới vị trí (80%, 70%).
+  const box = (await page.getByTestId('editor-canvas').boundingBox())!
+  await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5)
+  await page.mouse.down()
+  await page.mouse.move(box.x + box.width * 0.65, box.y + box.height * 0.6, { steps: 5 })
+  await page.mouse.move(box.x + box.width * 0.8, box.y + box.height * 0.7, { steps: 5 })
+  await page.mouse.up()
+  const saved = () => JSON.parse(readFileSync(join(projectDir, 'edit.json'), 'utf8'))
+  await expect.poll(() => saved().overlays?.[0]?.x ?? 0).toBeGreaterThan(0.75)
+  expect(saved().overlays[0].y).toBeGreaterThan(0.65)
+
+  // Chữ meme ở trên cùng, không hiệu ứng để dễ đo.
+  await page.getByTestId('overlay-text-input').fill('HẾT CỨU')
+  await page.getByTestId('text-style-meme').click()
+  await page.getByTestId('overlay-add-text').click()
+  await page.getByTestId('anim-none').click()
+  await expect(page.getByTestId('timeline-overlay')).toHaveCount(2)
+  await expect.poll(() => saved().overlays?.length).toBe(2)
+
+  await page.getByTestId('tab-export').click()
+  await page.waitForTimeout(1100)
+  const before = new Set(exported('.mp4'))
+  await page.getByTestId('export-start').click()
+  await expect(page.getByTestId('export-result')).toBeVisible({ timeout: 150_000 })
+  await expect.poll(() => exported('.mp4').filter((f) => !before.has(f)).length).toBe(1)
+  const styled = join(
+    projectDir,
+    'exports',
+    exported('.mp4').find((f) => !before.has(f))!,
+  )
+
+  /** Độ sáng trung bình của một vùng (crop w:h:x:y) tại giây t. */
+  const area = (file: string, t: number, crop: string) => {
+    const { stderr } = spawnSync(
+      ffmpegPath as unknown as string,
+      [
+        '-hide_banner',
+        '-ss',
+        String(t),
+        '-i',
+        file,
+        '-frames:v',
+        '1',
+        '-vf',
+        `crop=${crop},signalstats,metadata=print`,
+        '-f',
+        'null',
+        '-',
+      ],
+      { encoding: 'utf8' },
+    )
+    // Cộng độ sáng (Y) và hai kênh màu (U, V) để phân biệt cả vùng cùng độ sáng nhưng khác màu.
+    return ['YAVG', 'UAVG', 'VAVG'].map((k) =>
+      Number(new RegExp(`signalstats\\.${k}=([\\d.]+)`).exec(stderr)?.[1] ?? -1),
+    )
+  }
+  const diff = (a: number[], b: number[]) => a.reduce((sum, v, i) => sum + Math.abs(v - b[i]!), 0)
+  // Chữ ở trên giữa khung: vùng đó khác hẳn bản gốc.
+  const textArea = '300:50:490:83'
+  expect(diff(area(styled, 1, textArea), area(plain, 1, textArea))).toBeGreaterThan(10)
+  // Ảnh GIF đã được kéo tới (80%, 70%): vùng đó khác bản gốc…
+  const gifArea = '150:150:950:430'
+  expect(diff(area(styled, 1, gifArea), area(plain, 1, gifArea))).toBeGreaterThan(10)
+  // …và tự đổi khung theo thời gian (GIF động), còn vùng giữa khung nơi ảnh từng ở thì như bản gốc.
+  const frames = [0.3, 0.7, 1.1, 1.5].map((t) => area(styled, t, '120:120:960:440'))
+  expect(Math.max(...frames.slice(1).map((f) => diff(f, frames[0]!)))).toBeGreaterThan(1)
+  const center = '100:100:590:310'
+  expect(diff(area(styled, 1, center), area(plain, 1, center))).toBeLessThan(4)
+
+  expect(errors).toEqual([])
+  await app.close()
+})

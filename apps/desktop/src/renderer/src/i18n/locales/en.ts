@@ -120,7 +120,7 @@ export const en: Messages = {
     speed: 'Speed',
     shortcuts:
       'Space: play/pause · S: split · A: delete left · D: delete right · Delete: remove · Ctrl+Z: undo',
-    tracks: { clips: 'Video', zooms: 'Zoom', audio: 'Audio', effects: 'Effects' },
+    tracks: { clips: 'Video', zooms: 'Zoom', audio: 'Audio', effects: 'Effects', stickers: 'Text' },
     tabs: {
       frame: 'Frame',
       cursor: 'Cursor',
@@ -128,6 +128,7 @@ export const en: Messages = {
       zoom: 'Zoom',
       transition: 'Transition',
       effects: 'Effects',
+      stickers: 'Text & stickers',
       camera: 'Webcam',
       audio: 'Audio',
       captions: 'Captions',
@@ -151,6 +152,41 @@ export const en: Messages = {
       fill: 'Fill frame (auto-crop to cursor)',
       fillHint:
         'The screen video fills the whole frame; the overflow is cropped and the view follows the cursor.',
+    },
+    stickers: {
+      text: 'Text',
+      placeholder: 'Type text (Enter for a new line)…',
+      addText: 'Add text',
+      styles: { meme: 'Meme', title: 'Title', bubble: 'Bubble', neon: 'Neon' },
+      emoji: 'Emoji stickers',
+      memes: 'My meme library',
+      importMemes: '+ Add images/GIFs to library',
+      memesEmpty:
+        'No memes yet. Add your favourite meme images/GIFs once and reuse them in every project.',
+      removeMeme: 'Remove from library',
+      addImage: 'Add image/GIF from computer',
+      copyright:
+        'Lumora does not bundle copyrighted meme images. Use images you have the right to use.',
+      image: 'Image',
+      remove: 'Remove this layer',
+      color: 'Colour',
+      size: 'Size',
+      rotation: 'Rotation',
+      animations: {
+        none: 'Static',
+        pop: 'Pop',
+        bounce: 'Bounce',
+        shake: 'Shake',
+        fade: 'Fade',
+        slide: 'Slide in',
+      },
+      positions: { top: 'Top', center: 'Middle', bottom: 'Bottom' },
+      dragHint: 'Drag directly on the preview to position it.',
+      errors: {
+        image_unsupported: 'Only PNG, JPG, GIF and WEBP are supported.',
+        image_unreadable: 'Could not read this image (damaged file?).',
+        generic: 'Error: {{message}}',
+      },
     },
     effects: {
       hint: 'Click to add an effect at the playhead (2 s). Drag on the Effects row to move it, drag its edges to resize.',

@@ -52,6 +52,11 @@ export const IPC = {
   assetsAddAudio: 'assets:add-audio',
   assetsAddSfx: 'assets:add-sfx',
   assetsPeaks: 'assets:peaks',
+  assetsAddImage: 'assets:add-image',
+  memesList: 'memes:list',
+  memesImport: 'memes:import',
+  memesRemove: 'memes:remove',
+  memesUse: 'memes:use',
   exportStart: 'export:start',
   exportWrite: 'export:write',
   exportFinish: 'export:finish',
@@ -243,6 +248,18 @@ export interface AudioAsset {
   durationMs: number
 }
 
+export interface ImageAsset {
+  file: string
+  name: string
+  width: number
+  height: number
+}
+
+export interface MemeItem extends ImageAsset {
+  /** Ảnh thu nhỏ (data URL). */
+  thumb: string
+}
+
 export type Unsubscribe = () => void
 
 /** API mà preload cung cấp cho giao diện qua `window.lumora`. */
@@ -303,6 +320,13 @@ export interface LumoraApi {
   addSoundEffect(folder: string, id: string): Promise<AudioAsset>
   /** Dạng sóng của một file âm thanh đã thêm vào dự án. */
   getAssetPeaks(folder: string, file: string): Promise<Waveform | null>
+  /** Chọn ảnh/GIF trên máy và chép vào dự án. null nếu người dùng hủy. */
+  addImageFile(folder: string): Promise<ImageAsset | null>
+  /** Thư viện meme của riêng bạn (dùng lại ở mọi dự án). */
+  listMemes(): Promise<MemeItem[]>
+  importMemes(): Promise<MemeItem[]>
+  removeMeme(file: string): Promise<MemeItem[]>
+  useMeme(folder: string, file: string): Promise<ImageAsset>
   startExport(folder: string): Promise<string>
   writeExport(id: string, position: number, data: ArrayBuffer): Promise<void>
   finishExport(id: string, folder: string, edit: EditState): Promise<ExportResult>

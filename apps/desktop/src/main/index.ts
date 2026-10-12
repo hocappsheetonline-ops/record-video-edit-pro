@@ -23,6 +23,7 @@ import { Vault } from './vault'
 import { handleMediaRequest, MEDIA_SCHEME } from './projects/media-protocol'
 import { assetPeaks, AUDIO_EXTENSIONS, createSoundEffect, importAudioFile } from './projects/assets'
 import { loadFilmstrip } from './projects/filmstrip'
+import { IMAGE_EXTENSIONS, importImageFile, MemeLibrary } from './projects/images'
 import { PACK_EXTENSION } from './projects/share'
 import { loadWaveform } from './projects/waveform'
 import { RecordingController } from './recording/controller'
@@ -143,7 +144,32 @@ if (!app.requestSingleInstanceLock()) {
       log: (message) => logger.warn('update', message),
     })
 
+    /** Hộp thoại chọn file theo đuôi (một hoặc nhiều file). */
+    const pickFiles = async (extensions: string[], multiple: boolean): Promise<string[]> => {
+      const options = {
+        properties: multiple ? (['openFile', 'multiSelections'] as const) : (['openFile'] as const),
+        filters: [{ name: 'Images', extensions }],
+      }
+      const r = mainWindow
+        ? await dialog.showOpenDialog(mainWindow, {
+            ...options,
+            properties: [...options.properties],
+          })
+        : await dialog.showOpenDialog({ ...options, properties: [...options.properties] })
+      return r.canceled ? [] : r.filePaths
+    }
+    const memes = new MemeLibrary(join(userData, 'memes'), runFfmpeg)
+
     registerIpc(loggingIpc(ipcMain, logger), {
+      memes: {
+        list: () => memes.list(),
+        pickAndAdd: async () => {
+          const files = await pickFiles(IMAGE_EXTENSIONS, true)
+          return files.length > 0 ? memes.add(files) : memes.list()
+        },
+        remove: (file) => memes.remove(file),
+        useInProject: (file, dir) => memes.useInProject(file, dir),
+      },
       updates,
       openLogs: async () => {
         await shell.openPath(dirname(logger.file))
@@ -180,6 +206,10 @@ if (!app.requestSingleInstanceLock()) {
           return file ? importAudioFile(file, dir, runFfmpeg) : null
         },
         soundEffect: (dir, id) => createSoundEffect(id, dir, runFfmpeg),
+        importImage: async (dir) => {
+          const file = await pickFiles(IMAGE_EXTENSIONS, false)
+          return file[0] ? importImageFile(file[0], dir, runFfmpeg) : null
+        },
         assetPeaks: (dir, file) => assetPeaks(dir, file, runFfmpeg),
         pickPackToImport: async () => {
           const options = {

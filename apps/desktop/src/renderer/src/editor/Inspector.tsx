@@ -14,6 +14,7 @@ import { AudioPanel } from './AudioPanel'
 import { CaptionsPanel } from './CaptionsPanel'
 import { EffectsPanel } from './EffectsPanel'
 import { ExportPanel } from './ExportPanel'
+import { StickersPanel } from './StickersPanel'
 import { useEditorStore } from './store'
 import { TransitionPanel } from './TransitionPanel'
 
@@ -23,6 +24,7 @@ const TABS = [
   'motion',
   'transition',
   'effects',
+  'stickers',
   'zoom',
   'camera',
   'audio',
@@ -605,6 +607,7 @@ export function Inspector() {
 
         {tab === 'transition' && <TransitionPanel />}
         {tab === 'effects' && <EffectsPanel />}
+        {tab === 'stickers' && <StickersPanel />}
         {tab === 'captions' && <CaptionsPanel />}
         {tab === 'ai' && <AiPanel />}
         {tab === 'export' && <ExportPanel />}

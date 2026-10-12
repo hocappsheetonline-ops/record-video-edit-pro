@@ -14,6 +14,7 @@ import {
 } from '@lumora/core'
 import { mediaUrl } from '../lib/media'
 import { drawScene, videoElementSource } from './draw'
+import { OverlayImages } from './overlay-images'
 import { computeScene } from './scene'
 import { useEditorStore } from './store'
 
@@ -31,6 +32,8 @@ export class PreviewEngine {
   private lastTick = 0
   private disposed = false
 
+  /** Ảnh / GIF meme của lớp nổi. */
+  private readonly images: OverlayImages
   /** Thẻ audio cho từng đoạn nhạc/hiệu ứng (theo id đoạn). */
   private readonly audioClips = new Map<string, HTMLAudioElement>()
 
@@ -40,6 +43,7 @@ export class PreviewEngine {
     private readonly folder: string,
   ) {
     this.segments = sourceSegments(project.segments)
+    this.images = new OverlayImages(folder, () => this.requestDraw())
     for (const item of this.segments) {
       for (const kind of ['screen', 'camera', 'mic', 'system'] as TrackKind[]) {
         const track = item.segment.tracks[kind]
@@ -190,9 +194,12 @@ export class PreviewEngine {
       follow: store.follow,
       hasCamera: !!camera,
     })
+    for (const item of scene.overlays)
+      if (item.overlay.kind === 'image') void this.images.load(item.overlay.file)
     drawScene(ctx, scene, {
       screen: screen instanceof HTMLVideoElement ? videoElementSource(screen) : null,
       camera: camera instanceof HTMLVideoElement ? videoElementSource(camera) : null,
+      overlayImage: (file, local) => this.images.frameAt(file, local),
     })
   }
 
@@ -229,5 +236,6 @@ export class PreviewEngine {
       el.removeAttribute('src')
     }
     this.audioClips.clear()
+    this.images.dispose()
   }
 }

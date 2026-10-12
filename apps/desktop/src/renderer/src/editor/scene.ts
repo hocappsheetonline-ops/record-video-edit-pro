@@ -11,6 +11,7 @@ import {
   frameLayout,
   viewRect,
   effectsAt,
+  overlaysAt,
   transitionAt,
   type ActiveEffect,
   type ActiveTransition,
@@ -21,6 +22,7 @@ import {
   type Rect,
   type Size,
 } from '@lumora/core'
+import type { OverlayItem } from './overlay-draw'
 
 /** Mọi thứ cần vẽ cho một khung hình, tính bằng pixel của video xuất. */
 export interface FrameScene {
@@ -45,6 +47,8 @@ export interface FrameScene {
   transition: ActiveTransition | null
   /** Hiệu ứng hình đang chạy. */
   effects: ActiveEffect[]
+  /** Chữ, sticker, ảnh meme đang hiện (kèm thời gian đã hiện). */
+  overlays: OverlayItem[]
   captions: {
     words: { text: string; active: boolean }[]
     style: 'highlight' | 'classic'
@@ -141,6 +145,10 @@ export function computeScene(input: SceneInput): FrameScene {
   return {
     transition: transitionAt(edit.clips, edit.transitions, input.time),
     effects: effectsAt(edit.effects, input.time),
+    overlays: overlaysAt(edit.overlays, input.time).map((overlay) => ({
+      overlay,
+      local: input.time - overlay.start,
+    })),
     captions,
     width: output.width,
     height: output.height,

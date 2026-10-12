@@ -1,5 +1,6 @@
 import { beautyLayers, coverSource, type BeautyStyle } from '@lumora/core'
 import { applyEffects } from './effects-draw'
+import { drawOverlays } from './overlay-draw'
 import type { FrameScene } from './scene'
 
 export type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D
@@ -158,7 +159,12 @@ function drawCaptions(ctx: Ctx, scene: FrameScene) {
 export function drawScene(
   ctx: Ctx,
   scene: FrameScene,
-  frames: { screen: FrameSource | null; camera: FrameSource | null },
+  frames: {
+    screen: FrameSource | null
+    camera: FrameSource | null
+    /** Ảnh / khung GIF của lớp nổi (null nếu chưa tải xong). */
+    overlayImage?: (file: string, local: number) => CanvasImageSource | null
+  },
 ) {
   drawBackground(ctx, scene)
   const { content, radius } = scene
@@ -232,6 +238,7 @@ export function drawScene(
   }
   applyTransition(ctx, scene)
   applyEffects(ctx, scene)
+  drawOverlays(ctx, scene.overlays, scene.width, scene.height, frames.overlayImage ?? (() => null))
   drawCaptions(ctx, scene)
 }
 

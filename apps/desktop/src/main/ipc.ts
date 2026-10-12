@@ -17,6 +17,8 @@ import {
   IPC,
   type ActiveSession,
   type AudioAsset,
+  type ImageAsset,
+  type MemeItem,
   type AppInfo,
   type CaptureSources,
   type RecorderCapabilities,
@@ -70,8 +72,18 @@ export interface ProjectsIpc {
   importAudio(dir: string): Promise<AudioAsset | null>
   soundEffect(dir: string, id: string): Promise<AudioAsset>
   assetPeaks(dir: string, file: string): Promise<Waveform | null>
+  /** Hộp thoại chọn ảnh/GIF rồi chép vào dự án (null nếu hủy). */
+  importImage(dir: string): Promise<ImageAsset | null>
   trash(path: string): Promise<void>
   reveal(path: string): void
+}
+
+/** Thư viện meme cá nhân (hộp thoại chọn file nằm ở `pickFiles`). */
+export interface MemesIpc {
+  list(): Promise<MemeItem[]>
+  pickAndAdd(): Promise<MemeItem[]>
+  remove(file: string): Promise<MemeItem[]>
+  useInProject(file: string, projectDir: string): Promise<ImageAsset>
 }
 
 export interface IpcDeps {
@@ -99,6 +111,7 @@ export interface IpcDeps {
     | 'caption'
   >
   updates: Pick<UpdateService, 'state' | 'check' | 'install'>
+  memes: MemesIpc
   openLogs(): Promise<void>
 }
 
@@ -236,6 +249,19 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
   ipcMain.handle(IPC.assetsAddSfx, async (_event, folder: unknown, id: unknown) => {
     if (typeof id !== 'string') throw new Error('sfx_unknown')
     return projects.soundEffect(await projectDir(folder), id)
+  })
+  ipcMain.handle(IPC.assetsAddImage, async (_event, folder: unknown) =>
+    projects.importImage(await projectDir(folder)),
+  )
+  ipcMain.handle(IPC.memesList, () => deps.memes.list())
+  ipcMain.handle(IPC.memesImport, () => deps.memes.pickAndAdd())
+  ipcMain.handle(IPC.memesRemove, (_event, file: unknown) => {
+    if (typeof file !== 'string') throw new Error('Tên file không hợp lệ')
+    return deps.memes.remove(file)
+  })
+  ipcMain.handle(IPC.memesUse, async (_event, folder: unknown, file: unknown) => {
+    if (typeof file !== 'string') throw new Error('Tên file không hợp lệ')
+    return deps.memes.useInProject(file, await projectDir(folder))
   })
   ipcMain.handle(IPC.assetsPeaks, async (_event, folder: unknown, file: unknown) => {
     if (typeof file !== 'string') throw new Error('Tên file không hợp lệ')

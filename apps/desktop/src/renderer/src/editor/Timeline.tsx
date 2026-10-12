@@ -13,6 +13,7 @@ import {
 import { AudioTrack } from './AudioTrack'
 import { ClipFilmstrip } from './ClipFilmstrip'
 import { EffectTrack } from './EffectTrack'
+import { OverlayTrack } from './OverlayTrack'
 import { ClipWaveform } from './ClipWaveform'
 import { useEditorStore } from './store'
 import { formatTimecode, tickInterval, zoomOutputIntervals } from './timeline-math'
@@ -250,6 +251,13 @@ export function Timeline() {
               }),
             )}
           </div>
+        </div>
+
+        <div className="flex items-center">
+          <div style={{ width: LABEL_W }} className="text-muted">
+            {t('editor.tracks.stickers')}
+          </div>
+          <OverlayTrack duration={duration} pxPerMs={pxPerMs} onSeek={seek} />
         </div>
 
         <div className="flex items-center">

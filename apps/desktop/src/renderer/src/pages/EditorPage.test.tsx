@@ -193,6 +193,60 @@ describe('EditorPage', () => {
     expect(useEditorStore.getState().edit!.effects.map((e) => e.kind)).toEqual(['confetti'])
   })
 
+  it('chữ, sticker và meme: thêm, chỉnh, đặt vị trí, xóa', async () => {
+    const api = setup()
+    await screen.findByTestId('editor-title')
+    await userEvent.click(screen.getByTestId('tab-stickers'))
+    // Thư viện meme cá nhân hiện ra.
+    expect(await screen.findByTestId('meme-item')).toHaveAttribute('title', 'Mèo cười')
+
+    await userEvent.type(screen.getByTestId('overlay-text-input'), 'Hết cứu')
+    await userEvent.click(screen.getByTestId('text-style-neon'))
+    await userEvent.click(screen.getByTestId('overlay-add-text'))
+    let o = useEditorStore.getState().edit!.overlays[0]!
+    expect(o).toMatchObject({
+      kind: 'text',
+      text: 'Hết cứu',
+      style: 'neon',
+      start: 0,
+      end: 3000,
+      animation: 'pop',
+    })
+    expect(screen.getByTestId('timeline-overlay')).toHaveTextContent('Hết cứu')
+
+    // Chỉnh lớp đang chọn.
+    await userEvent.clear(screen.getByTestId('overlay-edit-text'))
+    await userEvent.type(screen.getByTestId('overlay-edit-text'), 'Đỉnh')
+    fireEvent.change(screen.getByTestId('overlay-size'), { target: { value: '0.2' } })
+    await userEvent.click(screen.getByTestId('anim-shake'))
+    await userEvent.click(screen.getByTestId('pos-bottom'))
+    o = useEditorStore.getState().edit!.overlays[0]!
+    expect(o).toMatchObject({ text: 'Đỉnh', size: 0.2, animation: 'shake', y: 0.85 })
+
+    // Emoji, câu meme có sẵn, meme trong thư viện, ảnh từ máy.
+    await userEvent.click(screen.getByTestId('emoji-0'))
+    await userEvent.click(screen.getByTestId('phrase-1'))
+    await userEvent.click(screen.getByTestId('meme-item'))
+    expect(api.useMeme).toHaveBeenCalledWith(sampleSummary.folder, 'meme-a.gif')
+    await waitFor(() => expect(useEditorStore.getState().edit!.overlays).toHaveLength(4))
+    await userEvent.click(screen.getByTestId('overlay-add-image'))
+    await waitFor(() => expect(useEditorStore.getState().edit!.overlays).toHaveLength(5))
+    const kinds = useEditorStore.getState().edit!.overlays.map((x) => [x.kind, x.text])
+    expect(kinds).toEqual([
+      ['text', 'Đỉnh'],
+      ['emoji', '😂'],
+      ['text', 'Hết cứu'],
+      ['image', 'Mèo cười'],
+      ['image', 'cat'],
+    ])
+    // Ảnh giữ đúng tỉ lệ (400×200).
+    expect(useEditorStore.getState().edit!.overlays[4]!.aspect).toBe(2)
+    expect(screen.getAllByTestId('timeline-overlay')).toHaveLength(5)
+
+    await userEvent.click(screen.getByTestId('overlay-remove'))
+    expect(useEditorStore.getState().edit!.overlays).toHaveLength(4)
+  })
+
   it('không có âm thanh thì không vẽ sóng', async () => {
     setup()
     await screen.findByTestId('editor-title')
