@@ -7,7 +7,7 @@ Lấy cảm hứng từ **Screen Studio, FocuSee, CursorClip** (quay + chỉnh s
 
 | Hạng mục | Quyết định |
 |---|---|
-| Nền tảng | Desktop **Windows + macOS** |
+| Nền tảng | **Windows trước** (máy phát triển và chạy thử chỉ có Windows). Code vẫn viết theo hướng đa nền tảng để thêm macOS sau |
 | Tính năng MVP | Quay màn hình + webcam, auto-zoom theo chuột, trình chỉnh sửa video, livestream |
 | Livestream | Làm giống StreamYard (đa nền tảng + mời khách), **nhưng làm sau khi xong quay và chỉnh sửa** |
 | AI | Phụ đề tự động (**ElevenLabs Speech-to-Text**) + AI tự biên tập (**Claude API**) |
@@ -18,17 +18,18 @@ Lấy cảm hứng từ **Screen Studio, FocuSee, CursorClip** (quay + chỉnh s
 
 | Lớp | Công nghệ | Lý do |
 |---|---|---|
-| App shell | **Electron** + **TypeScript** | Có sẵn `desktopCapturer`, WebRTC, WebCodecs; chạy được trên cả Windows lẫn macOS từ cùng một bộ code |
+| App shell | **Electron** + **TypeScript** | Có sẵn `desktopCapturer`, WebRTC, WebCodecs; sau này mở rộng sang macOS mà không phải viết lại |
 | Giao diện | **React** + **Vite** (electron-vite), **Tailwind**, **Zustand** (quản lý state) | Phát triển nhanh, hệ sinh thái lớn |
 | Hiển thị và hiệu ứng | **PixiJS** (WebGL) | Ghép các lớp nền, video, webcam, con trỏ và zoom theo thời gian thực ở 60fps |
 | Theo dõi chuột/phím | **uiohook-napi** | Hook toàn hệ thống: tọa độ chuột, click, phím, có timestamp |
+| Quay màn hình (Windows) | **FFmpeg `ddagrab`** (Desktop Duplication API, `draw_mouse=0`) + mã hóa phần cứng (NVENC / Intel QSV / AMD AMF), dự phòng bằng `desktopCapturer` | Quay mượt 60fps, tốn ít CPU, **ẩn được con trỏ** để vẽ lại con trỏ mượt hơn |
 | Mã hóa/xuất video | **WebCodecs** (dùng phần cứng) + **mp4-muxer**; **FFmpeg** (`ffmpeg-static`) để trộn âm thanh, xuất GIF, phát RTMP | Xuất nhanh, chất lượng cao |
 | Phụ đề | **ElevenLabs Scribe** (Speech-to-Text) | Có timestamp từng từ, hỗ trợ tiếng Việt |
 | AI biên tập | **Claude API** (`@anthropic-ai/sdk`) | Phát hiện từ thừa, đề xuất đoạn cắt, tạo tiêu đề, mô tả, chương, dịch phụ đề |
 | Livestream khách mời | **LiveKit** (WebRTC SFU, tự host bằng Docker hoặc LiveKit Cloud) | Mã nguồn mở, ổn định, có SDK cho web và Node |
 | i18n | **i18next** | Giao diện Việt/Anh |
-| Lưu API key | `safeStorage` của Electron (Keychain trên macOS, DPAPI trên Windows) | Key được mã hóa, không lưu dạng văn bản thường |
-| Đóng gói | **electron-builder** + **electron-updater** (phát hành qua GitHub Releases) | Tạo bộ cài `.exe`/`.dmg` và tự động cập nhật |
+| Lưu API key | `safeStorage` của Electron (dùng DPAPI trên Windows) | Key được mã hóa, không lưu dạng văn bản thường |
+| Đóng gói | **electron-builder** (bộ cài NSIS `.exe`) + **electron-updater** (phát hành qua GitHub Releases) | Tạo bộ cài và tự động cập nhật |
 | Kiểm thử | **Vitest** (logic), **Playwright** (E2E Electron) | |
 
 ### Cấu trúc repo (monorepo pnpm)
@@ -65,14 +66,15 @@ Mỗi nguồn được ghi thành **file riêng**. Nhờ vậy lúc chỉnh sử
 - Dựng monorepo pnpm, electron-vite, React, TypeScript, ESLint/Prettier, Vitest.
 - Khung giao diện: màn hình Quay, Trình chỉnh sửa, Thư viện dự án, Cài đặt (nhập API key ElevenLabs và Claude).
 - i18n Việt/Anh.
-- CI trên GitHub Actions: lint, test, build thử cho Windows và macOS.
+- CI trên GitHub Actions: lint, test và build bộ cài Windows (`windows-latest`). Mỗi lần push sẽ có file `.exe` để bạn tải về chạy thử.
 
 ### Giai đoạn 1: Quay màn hình (~2–3 tuần)
 - Chọn nguồn quay: toàn màn hình, một cửa sổ hoặc một vùng tùy chọn.
-- Webcam và micro (chọn thiết bị, xem trước), âm thanh hệ thống (Windows: loopback; macOS 13+: ScreenCaptureKit).
-- Ẩn con trỏ hệ thống trong bản quay. Ghi tọa độ chuột, click và phím ra `events.jsonl`.
+- Webcam và micro (chọn thiết bị, xem trước), âm thanh hệ thống (WASAPI loopback của Windows).
+- Quay bằng FFmpeg `ddagrab` với `draw_mouse=0` để ẩn con trỏ hệ thống. Ghi tọa độ chuột, click và phím ra `events.jsonl`.
+- Hỗ trợ màn hình có độ phân giải cao (DPI scaling 125%, 150%) và nhiều màn hình.
 - Thanh điều khiển nổi (Bắt đầu, Tạm dừng, Dừng), đếm ngược, phím tắt toàn cục.
-- Xin quyền trên macOS: Screen Recording, Accessibility, Camera, Microphone (có màn hình hướng dẫn).
+- Hướng dẫn cấp quyền Camera/Micro trong Windows Settings → Privacy nếu bị chặn.
 - **Kết quả:** quay được, mở lại dự án và phát lại đồng bộ tất cả các track.
 
 ### Giai đoạn 2: Trình chỉnh sửa và auto-zoom (~4–6 tuần), phần cốt lõi giống Screen Studio
@@ -100,32 +102,38 @@ Mỗi nguồn được ghi thành **file riêng**. Nhờ vậy lúc chỉnh sử
 - **4e. AI cho livestream:** phụ đề trực tiếp (ElevenLabs realtime STT), tự tạo bản tóm tắt và clip ngắn sau buổi live.
 
 ### Giai đoạn 5: Hoàn thiện và phát hành
-- Ký số (code signing): macOS cần Apple Developer ID và notarization; Windows có thể dùng chứng chỉ code signing.
+- Ký số Windows (tùy chọn): không ký thì app vẫn chạy, chỉ hiện cảnh báo SmartScreen "Windows protected your PC" khi cài lần đầu. Bấm "More info" → "Run anyway" là cài được. Dùng cá nhân thì không cần ký.
 - Tự động cập nhật, báo lỗi (Sentry, tùy chọn), tối ưu hiệu năng trên máy cấu hình yếu.
 
-## 4. Cài đặt môi trường phát triển
+## 4. Cài đặt trên máy Windows
 
-Trên máy phát triển cần có:
-- **Node.js 20+** và **pnpm 9+**
-- **Git**
-- macOS: **Xcode Command Line Tools** (để build native module `uiohook-napi`)
-- Windows: **Visual Studio Build Tools** (workload "Desktop development with C++") và **Python 3**
+**Chỉ để dùng app:** tải file cài `.exe` từ GitHub Actions/Releases về và chạy. Không cần cài thêm gì.
+
+**Để chạy code trực tiếp trên máy (chế độ phát triển):**
+- Windows 10 (bản 2004 trở lên) hoặc Windows 11, 64-bit
+- **Node.js 20 LTS** trở lên (https://nodejs.org) và **pnpm** (`npm install -g pnpm`)
+- **Git for Windows** (https://git-scm.com)
+- **Visual Studio Build Tools** (workload "Desktop development with C++") và **Python 3**, chỉ cần khi native module không có bản build sẵn
 - FFmpeg được đóng gói sẵn qua `ffmpeg-static`, không cần cài riêng
 - API key: **ElevenLabs** và **Anthropic (Claude)**, nhập trong mục Cài đặt của app
 - (Giai đoạn 4) **Docker** nếu tự host LiveKit, hoặc dùng tài khoản LiveKit Cloud
 
-> Lưu ý: app quay màn hình phải được **chạy và test trên máy thật** (Windows/Mac). Môi trường cloud chỉ dùng để viết code, chạy unit test và build.
+> Lưu ý: app quay màn hình phải được **chạy và test trên máy Windows thật** của bạn. Môi trường cloud chỉ dùng để viết code, chạy unit test và build.
+
+Cấu hình máy khuyến nghị để quay 1080p/60fps: CPU 4 nhân trở lên, RAM 8GB trở lên, card đồ họa có bộ mã hóa phần cứng (NVIDIA GTX 10xx trở lên, Intel thế hệ 7 trở lên hoặc AMD RX 400 trở lên).
 
 ## 5. Rủi ro và cách xử lý
 
 | Rủi ro | Cách xử lý |
 |---|---|
-| Không ẩn được con trỏ khi quay trên một số bản Windows | Dùng Windows Graphics Capture API qua native addon, hoặc làm mờ/che con trỏ gốc khi ghép hình |
-| Âm thanh hệ thống trên macOS cần quyền và API riêng | Dùng ScreenCaptureKit (macOS 13+). Bản macOS cũ hơn thì chỉ quay micro |
+| `ddagrab` không chạy trên một số máy (Remote Desktop, driver card đồ họa cũ) | Dự phòng bằng `gdigrab` hoặc `desktopCapturer` của Electron |
+| Lệch tọa độ chuột khi màn hình bật DPI scaling hoặc có nhiều màn hình | Quy đổi tọa độ theo DPI của từng màn hình; viết test riêng cho phần này |
+| Phần mềm diệt virus chặn hook chuột/bàn phím toàn hệ thống | Hướng dẫn thêm app vào danh sách ngoại lệ; app chỉ ghi sự kiện khi đang quay |
+| Chưa có máy Mac để test | Giữ phần riêng cho từng hệ điều hành tách biệt; thêm macOS khi có máy (hoặc build thử trên runner macOS của GitHub Actions) |
 | Xuất 4K/60fps chậm trên máy yếu | Ưu tiên WebCodecs dùng phần cứng; fallback sang FFmpeg; có hàng đợi xuất chạy nền |
 | Độ chính xác phụ đề tiếng Việt | Cho chỉnh sửa transcript; dùng Claude để sửa chính tả và dấu câu |
 | Livestream có khách khá phức tạp và tốn chi phí server | Làm sau cùng; bắt đầu với LiveKit Cloud (có gói miễn phí) rồi mới tự host |
 
 ## 6. Bước tiếp theo
 
-Bắt đầu **Giai đoạn 0**: dựng khung monorepo và app Electron chạy được, có màn hình Cài đặt để nhập API key.
+Bắt đầu **Giai đoạn 0**: dựng khung monorepo và app Electron chạy được trên Windows, có màn hình Cài đặt để nhập API key, cùng CI tự build file `.exe`.
