@@ -5,6 +5,7 @@ import {
   type CaptionsState,
   type TranscriptWord,
 } from './captions'
+import { parseAudioClips, type AudioClip } from './audio-clips'
 import { NO_BEAUTY, parseBeauty, type BeautyStyle } from './beauty'
 import { ASPECTS, CORNERS, RESOLUTIONS, type Aspect, type Corner, type Resolution } from './layout'
 import { initialClips, MIN_CLIP_MS, sourceDuration, type Clip } from './timeline'
@@ -93,6 +94,8 @@ export interface EditState {
   camera: CameraStyle
   motion: MotionStyle
   audio: AudioMix
+  /** Nhạc nền và hiệu ứng âm thanh thêm vào. */
+  audioClips: AudioClip[]
   export: ExportSettings
   captions: CaptionsState
 }
@@ -142,6 +145,7 @@ export function createDefaultEdit(
     },
     motion: { cameraSpeed: 0.85, zoomTransitionMs: 700 },
     audio: { mic: 1, system: 1 },
+    audioClips: [],
     export: { resolution: 1080, fps: project.fps >= 60 ? 60 : 30, format: 'mp4' },
     captions: { ...DEFAULT_CAPTIONS, lines: [] },
   }
@@ -298,6 +302,7 @@ export function parseEditState(
       zoomTransitionMs: num(m.zoomTransitionMs, base.motion.zoomTransitionMs, 250, 1500),
     },
     audio: { mic: num(a.mic, 1, 0, 2), system: num(a.system, 1, 0, 2) },
+    audioClips: parseAudioClips(input.audioClips),
     export: {
       resolution: pick(RESOLUTIONS, e.resolution, base.export.resolution),
       fps: pick([30, 60] as const, e.fps, base.export.fps),

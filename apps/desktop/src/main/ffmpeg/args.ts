@@ -196,6 +196,11 @@ export interface MuxAudioPiece {
   outputStart: number
   speed: number
   volume: number
+  /** Âm lượng tăng dần lúc đầu / giảm dần lúc cuối (giây). */
+  fadeIn?: number
+  fadeOut?: number
+  /** Lặp lại file (nhạc nền ngắn hơn đoạn cần phát). */
+  loop?: boolean
 }
 
 const sec = (n: number) => Number(n.toFixed(6))
@@ -216,7 +221,10 @@ export function buildExportMuxArgs(options: {
   if (pieces.length === 0) return [...head, '-map', '0:v', '-c:v', 'copy', '-an', ...tail]
 
   const files = [...new Set(pieces.map((p) => p.path))]
-  const inputs = files.flatMap((f) => ['-i', f])
+  // File cần lặp được mở với -stream_loop -1; atrim phía sau giới hạn độ dài.
+  const inputs = files.flatMap((f) =>
+    pieces.some((p) => p.path === f && p.loop) ? ['-stream_loop', '-1', '-i', f] : ['-i', f],
+  )
   const filters: string[] = []
   const labels = new Map<string, string[]>()
   files.forEach((file, i) => {
@@ -240,6 +248,12 @@ export function buildExportMuxArgs(options: {
       'asetpts=PTS-STARTPTS',
       ...atempoChain(p.speed),
       `volume=${sec(p.volume)}`,
+      ...(p.fadeIn ? [`afade=t=in:st=0:d=${sec(p.fadeIn)}`] : []),
+      ...(p.fadeOut
+        ? [
+            `afade=t=out:st=${sec(Math.max(0, p.duration / p.speed - p.fadeOut))}:d=${sec(p.fadeOut)}`,
+          ]
+        : []),
       `adelay=${delayMs}:all=1`,
     ]
     filters.push(`[${source}]${chain.join(',')}[p${k}]`)

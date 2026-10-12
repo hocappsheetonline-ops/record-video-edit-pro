@@ -1,7 +1,13 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, open, rename, rm, type FileHandle } from 'node:fs/promises'
 import { join } from 'node:path'
-import { outputDuration, planAudio, type EditState, type Project } from '@lumora/core'
+import {
+  outputDuration,
+  planAudio,
+  planAudioClips,
+  type EditState,
+  type Project,
+} from '@lumora/core'
 import { buildExportMuxArgs, buildGifArgs } from '../ffmpeg/args'
 import type { FfmpegRunner } from '../ffmpeg/runner'
 
@@ -74,14 +80,22 @@ export class ExportManager {
       const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')
       const name = safeFileName(`${baseName} ${stamp}`)
       const mp4 = join(job.dir, `${name}.mp4`)
-      const pieces = planAudio(project, edit.clips, edit.audio).map((p) => ({
-        path: join(projectDir, p.file),
-        mediaStart: p.mediaStart,
-        duration: p.duration,
-        outputStart: p.outputStart,
-        speed: p.speed,
-        volume: p.volume,
-      }))
+      const pieces = [
+        ...planAudio(project, edit.clips, edit.audio).map((p) => ({
+          path: join(projectDir, p.file),
+          mediaStart: p.mediaStart,
+          duration: p.duration,
+          outputStart: p.outputStart,
+          speed: p.speed,
+          volume: p.volume,
+        })),
+        // Nhạc nền và hiệu ứng âm thanh thêm vào.
+        ...planAudioClips(edit.audioClips, durationS * 1000).map((p) => ({
+          ...p,
+          path: join(projectDir, p.file),
+          speed: 1,
+        })),
+      ]
       const tmpOut = join(job.dir, `.mux-${id}.mp4`)
       const muxed = await this.run(
         buildExportMuxArgs({ video: job.tmpPath, pieces, durationS, output: tmpOut }),

@@ -1,5 +1,7 @@
+import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import ffmpegPath from 'ffmpeg-static'
 import { expect, test, type Page } from '@playwright/test'
 import { createFixtureProject, pixelAt } from './fixtures'
 import { createTestDirs, launchApp, probeMedia, type TestDirs } from './helpers'
@@ -280,6 +282,80 @@ test('làm đẹp mặt webcam: video xuất ra sáng và mịn hơn bản khôn
 
   const saved = JSON.parse(readFileSync(join(projectDir, 'edit.json'), 'utf8'))
   expect(saved.camera.beauty.smooth).toBeGreaterThan(0)
+  expect(errors).toEqual([])
+  await app.close()
+})
+
+test('nhạc nền + hiệu ứng âm thanh: thêm từ máy, xuất video có nhạc đúng chỗ', async () => {
+  const song = join(dirs.userData, 'Nhạc thử.mp3')
+  execFileSync(ffmpegPath as unknown as string, [
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+    '-f',
+    'lavfi',
+    '-i',
+    'sine=frequency=660:duration=1',
+    song,
+  ])
+  const { app, page, errors } = await launchApp(dirs.userData)
+  await app.evaluate(({ dialog }, path) => {
+    dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [path] })) as never
+  }, song)
+  await openEditor(page)
+  await page.getByTestId('tab-audio').click()
+  // Tắt micro để chỉ còn nhạc nền trong video xuất.
+  await page.getByTestId('audio-mic').fill('0')
+
+  // Nhạc bắt đầu ở giây 1 (bài dài 1 giây nhưng tự lặp tới hết video).
+  await page.getByTestId('editor-canvas').click()
+  await page.keyboard.press('ArrowRight')
+  await page.getByTestId('add-music').click()
+  await expect(page.getByTestId('timeline-audio')).toHaveCount(1)
+  await expect(page.getByTestId('timeline-audio')).toContainText('Nhạc thử')
+  await page.getByTestId('sfx-ding').click()
+  await expect(page.getByTestId('timeline-audio')).toHaveCount(2)
+  // Dạng sóng của nhạc hiện trên timeline.
+  await expect(page.getByTestId('timeline-audio').first().locator('svg')).toBeVisible()
+
+  await page.getByTestId('tab-export').click()
+  await page.getByTestId('resolution-720').click()
+  await page.getByTestId('export-start').click()
+  await expect(page.getByTestId('export-result')).toBeVisible({ timeout: 150_000 })
+  const file = join(projectDir, 'exports', exported('.mp4')[0]!)
+  expect(probeMedia(file).hasAudio).toBe(true)
+
+  const loudness = (from: number, len: number) => {
+    const { stderr } = spawnSync(
+      ffmpegPath as unknown as string,
+      [
+        '-hide_banner',
+        '-ss',
+        String(from),
+        '-t',
+        String(len),
+        '-i',
+        file,
+        '-af',
+        'volumedetect',
+        '-f',
+        'null',
+        '-',
+      ],
+      { encoding: 'utf8' },
+    )
+    return Number(/mean_volume: (-?[\d.]+) dB/.exec(stderr)?.[1] ?? -100)
+  }
+  expect(loudness(0.1, 0.7)).toBeLessThan(-50)
+  // Sau 1 giây của bài (1s → 2s) vẫn có tiếng nhờ lặp lại.
+  expect(loudness(2.2, 0.6)).toBeGreaterThan(-35)
+
+  const saved = JSON.parse(readFileSync(join(projectDir, 'edit.json'), 'utf8'))
+  expect(saved.audioClips.map((c: { kind: string }) => c.kind)).toEqual(['music', 'sfx'])
+  expect(
+    readdirSync(projectDir).filter((f) => f.startsWith('asset-') && !f.endsWith('.peaks.json')),
+  ).toHaveLength(2)
   expect(errors).toEqual([])
   await app.close()
 })

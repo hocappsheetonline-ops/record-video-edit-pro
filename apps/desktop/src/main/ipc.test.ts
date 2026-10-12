@@ -97,6 +97,13 @@ beforeEach(async () => {
         filmstrip: vi.fn(async () => null),
         pickPackSavePath: vi.fn(async () => null),
         pickPackToImport: vi.fn(async () => null),
+        importAudio: vi.fn(async () => null),
+        soundEffect: vi.fn(async (_dir: string, id: string) => ({
+          file: `asset-sfx-${id}.m4a`,
+          name: id,
+          durationMs: 500,
+        })),
+        assetPeaks: vi.fn(async () => null),
         trash: async (path: string) => {
           trashed.push(path)
         },
@@ -141,6 +148,15 @@ describe('registerIpc', () => {
       'Không tìm thấy dự án',
     )
     expect(await call(IPC.projectsImportPack)).toBeNull()
+  })
+
+  it('âm thanh: kiểm tra thư mục và tham số', async () => {
+    await expect(call(IPC.assetsAddAudio, '../x')).rejects.toThrow('Thư mục dự án không hợp lệ')
+    await expect(call(IPC.assetsAddSfx, 'A.lumora', 42)).rejects.toThrow('sfx_unknown')
+    expect(await call(IPC.assetsAddSfx, 'A.lumora', 'pop')).toMatchObject({
+      file: 'asset-sfx-pop.m4a',
+    })
+    await expect(call(IPC.assetsPeaks, 'A.lumora', null)).rejects.toThrow('Tên file không hợp lệ')
   })
 
   it('cập nhật settings', async () => {

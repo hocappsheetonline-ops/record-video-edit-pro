@@ -49,6 +49,9 @@ export const IPC = {
   projectsFilmstrip: 'projects:filmstrip',
   projectsSharePack: 'projects:share-pack',
   projectsImportPack: 'projects:import-pack',
+  assetsAddAudio: 'assets:add-audio',
+  assetsAddSfx: 'assets:add-sfx',
+  assetsPeaks: 'assets:peaks',
   exportStart: 'export:start',
   exportWrite: 'export:write',
   exportFinish: 'export:finish',
@@ -234,6 +237,12 @@ export interface PackImportResult {
   mode: PackMode
 }
 
+export interface AudioAsset {
+  file: string
+  name: string
+  durationMs: number
+}
+
 export type Unsubscribe = () => void
 
 /** API mà preload cung cấp cho giao diện qua `window.lumora`. */
@@ -288,6 +297,12 @@ export interface LumoraApi {
   sharePack(folder: string, mode: PackMode): Promise<{ path: string; bytes: number } | null>
   /** Chọn và nhập file .lumorapack. null nếu người dùng hủy. */
   importPack(): Promise<PackImportResult | null>
+  /** Chọn file nhạc trên máy và chép vào dự án. null nếu người dùng hủy. */
+  addAudioFile(folder: string): Promise<AudioAsset | null>
+  /** Tạo hiệu ứng âm thanh có sẵn trong dự án. */
+  addSoundEffect(folder: string, id: string): Promise<AudioAsset>
+  /** Dạng sóng của một file âm thanh đã thêm vào dự án. */
+  getAssetPeaks(folder: string, file: string): Promise<Waveform | null>
   startExport(folder: string): Promise<string>
   writeExport(id: string, position: number, data: ArrayBuffer): Promise<void>
   finishExport(id: string, folder: string, edit: EditState): Promise<ExportResult>

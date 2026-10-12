@@ -10,6 +10,7 @@ import {
   type EditState,
 } from '@lumora/core'
 import { AiPanel } from './AiPanel'
+import { AudioPanel } from './AudioPanel'
 import { CaptionsPanel } from './CaptionsPanel'
 import { ExportPanel } from './ExportPanel'
 import { useEditorStore } from './store'
@@ -576,6 +577,7 @@ export function Inspector() {
               step={0.05}
               format={pct}
               onChange={(v) => set('audio', { mic: v }, 'mic')}
+              testId="audio-mic"
             />
             <Slider
               label={t('editor.audio.system')}
@@ -586,6 +588,7 @@ export function Inspector() {
               format={pct}
               onChange={(v) => set('audio', { system: v }, 'system')}
             />
+            <AudioPanel />
           </>
         )}
 

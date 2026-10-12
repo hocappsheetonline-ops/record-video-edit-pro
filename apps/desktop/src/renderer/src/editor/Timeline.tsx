@@ -9,6 +9,7 @@ import {
   sourceDuration,
   type ZoomRegion,
 } from '@lumora/core'
+import { AudioTrack } from './AudioTrack'
 import { ClipFilmstrip } from './ClipFilmstrip'
 import { ClipWaveform } from './ClipWaveform'
 import { useEditorStore } from './store'
@@ -224,6 +225,13 @@ export function Timeline() {
               }),
             )}
           </div>
+        </div>
+
+        <div className="flex items-center">
+          <div style={{ width: LABEL_W }} className="text-muted">
+            {t('editor.tracks.audio')}
+          </div>
+          <AudioTrack duration={duration} pxPerMs={pxPerMs} onSeek={seek} />
         </div>
 
         <div

@@ -21,6 +21,7 @@ import { GUEST_SCRIPT, guestHtml } from './live/guest-page'
 import { SignalingServer } from './live/signaling'
 import { Vault } from './vault'
 import { handleMediaRequest, MEDIA_SCHEME } from './projects/media-protocol'
+import { assetPeaks, AUDIO_EXTENSIONS, createSoundEffect, importAudioFile } from './projects/assets'
 import { loadFilmstrip } from './projects/filmstrip'
 import { PACK_EXTENSION } from './projects/share'
 import { loadWaveform } from './projects/waveform'
@@ -167,6 +168,19 @@ if (!app.requestSingleInstanceLock()) {
             : await dialog.showSaveDialog(options)
           return r.canceled || !r.filePath ? null : r.filePath
         },
+        importAudio: async (dir) => {
+          const options = {
+            properties: ['openFile' as const],
+            filters: [{ name: 'Audio', extensions: AUDIO_EXTENSIONS }],
+          }
+          const r = mainWindow
+            ? await dialog.showOpenDialog(mainWindow, options)
+            : await dialog.showOpenDialog(options)
+          const file = r.canceled ? null : r.filePaths[0]
+          return file ? importAudioFile(file, dir, runFfmpeg) : null
+        },
+        soundEffect: (dir, id) => createSoundEffect(id, dir, runFfmpeg),
+        assetPeaks: (dir, file) => assetPeaks(dir, file, runFfmpeg),
         pickPackToImport: async () => {
           const options = {
             properties: ['openFile' as const],

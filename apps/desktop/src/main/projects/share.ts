@@ -32,6 +32,7 @@ function shareable(name: string): boolean {
     name !== 'exports' &&
     !/^filmstrip(-\d+\.jpg|\.json)$/.test(name) &&
     name !== 'waveform.json' &&
+    !name.endsWith('.peaks.json') &&
     !/^edit\.backup-/.test(name)
   )
 }

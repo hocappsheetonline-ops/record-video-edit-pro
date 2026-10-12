@@ -217,6 +217,20 @@ export function createFakeApi(
       path: `/x/Demo${mode === 'edits' ? ' (bản chỉnh sửa)' : ''}.lumorapack`,
       bytes: mode === 'edits' ? 4096 : 52_428_800,
     })),
+    addAudioFile: vi.fn<LumoraApi['addAudioFile']>(async () => ({
+      file: 'asset-abc.mp3',
+      name: 'Nhạc nền',
+      durationMs: 3000,
+    })),
+    addSoundEffect: vi.fn<LumoraApi['addSoundEffect']>(async (_folder, id) => ({
+      file: `asset-sfx-${id}.m4a`,
+      name: id,
+      durationMs: 800,
+    })),
+    getAssetPeaks: vi.fn<LumoraApi['getAssetPeaks']>(async () => ({
+      bucketMs: 20,
+      peaks: Array.from({ length: 150 }, (_, i) => (i * 7) % 255),
+    })),
     importPack: vi.fn<LumoraApi['importPack']>(async () => ({
       folder: sampleSummary.folder,
       status: 'created',

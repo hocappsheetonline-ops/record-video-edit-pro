@@ -96,6 +96,87 @@ describe('ExportManager', () => {
     expect((await readdir(join(dir, 'exports'))).filter((f) => f.startsWith('.'))).toEqual([])
   }, 60_000)
 
+  it('nhạc nền lặp lại có fade vào/ra và hiệu ứng âm thanh được trộn đúng vị trí', async () => {
+    const rendered = join(dir, 'rendered.mp4')
+    await ffmpeg([
+      '-f',
+      'lavfi',
+      '-i',
+      'testsrc=size=320x240:rate=30:duration=6',
+      '-pix_fmt',
+      'yuv420p',
+      '-c:v',
+      'libx264',
+      rendered,
+    ])
+    // Nhạc chỉ dài 1 giây → phải lặp để phủ 4 giây (từ 1s đến 5s).
+    await ffmpeg([
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=500:duration=1',
+      '-c:a',
+      'aac',
+      join(dir, 'asset-song.m4a'),
+    ])
+    const silent: Project = {
+      ...project,
+      segments: [{ index: 0, startedAt: 0, endedAt: 6000, tracks: {} }],
+      durationMs: 6000,
+    }
+    const manager = new ExportManager(runFfmpeg)
+    const id = await manager.start(dir)
+    await manager.write(id, 0, await readFile(rendered))
+    const edit = createDefaultEdit(silent)
+    edit.audioClips = [
+      {
+        id: 'm',
+        file: 'asset-song.m4a',
+        name: 'Song',
+        kind: 'music',
+        start: 1000,
+        offset: 0,
+        duration: 4000,
+        sourceDuration: 1000,
+        volume: 1,
+        fadeIn: 1000,
+        fadeOut: 1000,
+        loop: true,
+      },
+    ]
+    const result = await manager.finish(id, silent, edit, dir, 'Music')
+
+    /** Âm lượng trung bình (dB) trong khoảng [from, from + len] giây. */
+    const loudness = async (from: number, len: number) => {
+      const r = await runFfmpeg([
+        '-hide_banner',
+        '-ss',
+        String(from),
+        '-t',
+        String(len),
+        '-i',
+        result.path,
+        '-af',
+        'volumedetect',
+        '-f',
+        'null',
+        '-',
+      ])
+      return Number(/mean_volume: (-?[\d.]+) dB/.exec(r.stderr)?.[1] ?? -100)
+    }
+    const before = await loudness(0.2, 0.6)
+    const fadingIn = await loudness(1.05, 0.15)
+    const full = await loudness(2.6, 0.8)
+    const fadingOut = await loudness(4.8, 0.15)
+    const after = await loudness(5.3, 0.5)
+    expect(before).toBeLessThan(-60)
+    expect(after).toBeLessThan(-60)
+    // Sau 1 giây (hết file) vẫn có tiếng nhờ lặp lại.
+    expect(full).toBeGreaterThan(-25)
+    expect(fadingIn).toBeLessThan(full - 6)
+    expect(fadingOut).toBeLessThan(full - 6)
+  }, 60_000)
+
   it('xuất GIF', async () => {
     const rendered = join(dir, 'rendered.mp4')
     await ffmpeg([

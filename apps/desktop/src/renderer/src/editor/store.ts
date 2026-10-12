@@ -20,13 +20,18 @@ import {
   type InputEvent,
   type Project,
   type Size,
+  type AudioClip,
   type Filmstrip,
+  MIN_AUDIO_CLIP_MS,
+  newAudioClipId,
+  type SoundEffectId,
   type Transcript,
   type Waveform,
 } from '@lumora/core'
+import type { AudioAsset } from '@shared/ipc'
 import { lumora } from '../api'
 
-export type Selection = { kind: 'clip' | 'zoom'; id: string } | null
+export type Selection = { kind: 'clip' | 'zoom' | 'audio'; id: string } | null
 
 interface EditorStore {
   folder: string | null
@@ -38,6 +43,8 @@ interface EditorStore {
   waveform: Waveform | null
   /** Ảnh thu nhỏ cho dải phim trên timeline (tải sau). */
   filmstrip: Filmstrip | null
+  /** Dạng sóng của các file nhạc/hiệu ứng đã thêm (theo tên file). */
+  assetPeaks: Record<string, Waveform | null>
   cursor: CursorTrack | null
   follow: CursorTrack | null
   /** Kích thước gốc của video màn hình. */
@@ -64,6 +71,12 @@ interface EditorStore {
   splitAtPlayhead(): void
   /** Phím A / D: xóa phần clip bên trái / bên phải đầu phát (giống CapCut). */
   trimAtPlayhead(side: 'left' | 'right'): void
+  /** Thêm nhạc từ máy tại đầu phát. Trả về false nếu người dùng hủy. */
+  addMusic(): Promise<boolean>
+  /** Thêm hiệu ứng âm thanh có sẵn tại đầu phát. */
+  addSoundEffect(id: SoundEffectId): Promise<void>
+  updateAudioClip(id: string, patch: Partial<AudioClip>, coalesce?: string): void
+  loadAssetPeaks(file: string): void
   deleteSelection(): void
   setClipSpeed(id: string, speed: number): void
   addZoomAtPlayhead(): void
@@ -91,6 +104,7 @@ const initial = {
   transcript: null,
   waveform: null,
   filmstrip: null,
+  assetPeaks: {},
   cursor: null,
   follow: null,
   videoSize: { width: 1920, height: 1080 },
@@ -100,6 +114,34 @@ const initial = {
   past: [],
   future: [],
   loadError: null,
+}
+
+/** Đặt file âm thanh vừa thêm vào timeline tại đầu phát và chọn nó. */
+function insertAudio(asset: AudioAsset, kind: AudioClip['kind']) {
+  const { edit, time } = useEditorStore.getState()
+  if (!edit) return
+  const total = outputDuration(edit.clips)
+  const start = Math.min(time, Math.max(0, total - MIN_AUDIO_CLIP_MS))
+  const clip: AudioClip = {
+    id: newAudioClipId(),
+    file: asset.file,
+    name: asset.name,
+    kind,
+    start,
+    offset: 0,
+    // Nhạc nền: phủ đến hết video (lặp nếu cần); hiệu ứng: đúng độ dài file.
+    duration: Math.max(
+      MIN_AUDIO_CLIP_MS,
+      kind === 'music' ? total - start : Math.min(asset.durationMs, total - start),
+    ),
+    sourceDuration: asset.durationMs,
+    volume: kind === 'music' ? 0.5 : 1,
+    fadeIn: 0,
+    fadeOut: kind === 'music' ? 1500 : 0,
+    loop: kind === 'music',
+  }
+  useEditorStore.getState().change((e) => ({ ...e, audioClips: [...e.audioClips, clip] }))
+  useEditorStore.setState({ selection: { kind: 'audio', id: clip.id } })
 }
 
 export const useEditorStore = create<EditorStore>((set, get) => ({
@@ -235,10 +277,49 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set({ time: result.time, selection: null })
   },
 
+  async addMusic() {
+    const { folder } = get()
+    if (!folder) return false
+    const asset = await lumora().addAudioFile(folder)
+    if (!asset) return false
+    insertAudio(asset, 'music')
+    return true
+  },
+
+  async addSoundEffect(id) {
+    const { folder } = get()
+    if (!folder) return
+    insertAudio(await lumora().addSoundEffect(folder, id), 'sfx')
+  },
+
+  updateAudioClip(id, patch, coalesce) {
+    get().change(
+      (e) => ({
+        ...e,
+        audioClips: e.audioClips.map((c) => (c.id === id ? { ...c, ...patch } : c)),
+      }),
+      coalesce,
+    )
+  },
+
+  loadAssetPeaks(file) {
+    const { folder, assetPeaks } = get()
+    if (!folder || file in assetPeaks) return
+    set({ assetPeaks: { ...assetPeaks, [file]: null } })
+    void lumora()
+      .getAssetPeaks(folder, file)
+      .then((peaks) => {
+        if (get().folder === folder) set({ assetPeaks: { ...get().assetPeaks, [file]: peaks } })
+      })
+      .catch(() => undefined)
+  },
+
   deleteSelection() {
     const { selection } = get()
     if (!selection) return
-    if (selection.kind === 'clip') {
+    if (selection.kind === 'audio') {
+      get().change((e) => ({ ...e, audioClips: e.audioClips.filter((c) => c.id !== selection.id) }))
+    } else if (selection.kind === 'clip') {
       get().change((e) =>
         e.clips.length > 1 ? { ...e, clips: removeClip(e.clips, selection.id) } : e,
       )

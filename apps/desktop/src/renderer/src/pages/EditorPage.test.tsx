@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useEditorStore } from '../editor/store'
@@ -101,6 +101,51 @@ describe('EditorPage', () => {
     expect(tiles[3]!.style.backgroundPosition).toMatch(/^-(23[0-9]|31[0-9])\.\d+px 0px$/)
     const second = strips[1]!.querySelectorAll<HTMLElement>('[data-testid="filmstrip-tile"]')
     expect(second[0]!.style.backgroundImage).toContain('filmstrip-1.jpg')
+  })
+
+  it('nhạc nền và hiệu ứng âm thanh: thêm, chỉnh, xóa, hoàn tác', async () => {
+    const api = setup()
+    await screen.findByTestId('editor-title')
+    await userEvent.click(screen.getByTestId('tab-audio'))
+
+    // Nhạc nền từ máy: phủ hết video (7 giây), tự lặp, nhỏ dần cuối bài.
+    await userEvent.click(screen.getByTestId('add-music'))
+    expect(api.addAudioFile).toHaveBeenCalledWith(sampleSummary.folder)
+    const music = await screen.findByTestId('timeline-audio')
+    expect(music).toHaveAttribute('data-kind', 'music')
+    expect(music).toHaveTextContent('Nhạc nền')
+    let clip = useEditorStore.getState().edit!.audioClips[0]!
+    expect(clip).toMatchObject({ start: 0, duration: 7000, loop: true, volume: 0.5, fadeOut: 1500 })
+    expect(screen.getByTestId('audio-loop')).toBeChecked()
+
+    fireEvent.change(screen.getByTestId('audio-volume'), { target: { value: '1.2' } })
+    expect(useEditorStore.getState().edit!.audioClips[0]!.volume).toBe(1.2)
+
+    // Hiệu ứng "Bụp" tại giây 3.
+    act(() => useEditorStore.getState().setTime(3000))
+    await userEvent.click(screen.getByTestId('sfx-pop'))
+    expect(api.addSoundEffect).toHaveBeenCalledWith(sampleSummary.folder, 'pop')
+    await waitFor(() => expect(screen.getAllByTestId('timeline-audio')).toHaveLength(2))
+    clip = useEditorStore.getState().edit!.audioClips[1]!
+    expect(clip).toMatchObject({ kind: 'sfx', start: 3000, duration: 800, loop: false })
+    expect(api.getAssetPeaks).toHaveBeenCalledWith(sampleSummary.folder, 'asset-sfx-pop.m4a')
+
+    // Xóa hiệu ứng đang chọn rồi hoàn tác.
+    await userEvent.click(screen.getByTestId('audio-remove'))
+    expect(screen.getAllByTestId('timeline-audio')).toHaveLength(1)
+    act(() => useEditorStore.getState().undo())
+    expect(screen.getAllByTestId('timeline-audio')).toHaveLength(2)
+  })
+
+  it('thêm nhạc lỗi định dạng: báo lỗi dễ hiểu', async () => {
+    const api = setup()
+    await screen.findByTestId('editor-title')
+    await userEvent.click(screen.getByTestId('tab-audio'))
+    api.addAudioFile.mockRejectedValueOnce(
+      new Error("Error invoking remote method 'assets:add-audio': Error: audio_unreadable"),
+    )
+    await userEvent.click(screen.getByTestId('add-music'))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Không đọc được file âm thanh này')
   })
 
   it('không có âm thanh thì không vẽ sóng', async () => {

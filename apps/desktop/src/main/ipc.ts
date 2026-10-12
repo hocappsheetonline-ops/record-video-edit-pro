@@ -16,6 +16,7 @@ import {
 import {
   IPC,
   type ActiveSession,
+  type AudioAsset,
   type AppInfo,
   type CaptureSources,
   type RecorderCapabilities,
@@ -65,6 +66,10 @@ export interface ProjectsIpc {
   pickPackSavePath(defaultName: string): Promise<string | null>
   /** Hộp thoại chọn gói chia sẻ để nhập (null nếu hủy). */
   pickPackToImport(): Promise<string | null>
+  /** Hộp thoại chọn file nhạc rồi chép vào dự án (null nếu hủy). */
+  importAudio(dir: string): Promise<AudioAsset | null>
+  soundEffect(dir: string, id: string): Promise<AudioAsset>
+  assetPeaks(dir: string, file: string): Promise<Waveform | null>
   trash(path: string): Promise<void>
   reveal(path: string): void
 }
@@ -219,6 +224,22 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
     const result = await exportPack(dir, project, mode, out)
     projects.reveal(result.path)
     return result
+  })
+  const projectDir = async (folder: unknown) => {
+    const dir = safeJoin(await projects.dir(), assertFolder(folder))
+    if (!dir) throw new Error('Thư mục dự án không hợp lệ')
+    return dir
+  }
+  ipcMain.handle(IPC.assetsAddAudio, async (_event, folder: unknown) =>
+    projects.importAudio(await projectDir(folder)),
+  )
+  ipcMain.handle(IPC.assetsAddSfx, async (_event, folder: unknown, id: unknown) => {
+    if (typeof id !== 'string') throw new Error('sfx_unknown')
+    return projects.soundEffect(await projectDir(folder), id)
+  })
+  ipcMain.handle(IPC.assetsPeaks, async (_event, folder: unknown, file: unknown) => {
+    if (typeof file !== 'string') throw new Error('Tên file không hợp lệ')
+    return projects.assetPeaks(await projectDir(folder), file)
   })
   ipcMain.handle(IPC.projectsImportPack, async () => {
     const pack = await projects.pickPackToImport()

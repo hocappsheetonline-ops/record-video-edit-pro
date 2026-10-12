@@ -1,4 +1,6 @@
 import {
+  audioClipGain,
+  audioClipMediaTime,
   mediaTime,
   outputDuration,
   outputToSource,
@@ -29,10 +31,13 @@ export class PreviewEngine {
   private lastTick = 0
   private disposed = false
 
+  /** Thẻ audio cho từng đoạn nhạc/hiệu ứng (theo id đoạn). */
+  private readonly audioClips = new Map<string, HTMLAudioElement>()
+
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly project: Project,
-    folder: string,
+    private readonly folder: string,
   ) {
     this.segments = sourceSegments(project.segments)
     for (const item of this.segments) {
@@ -96,6 +101,7 @@ export class PreviewEngine {
       }
       this.lastTick = playing ? now : 0
       this.sync(edit, useEditorStore.getState().time, playing)
+      this.syncAudioClips(edit, useEditorStore.getState().time, playing)
       if (this.needsDraw || playing || this.changedSinceDraw())
         this.draw(edit, useEditorStore.getState().time)
     }
@@ -126,6 +132,35 @@ export class PreviewEngine {
         if (!el.paused) el.pause()
         if (drift > 0.02) el.currentTime = target
       }
+    }
+  }
+
+  /** Nhạc nền / hiệu ứng: phát đúng đoạn, đúng vị trí trong file, âm lượng theo fade. */
+  private syncAudioClips(edit: EditState, time: number, playing: boolean) {
+    const ids = new Set(edit.audioClips.map((c) => c.id))
+    for (const [id, el] of this.audioClips) {
+      if (ids.has(id)) continue
+      el.pause()
+      el.removeAttribute('src')
+      this.audioClips.delete(id)
+    }
+    for (const clip of edit.audioClips) {
+      let el = this.audioClips.get(clip.id)
+      if (!el) {
+        el = document.createElement('audio')
+        el.preload = 'auto'
+        el.src = mediaUrl(this.folder, clip.file)
+        this.audioClips.set(clip.id, el)
+      }
+      const at = audioClipMediaTime(clip, time)
+      if (!playing || at === null) {
+        if (!el.paused) el.pause()
+        continue
+      }
+      el.volume = Math.min(1, audioClipGain(clip, time))
+      const target = at / 1000
+      if (Math.abs(el.currentTime - target) > RESYNC_S) el.currentTime = target
+      if (el.paused) void el.play().catch(() => undefined)
     }
   }
 
@@ -188,5 +223,10 @@ export class PreviewEngine {
       el.load()
     }
     this.media.clear()
+    for (const el of this.audioClips.values()) {
+      el.pause()
+      el.removeAttribute('src')
+    }
+    this.audioClips.clear()
   }
 }
