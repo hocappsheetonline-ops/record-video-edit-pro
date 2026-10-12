@@ -15,6 +15,7 @@ import {
   parseAudioFx,
   type AudioFx,
   normalizeLocalAi,
+  type DirectorMessage,
 } from '@lumora/core'
 import {
   IPC,
@@ -30,6 +31,7 @@ import {
   type OnlineSource,
   type MusicTrack,
   type RecentDownload,
+  type LocalAiProgress,
 } from '@shared/ipc'
 import { validateKey, type Validators } from './key-validation'
 import { mkdir, writeFile } from 'node:fs/promises'
@@ -135,7 +137,10 @@ export interface IpcDeps {
     | 'suggestCuts'
     | 'summarize'
     | 'plan'
+    | 'direct'
     | 'listLocalModels'
+    | 'pullLocalModel'
+    | 'benchmarkLocalModel'
     | 'translate'
     | 'voices'
     | 'speak'
@@ -160,6 +165,11 @@ export interface IpcDeps {
   updates: Pick<UpdateService, 'state' | 'check' | 'install'>
   memes: MemesIpc
   music: MusicIpc
+  /** AI cục bộ: gửi tiến độ xuống giao diện, tải và mở bộ cài Ollama. */
+  localAi: {
+    sendProgress(p: LocalAiProgress): void
+    installOllama(onProgress: (completed: number, total: number) => void): Promise<void>
+  }
   /** Điều khiển cửa sổ chính (thanh tiêu đề tự vẽ của cửa sổ không viền). */
   window: {
     minimize(): void
@@ -525,10 +535,61 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
       hasTranscript: c.hasTranscript === true,
     })
   })
+  ipcMain.handle(IPC.aiDirect, (_event, goal: unknown, context: unknown) => {
+    if (typeof goal !== 'string' || goal.length > 2000) throw new Error('direct_input')
+    const c =
+      typeof context === 'object' && context !== null ? (context as Record<string, unknown>) : {}
+    const names = (value: unknown) =>
+      Array.isArray(value) ? value.filter((n): n is string => typeof n === 'string') : []
+    const history: DirectorMessage[] = Array.isArray(c.history)
+      ? c.history.flatMap((item: unknown) => {
+          const m =
+            typeof item === 'object' && item !== null ? (item as Record<string, unknown>) : null
+          if (!m || (m.role !== 'user' && m.role !== 'ai') || typeof m.text !== 'string') return []
+          return [
+            {
+              role: m.role,
+              text: m.text,
+              at: typeof m.at === 'number' && Number.isFinite(m.at) ? m.at : 0,
+            },
+          ]
+        })
+      : []
+    return deps.ai.direct(goal, {
+      language: typeof c.language === 'string' ? c.language.slice(0, 10) : '',
+      durationMs:
+        typeof c.durationMs === 'number' && Number.isFinite(c.durationMs)
+          ? Math.max(0, c.durationMs)
+          : 0,
+      hasTranscript: c.hasTranscript === true,
+      hasCursor: c.hasCursor === true,
+      musicTracks: names(c.musicTracks),
+      projects: names(c.projects),
+      memory: typeof c.memory === 'string' ? c.memory : '',
+      history,
+    })
+  })
   ipcMain.handle(IPC.aiLocalModels, (_event, baseUrl: unknown) => {
     const url = normalizeLocalAi({ baseUrl }).baseUrl
     return deps.ai.listLocalModels(url)
   })
+  ipcMain.handle(IPC.aiPullModel, (_event, baseUrl: unknown, model: unknown) => {
+    const local = normalizeLocalAi({ baseUrl, model })
+    if (typeof model !== 'string' || local.model !== model.trim()) throw new Error('ollama_model')
+    return deps.ai.pullLocalModel(local.baseUrl, local.model, (p) =>
+      deps.localAi.sendProgress({ kind: 'pull', ...p }),
+    )
+  })
+  ipcMain.handle(IPC.aiBenchmark, (_event, baseUrl: unknown, model: unknown) => {
+    const local = normalizeLocalAi({ baseUrl, model })
+    if (typeof model !== 'string' || local.model !== model.trim()) throw new Error('ollama_model')
+    return deps.ai.benchmarkLocalModel(local.baseUrl, local.model)
+  })
+  ipcMain.handle(IPC.aiInstallOllama, () =>
+    deps.localAi.installOllama((completed, total) =>
+      deps.localAi.sendProgress({ kind: 'install', status: 'download', completed, total }),
+    ),
+  )
   ipcMain.handle(IPC.aiVoices, () => deps.ai.voices())
   ipcMain.handle(
     IPC.aiSpeak,

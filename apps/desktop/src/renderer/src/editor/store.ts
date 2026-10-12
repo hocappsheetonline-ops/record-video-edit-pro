@@ -21,7 +21,6 @@ import {
   type Project,
   type Size,
   type AudioClip,
-  DEFAULT_OVERLAY_MS,
   newOverlayId,
   templateStyle,
   addMarker,
@@ -64,7 +63,6 @@ import {
   DEFAULT_LOOK,
   type Clip,
   type Look,
-  DEFAULT_ANIM,
   NO_ANIM,
   editPose,
   overlayPose,
@@ -75,6 +73,7 @@ import {
   canReverse,
   type SpeedCurve,
   buildCaptionLines,
+  normalizeAssistantCommands,
   parseAssistantRequest,
   sourceToOutput,
   type AssistantCommand,
@@ -84,12 +83,33 @@ import {
   removeSourceRanges,
   wordsToRanges,
   type SourceRange,
+  withCaptionTemplate,
+  EMPTY_MEMORY,
+  forgetRule,
+  isStandingRule,
+  learnFromEdit,
+  memorySummary,
+  normalizeDirectorPlan,
+  planLocally,
+  rememberRule,
+  type DirectorContext,
+  type DirectorMessage,
+  type DirectorPlan,
+  type StyleMemory,
 } from '@lumora/core'
-import type { AudioAsset, MediaAsset } from '@shared/ipc'
+import type { AudioAsset, MediaAsset, MusicTrack } from '@shared/ipc'
 import { lumora } from '../api'
 import i18n from '../i18n'
+import { loadPrefs, savePrefs } from '../lib/prefs'
 import { useJobs } from './jobs'
 import { useAppStore } from '../store/app'
+import {
+  buildOverlay,
+  previewWindow,
+  samePreview,
+  type PreviewWindow,
+  type TryPreview,
+} from './try-preview'
 
 /** Mục chọn được nhiều cùng lúc (Ctrl+click, kéo khung chọn, Ctrl+A). */
 export type MultiKind = 'overlay' | 'effect' | 'audio'
@@ -156,6 +176,12 @@ interface EditorStore {
   previewZoom: 'fit' | number
   /** Đường gióng trên khung xem trước. */
   guides: 'none' | 'thirds' | 'safe'
+  /** Mục đang xem thử (rê chuột trong thư viện): vẽ lên khung xem trước, không lưu vào dự án. */
+  preview: TryPreview | null
+  /** Khoảng phát thử (lặp lại); null khi chỉ nghe thử nhạc. */
+  previewWindow: PreviewWindow | null
+  /** Đầu phát và trạng thái phát trước khi xem thử (trả lại khi thôi). */
+  previewReturn: { time: number; playing: boolean } | null
   /** Hít dính khi kéo trên timeline (phím N). */
   snapping: boolean
   /** Vạch hít dính đang hiện (ms), null nếu không hít. */
@@ -163,6 +189,19 @@ interface EditorStore {
   past: EditState[]
   future: EditState[]
   loadError: string | null
+  /** Hội thoại với Đạo diễn AI của dự án đang mở (lưu theo thư mục dự án). */
+  directorMessages: DirectorMessage[]
+  /** Kế hoạch đang chờ người dùng (có câu hỏi làm rõ, hoặc bật "hỏi trước khi làm"). */
+  directorPlan: DirectorPlan | null
+  directorBusy: boolean
+  /** Thói quen chỉnh sửa đã học + quy tắc người dùng dặn (dùng chung mọi dự án). */
+  memory: StyleMemory
+  /** Đạo diễn AI hỏi xác nhận trước khi thực hiện. */
+  askConfirm: boolean
+  /** Tăng mỗi lần yêu cầu mở hộp thoại xuất (trang chỉnh sửa theo dõi). */
+  exportRequest: number
+  /** Bật thì bảng Xuất tự bắt đầu xuất ngay khi hiện rồi tắt cờ. */
+  autoExport: boolean
 
   load(folder: string): Promise<void>
   reset(): void
@@ -194,6 +233,14 @@ interface EditorStore {
   setSnapping(on: boolean): void
   setGuides(mode: EditorStore['guides']): void
   setPreviewZoom(zoom: EditorStore['previewZoom']): void
+  /**
+   * Xem thử một mục thư viện (như CapCut): hiệu ứng / bộ lọc / chuyển cảnh / lớp thì phát thử
+   * một đoạn ngắn từ đầu phát rồi lặp; nhạc thì nghe thử (timeline dừng). Gọi lại với cùng mục
+   * thì giữ nguyên.
+   */
+  tryPreview(preview: TryPreview): void
+  /** Thôi xem thử: trả đầu phát và trạng thái phát về như trước. */
+  endPreview(): void
   setSnapLine(t: number | null): void
   /** Đổi thứ tự vẽ của lớp phủ (lên / xuống một lớp, lên trên cùng, xuống dưới cùng). */
   reorderOverlay(id: string, to: 'up' | 'down' | 'top' | 'bottom'): void
@@ -307,6 +354,37 @@ interface EditorStore {
     onProgress?: (done: number, total: number, step: AutoEditStep) => void,
   ): Promise<{ commands: AssistantCommand[]; report: AutoEditReport[] }>
   /**
+   * Thực hiện danh sách lệnh của trợ lý / Đạo diễn AI trong một bước hoàn tác. Các lệnh AI (cắt
+   * khoảng lặng, từ thừa, zoom, phụ đề, làm sạch âm thanh) đi qua `autoEdit`; lệnh `export` được
+   * làm sau cùng (mở hộp thoại xuất và tự xuất). Trả về kết quả từng lệnh.
+   */
+  applyAssistantCommands(
+    commands: AssistantCommand[],
+    onProgress?: (done: number, total: number, step: AutoEditStep) => void,
+  ): Promise<AutoEditReport[]>
+  /**
+   * Đạo diễn AI: gửi yêu cầu kèm ngữ cảnh (thói quen, kho nhạc, dự án khác, lịch sử) → kế hoạch.
+   * Có câu hỏi làm rõ hoặc bật "hỏi trước khi làm" thì giữ kế hoạch chờ (`directorPlan`), không
+   * thì thực hiện luôn. Câu "luôn… / từ nay…" được ghi thành quy tắc lâu dài.
+   */
+  askDirector(
+    text: string,
+    onProgress?: (done: number, total: number, step: AutoEditStep) => void,
+  ): Promise<{ plan: DirectorPlan; applied: boolean; report: AutoEditReport[] }>
+  /** Thực hiện kế hoạch đang chờ. */
+  applyDirectorPlan(
+    onProgress?: (done: number, total: number, step: AutoEditStep) => void,
+  ): Promise<AutoEditReport[]>
+  discardDirectorPlan(): void
+  /** Ghi / bỏ một quy tắc người dùng dặn ("luôn thêm phụ đề"). */
+  rememberDirectorRule(text: string): void
+  forgetDirectorRule(text: string): void
+  setAskConfirm(v: boolean): void
+  /** Học thói quen từ bản chỉnh sửa hiện tại (gọi khi tự lưu). */
+  learnFromCurrentEdit(): void
+  /** Yêu cầu mở hộp thoại xuất; `autoStart` thì bắt đầu xuất ngay. */
+  requestExport(autoStart: boolean): void
+  /**
    * Chia video thành nhiều video ngắn: mỗi đoạn (theo chương AI hoặc mỗi N giây) thành một dự án
    * riêng (bản sao) chỉ giữ phần đó, tuỳ chọn khung dọc 9:16. Trả về số dự án đã tạo.
    */
@@ -343,10 +421,90 @@ export const AUTO_EDIT_STEPS: readonly AutoEditStep[] = [
   'title',
 ]
 export interface AutoEditReport {
-  step: AutoEditStep
+  /**
+   * Bước AI tự biên tập (silences, captions…), hoặc loại lệnh của trợ lý / Đạo diễn AI (title,
+   * effect, music, export…).
+   */
+  step: AutoEditStep | AssistantCommand['kind']
   status: 'done' | 'skipped' | 'error'
   /** Số đoạn / mục đã thêm (done), hoặc mã lý do (skipped / error). */
   detail: number | string
+}
+
+/** Khóa lưu thói quen chỉnh sửa (dùng chung mọi dự án) và tùy chọn của Đạo diễn AI. */
+const MEMORY_KEY = 'lumora.ai-memory'
+const DIRECTOR_PREFS_KEY = 'lumora.director-prefs'
+const directorKey = (folder: string) => `lumora.director.${folder}`
+/** Giữ tối đa bấy nhiêu lượt hội thoại cho mỗi dự án. */
+const DIRECTOR_HISTORY_LIMIT = 100
+/** Gửi cho AI bấy nhiêu lượt gần nhất làm ngữ cảnh. */
+const DIRECTOR_CONTEXT_TURNS = 8
+/** Câu hỏi khi AI không hiểu yêu cầu. */
+const DIRECTOR_FALLBACK_QUESTION =
+  'Bạn muốn làm gì với video này? Ví dụ: cắt khoảng lặng, thêm phụ đề, nhạc nền, xuất 9:16…'
+const EMPTY_PLAN: DirectorPlan = { summary: '', questions: [], commands: [] }
+
+/** Đọc thói quen đã lưu; dữ liệu hỏng thì bắt đầu lại từ đầu. */
+function loadMemory(): StyleMemory {
+  const m = loadPrefs(MEMORY_KEY, EMPTY_MEMORY)
+  const ok =
+    m.version === 1 &&
+    Array.isArray(m.rules) &&
+    m.rules.every((r) => typeof r === 'string') &&
+    Array.isArray(m.learned) &&
+    typeof m.counts === 'object' &&
+    m.counts !== null
+  return ok ? m : EMPTY_MEMORY
+}
+
+/** Hội thoại đã lưu của một dự án (bỏ mục hỏng). */
+function loadDirectorMessages(folder: string): DirectorMessage[] {
+  const { messages } = loadPrefs(directorKey(folder), { messages: [] as unknown })
+  if (!Array.isArray(messages)) return []
+  return messages.filter(
+    (m): m is DirectorMessage =>
+      typeof m === 'object' &&
+      m !== null &&
+      ((m as DirectorMessage).role === 'user' || (m as DirectorMessage).role === 'ai') &&
+      typeof (m as DirectorMessage).text === 'string' &&
+      typeof (m as DirectorMessage).at === 'number',
+  )
+}
+
+/** Thêm một lượt vào hội thoại của dự án `folder` và lưu lại (bỏ qua nếu đã sang dự án khác). */
+function pushDirectorMessage(folder: string, message: DirectorMessage) {
+  const s = useEditorStore.getState()
+  if (s.folder !== folder) return
+  const messages = [...s.directorMessages, message].slice(-DIRECTOR_HISTORY_LIMIT)
+  useEditorStore.setState({ directorMessages: messages })
+  savePrefs(directorKey(folder), { messages })
+}
+
+/** Câu AI nói khi đã làm xong mà không có tóm tắt. */
+const doneLine = (n: number) => `Đã làm ${n} việc`
+
+/**
+ * Bản chỉnh sửa của dự án mẫu cho lệnh "làm giống dự án X": `ref` là tên thư mục, hoặc tên dự án
+ * (so không phân biệt hoa thường). Không tìm thấy thì null.
+ */
+async function loadStyleSource(ref: string): Promise<EditState | null> {
+  const wanted = ref.trim().toLowerCase()
+  let folder = ref.trim()
+  try {
+    const projects = await lumora().listProjects()
+    const match =
+      projects.find((p) => p.name.toLowerCase() === wanted) ??
+      projects.find((p) => p.folder.toLowerCase() === wanted) ??
+      projects.find((p) => p.name.toLowerCase().includes(wanted))
+    if (match) folder = match.folder
+  } catch {
+    // Không liệt kê được: thử thẳng như tên thư mục.
+  }
+  try {
+    return await lumora().getEdit(folder)
+  } catch {
+    return null
+  }
 }
 
 /** Thời lượng tiêu đề mở đầu do AI thêm (ms). */
@@ -417,6 +575,9 @@ const initial = {
   selected: [] as SelItem[],
   clipboard: null as ClipboardData | null,
   guides: 'none' as EditorStore['guides'],
+  preview: null as TryPreview | null,
+  previewWindow: null as PreviewWindow | null,
+  previewReturn: null as { time: number; playing: boolean } | null,
   previewZoom: 'fit' as EditorStore['previewZoom'],
   lowPreview: false,
   snapping: true,
@@ -424,6 +585,11 @@ const initial = {
   past: [],
   future: [],
   loadError: null,
+  directorMessages: [] as DirectorMessage[],
+  directorPlan: null as DirectorPlan | null,
+  directorBusy: false,
+  exportRequest: 0,
+  autoExport: false,
 }
 
 /** Đặt file âm thanh vừa thêm vào timeline tại đầu phát và chọn nó. */
@@ -555,9 +721,12 @@ const revRequests = new Map<string, Promise<ReversedFiles | 'error'>>()
 
 export const useEditorStore = create<EditorStore>((set, get) => ({
   ...initial,
+  // Thói quen và tùy chọn Đạo diễn AI dùng chung mọi dự án: không nằm trong `initial`.
+  memory: loadMemory(),
+  askConfirm: loadPrefs(DIRECTOR_PREFS_KEY, { askConfirm: false }).askConfirm === true,
 
   async load(folder) {
-    set({ ...initial, folder })
+    set({ ...initial, folder, directorMessages: loadDirectorMessages(folder) })
     const api = lumora()
     const [project, events, saved, transcript] = await Promise.all([
       api.getProject(folder),
@@ -691,6 +860,29 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   setPlaying(playing) {
     set({ playing })
+  },
+
+  tryPreview(preview) {
+    const { edit } = get()
+    if (!edit || samePreview(get().preview, preview)) return
+    // Lần xem thử đầu tiên ghi lại chỗ đang đứng; đổi mục khác vẫn trả về chỗ đó.
+    const back = get().previewReturn ?? { time: get().time, playing: get().playing }
+    const window = previewWindow(edit, preview, back.time)
+    set({ preview, previewWindow: window, previewReturn: back })
+    if (window) {
+      get().setTime(window.start)
+      set({ playing: true })
+    } else set({ playing: false })
+  },
+
+  endPreview() {
+    const back = get().previewReturn
+    if (!get().preview && !back) return
+    set({ preview: null, previewWindow: null, previewReturn: null })
+    if (back) {
+      get().setTime(back.time)
+      set({ playing: back.playing })
+    }
   },
 
   select(selection) {
@@ -1165,45 +1357,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   addOverlay(init) {
     const { edit, time } = get()
     if (!edit) return
-    const total = outputDuration(edit.clips)
-    const start = Math.min(time, Math.max(0, total - 200))
-    const video = init.kind === 'video'
-    // Video meme dài đúng bằng phần còn lại của file (không vượt cuối video).
-    const length = video
-      ? Math.max(200, (init.sourceDuration ?? 0) - (init.mediaOffset ?? 0))
-      : DEFAULT_OVERLAY_MS
-    const overlay: Overlay = {
-      id: newOverlayId(),
-      start,
-      end: Math.min(total, start + length),
-      x: 0.5,
-      y: init.kind === 'text' ? 0.15 : 0.5,
-      size: video
-        ? (init.aspect ?? 1) < 1
-          ? 0.7
-          : 0.45
-        : init.kind === 'image'
-          ? 0.35
-          : init.kind === 'emoji'
-            ? 0.18
-            : init.kind === 'shape'
-              ? 0.14
-              : 0.09,
-      rotation: 0,
-      anim: video ? { ...NO_ANIM } : { ...DEFAULT_ANIM },
-      text: '',
-      style: 'meme',
-      color: '#ffffff',
-      file: '',
-      aspect: 1,
-      mediaOffset: 0,
-      sourceDuration: 0,
-      hasAudio: false,
-      volume: 1,
-      keyColor: '',
-      keyStrength: 0.4,
-      ...init,
-    }
+    const overlay = buildOverlay(init, time, outputDuration(edit.clips))
     get().change((e) => ({ ...e, overlays: [...e.overlays, overlay] }))
     get().select({ kind: 'overlay', id: overlay.id })
   },
@@ -1431,11 +1585,21 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     } catch {
       // Không có key Claude / mất mạng: hiểu theo từ khóa.
     }
-    if (commands.length === 0) commands = parseAssistantRequest(text)
+    // Gộp với bộ hiểu từ khóa: model (nhất là model cục bộ nhỏ) hay bỏ sót lệnh rõ ràng.
+    commands = normalizeAssistantCommands([...commands, ...parseAssistantRequest(text)])
     if (commands.length === 0 || get().folder !== folder) return { commands, report: [] }
+    const report = await get().applyAssistantCommands(commands, onProgress)
+    return { commands, report }
+  },
+
+  async applyAssistantCommands(commands, onProgress) {
+    const { folder, edit: before, project } = get()
+    if (!folder || !before || !project || commands.length === 0) return []
     const pastBefore = get().past
     const has = (kind: AssistantCommand['kind']) => commands.some((c) => c.kind === kind)
-    const report = await get().autoEdit(
+    // Các bước AI (cắt, zoom, phụ đề, âm thanh) làm trước: lệnh sau tính theo clip đã cắt.
+    // Báo cáo: các bước AI theo tên bước tự biên tập, lệnh còn lại theo loại lệnh, đúng thứ tự.
+    const report: AutoEditReport[] = await get().autoEdit(
       {
         silences: has('cutSilences'),
         fillers: has('removeFillers'),
@@ -1446,17 +1610,33 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       },
       onProgress,
     )
-    if (get().folder !== folder) return { commands, report }
+    if (get().folder !== folder) return report
+    const done = (step: AutoEditReport['step'], detail = 1) =>
+      report.push({ step, status: 'done', detail })
+    const skipped = (step: AutoEditReport['step'], detail: string) =>
+      report.push({ step, status: 'skipped', detail })
+    // Xuất làm sau cùng (sau khi gộp bước hoàn tác) để bản xuất có đủ mọi thay đổi.
+    let exportAfter = false
     for (const c of commands) {
+      if (get().folder !== folder) return report
       switch (c.kind) {
+        case 'cutSilences':
+        case 'removeFillers':
+        case 'autoZoom':
+        case 'captions':
+        case 'cleanAudio':
+          // Đã làm trong autoEdit (có dòng báo cáo riêng).
+          break
         case 'title':
           addTitleOverlay(c.text)
+          done('title')
           break
         case 'filter':
           get().change((e) => ({
             ...e,
             look: { ...e.look, filter: c.preset, intensity: c.intensity },
           }))
+          done('filter')
           break
         case 'speed':
           get().change((e) => ({
@@ -1466,12 +1646,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
               e.clips,
             ),
           }))
+          done('speed')
           break
         case 'aspect':
           get().change((e) => ({
             ...e,
             frame: { ...e.frame, aspect: c.aspect, fill: c.aspect === '9:16' },
           }))
+          done('aspect')
           break
         case 'trimStart':
         case 'trimEnd': {
@@ -1480,18 +1662,262 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             c.kind === 'trimStart'
               ? { start: 0, end: Math.min(c.ms, total - 1000) }
               : { start: Math.max(1000, total - c.ms), end: total }
-          if (range.end > range.start)
+          if (range.end > range.start) {
             get().change((e) => ({ ...e, clips: removeSourceRanges(e.clips, [range]) }))
+            done(c.kind)
+          } else skipped(c.kind, 'too_short')
+          break
+        }
+        case 'effect': {
+          // Hiệu ứng ở đầu video và mỗi chỗ nối clip; chỗ đã có hiệu ứng cùng loại thì bỏ qua.
+          const cur = get().edit!
+          const total = outputDuration(cur.clips)
+          const taken = new Set(
+            cur.effects.filter((x) => x.kind === c.effect).map((x) => Math.round(x.start)),
+          )
+          const added: EffectRegion[] = []
+          for (const at of [0, ...cutPoints(cur.clips).map((p) => p.at)]) {
+            const start = Math.min(at, Math.max(0, total - MIN_REGION_MS))
+            if (taken.has(Math.round(start))) continue
+            taken.add(Math.round(start))
+            added.push({
+              id: newEffectId(),
+              kind: c.effect,
+              start,
+              end: Math.min(total, start + DEFAULT_EFFECT_MS),
+              intensity: 0.7,
+            })
+          }
+          if (added.length > 0) {
+            get().change((e) => ({ ...e, effects: [...e.effects, ...added] }))
+            done('effect', added.length)
+          } else skipped('effect', 'duplicate')
+          break
+        }
+        case 'transitions': {
+          const cuts = cutPoints(get().edit!.clips).length
+          if (cuts === 0) skipped('transitions', 'no_cuts')
+          else {
+            get().applyTransitionToAll(c.transition, DEFAULT_TRANSITION_MS)
+            done('transitions', cuts)
+          }
+          break
+        }
+        case 'music': {
+          let tracks: MusicTrack[] = []
+          try {
+            tracks = await lumora().listMusic()
+          } catch {
+            tracks = []
+          }
+          if (get().folder !== folder) return report
+          const q = c.query.toLowerCase()
+          const track = tracks.find((t) => t.name.toLowerCase().includes(q)) ?? tracks[0]
+          if (!track) {
+            skipped('music', 'no_music')
+            break
+          }
+          try {
+            const count = get().edit!.audioClips.length
+            await get().addMusicFromLibrary(track.file)
+            if (get().folder !== folder) return report
+            const clips = get().edit!.audioClips
+            const clip = clips.length > count ? clips[clips.length - 1] : undefined
+            if (clip) get().updateAudioClip(clip.id, { volume: c.volume })
+            done('music')
+          } catch (e) {
+            report.push({ step: 'music', status: 'error', detail: errorCode(e) })
+          }
+          break
+        }
+        case 'captionsStyle':
+          get().change((e) => ({
+            ...e,
+            captions: { ...e.captions, look: withCaptionTemplate(e.captions.look, c.template) },
+          }))
+          done('captionsStyle')
+          break
+        case 'export':
+          get().change((e) => ({
+            ...e,
+            export: { ...e.export, resolution: c.resolution, format: c.format },
+          }))
+          exportAfter = true
+          done('export')
+          break
+        case 'styleFrom': {
+          const other = await loadStyleSource(c.project)
+          if (get().folder !== folder) return report
+          if (!other) {
+            skipped('styleFrom', 'no_project')
+            break
+          }
+          const transition = other.transitions?.[0]
+          get().change((e) => ({
+            ...e,
+            frame: { ...(other.frame ?? e.frame) },
+            look: { ...(other.look ?? e.look) },
+            captions: { ...e.captions, look: { ...(other.captions?.look ?? e.captions.look) } },
+            cursor: { ...(other.cursor ?? e.cursor) },
+            camera: { ...(other.camera ?? e.camera) },
+            motion: { ...(other.motion ?? e.motion) },
+            audio: {
+              ...e.audio,
+              micFx: { ...(other.audio?.micFx ?? e.audio.micFx) },
+              systemFx: { ...(other.audio?.systemFx ?? e.audio.systemFx) },
+            },
+            transitions: transition
+              ? cutPoints(e.clips).map((p) => ({
+                  afterClip: p.afterClip,
+                  kind: transition.kind,
+                  durationMs: transition.durationMs,
+                }))
+              : e.transitions,
+          }))
+          done('styleFrom')
           break
         }
         default:
           break
       }
     }
+    // Gộp thành một bước hoàn tác.
     const after = get().edit
     if (after && after !== before)
       set({ past: [...pastBefore, before].slice(-HISTORY_LIMIT), future: [] })
-    return { commands, report }
+    if (exportAfter) get().requestExport(true)
+    return report
+  },
+
+  async askDirector(input, onProgress) {
+    const { folder, edit, project, transcript, cursor, events } = get()
+    const text = input.trim()
+    if (!folder || !edit || !project || !text)
+      return { plan: EMPTY_PLAN, applied: false, report: [] }
+    pushDirectorMessage(folder, { role: 'user', text, at: Date.now() })
+    if (isStandingRule(text)) get().rememberDirectorRule(text)
+    set({ directorBusy: true })
+    try {
+      const language = edit.captions.language || transcript?.language || ''
+      const [tracks, projects] = await Promise.all([
+        lumora()
+          .listMusic()
+          .catch(() => []),
+        lumora()
+          .listProjects()
+          .catch(() => []),
+      ])
+      if (get().folder !== folder) return { plan: EMPTY_PLAN, applied: false, report: [] }
+      const musicTracks = tracks.map((t) => t.name)
+      const context: DirectorContext = {
+        language,
+        durationMs: outputDuration(edit.clips),
+        hasTranscript: transcript !== null,
+        hasCursor: cursor !== null && events.length > 0,
+        musicTracks,
+        projects: projects.filter((p) => p.folder !== folder).map((p) => p.name),
+        memory: memorySummary(get().memory, language || 'vi'),
+        // Các lượt trước câu vừa gửi.
+        history: get().directorMessages.slice(0, -1).slice(-DIRECTOR_CONTEXT_TURNS),
+      }
+      let plan: DirectorPlan = EMPTY_PLAN
+      try {
+        plan = normalizeDirectorPlan(await lumora().directEdits(text, context))
+      } catch {
+        // Không có AI (thiếu key / Ollama tắt): lập kế hoạch tại chỗ theo từ khóa.
+      }
+      if (get().folder !== folder) return { plan, applied: false, report: [] }
+      // Bổ sung lệnh hiểu theo từ khóa + thói quen (mẫu phụ đề quen, âm lượng nhạc quen).
+      const local = planLocally(
+        normalizeAssistantCommands([...plan.commands, ...parseAssistantRequest(text)]),
+        { musicTracks },
+        get().memory,
+      )
+      const commands = local.commands
+      let questions = [...plan.questions, ...local.questions].slice(0, 2)
+      if (commands.length === 0 && questions.length === 0) questions = [DIRECTOR_FALLBACK_QUESTION]
+      const final: DirectorPlan = { summary: plan.summary || '', questions, commands }
+      if (questions.length > 0 || get().askConfirm) {
+        set({ directorPlan: final })
+        pushDirectorMessage(folder, {
+          role: 'ai',
+          text: [final.summary, ...questions].filter(Boolean).join('\n'),
+          at: Date.now(),
+        })
+        return { plan: final, applied: false, report: [] }
+      }
+      const report = await get().applyAssistantCommands(commands, onProgress)
+      if (get().folder === folder) {
+        set({ directorPlan: null })
+        pushDirectorMessage(folder, {
+          role: 'ai',
+          text: final.summary || doneLine(commands.length),
+          at: Date.now(),
+        })
+      }
+      return { plan: final, applied: true, report }
+    } finally {
+      set({ directorBusy: false })
+    }
+  },
+
+  async applyDirectorPlan(onProgress) {
+    const { folder, directorPlan: plan } = get()
+    if (!folder || !plan) return []
+    if (plan.commands.length === 0) {
+      set({ directorPlan: null })
+      return []
+    }
+    set({ directorBusy: true })
+    try {
+      const report = await get().applyAssistantCommands(plan.commands, onProgress)
+      if (get().folder === folder) {
+        set({ directorPlan: null })
+        pushDirectorMessage(folder, {
+          role: 'ai',
+          text: plan.summary || doneLine(plan.commands.length),
+          at: Date.now(),
+        })
+      }
+      return report
+    } finally {
+      set({ directorBusy: false })
+    }
+  },
+
+  discardDirectorPlan() {
+    set({ directorPlan: null })
+  },
+
+  rememberDirectorRule(text) {
+    const memory = rememberRule(get().memory, text)
+    if (memory === get().memory) return
+    set({ memory })
+    savePrefs(MEMORY_KEY, memory)
+  },
+
+  forgetDirectorRule(text) {
+    const memory = forgetRule(get().memory, text)
+    set({ memory })
+    savePrefs(MEMORY_KEY, memory)
+  },
+
+  setAskConfirm(askConfirm) {
+    set({ askConfirm })
+    savePrefs(DIRECTOR_PREFS_KEY, { askConfirm })
+  },
+
+  learnFromCurrentEdit() {
+    const { project, edit, memory } = get()
+    if (!project || !edit) return
+    const next = learnFromEdit(memory, project.id, edit)
+    if (next === memory) return
+    set({ memory: next })
+    savePrefs(MEMORY_KEY, next)
+  },
+
+  requestExport(autoStart) {
+    set({ exportRequest: get().exportRequest + 1, autoExport: autoStart })
   },
 
   async splitIntoShorts(options, onProgress) {
@@ -1557,10 +1983,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     let done = 0
     const tick = (step: AutoEditStep) => onProgress?.(++done, steps.length, step)
 
-    // Lời thoại: cần cho từ thừa, phụ đề và tiêu đề. Thiếu key thì các bước đó bị bỏ qua.
+    // Lời thoại: cần cho từ thừa, phụ đề và tiêu đề (và cho khoảng lặng khi chưa có dạng sóng
+    // để dựa vào). Thiếu key thì các bước đó bị bỏ qua.
     let transcript = get().transcript
     let transcriptIssue: string | null = null
-    if ((options.fillers || options.captions || options.title) && !transcript) {
+    const needTranscript =
+      options.fillers || options.captions || options.title || (options.silences && !waveform)
+    if (needTranscript && !transcript) {
       try {
         transcript = await lumora().transcribe(folder, before.captions.language || '')
         if (get().folder !== folder) return []

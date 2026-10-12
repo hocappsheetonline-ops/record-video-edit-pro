@@ -121,6 +121,16 @@ export async function startMockAi(): Promise<{
         if (system.includes('editing assistant')) {
           return json(200, anthropicMessage({ commands: [{ kind: 'cutSilences' }] }))
         }
+        if (system.includes('AI director')) {
+          return json(
+            200,
+            anthropicMessage({
+              summary: 'Thêm phụ đề',
+              questions: [],
+              commands: [{ kind: 'captions' }],
+            }),
+          )
+        }
         if (system.includes('metadata')) {
           return json(
             200,

@@ -2,6 +2,20 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.4.0
+
+- **Đạo diễn AI** (Thư viện → AI, thay cho Trợ lý AI): nói bạn muốn video thế nào, AI viết lại thành **kế hoạch** (cắt khoảng lặng / từ thừa, tự zoom, phụ đề và kiểu phụ đề, làm sạch âm thanh, tiêu đề, bộ lọc, tốc độ, khung hình, **hiệu ứng**, **chuyển cảnh**, **nhạc nền từ kho nhạc**, **xuất video** theo độ phân giải / định dạng, **chỉnh theo mẫu dự án khác**) rồi tự làm hết trong một bước hoàn tác; có yêu cầu xuất thì mở hộp thoại xuất và bắt đầu xuất luôn.
+- **Hỏi lại khi thiếu thông tin**: AI hỏi tối đa hai câu (ví dụ kho nhạc trống, hay "làm cho hay" chưa rõ) và chờ bạn trả lời ngay trong cuộc trò chuyện; bật **Hỏi lại trước khi làm** để luôn xem kế hoạch rồi mới duyệt.
+- **Lịch sử và trí nhớ**: mỗi dự án giữ lịch sử trò chuyện (AI nhớ ngữ cảnh lượt trước); câu "từ nay…" / "luôn…" được ghi thành **quy tắc lâu dài** (xem, quên được); app **học thói quen** từ cách bạn chỉnh (mẫu phụ đề, bộ lọc, khung hình, chuyển cảnh, hiệu ứng, âm lượng nhạc) và tự áp dụng khi lệnh không nói rõ.
+- **Xem thử trước khi thêm** (như CapCut): rê chuột lên **hiệu ứng**, **bộ lọc**, **chuyển cảnh**, **meme / ảnh / GIF / video** trong kho, **nhãn dán**, **mẫu chữ** hay **kho online** là khung xem trước phát thử ngay một đoạn ngắn (lặp lại) mà chưa thêm gì vào dự án; bỏ chuột ra là trở lại chỗ cũ, bấm mới thêm thật. Nhạc trong kho có nút **▶ Nghe thử**.
+- **Kéo giãn khung** như CapCut: kéo vạch giữa thư viện / khung xem trước / bảng thuộc tính và vạch trên timeline để đổi cỡ (nhớ cho lần sau; bấm đúp để về mặc định; mũi tên bàn phím khi vạch có tiêu điểm).
+- Chạy được bằng **AI cục bộ (Ollama)**, Claude, hoặc chỉ từ khóa khi không có AI (huy hiệu ở góc cho biết đang dùng gì).
+- AI cục bộ ổn định hơn: tự tách JSON khi model trả kèm chữ, thử lại một lần khi lỗi, cỡ ngữ cảnh theo độ dài lời thoại, giữ model nóng 15 phút, tìm từ thừa theo từng đoạn cho lời thoại dài, nút **Đo tốc độ** và gợi ý model theo máy.
+
+## 1.3.1
+
+- **Cài Ollama và tải model ngay trong app** (Cài đặt → AI cục bộ): nút **Cài Ollama** tự tải bộ cài chính thức rồi mở, nút **Tải model** tải model về Ollama với thanh tiến độ (không cần gõ lệnh). Ba bước ngay tại chỗ: Cài Ollama → Kiểm tra kết nối → Tải model.
+
 ## 1.3.0
 
 - **Bố cục giống CapCut**: thanh tiêu đề chứa tên dự án và nút **Xuất**, nút cửa sổ kiểu Windows (thu nhỏ, phóng to, đóng) ở góc phải (macOS dùng nút hệ thống); hàng mục thư viện ngang với biểu tượng kèm nhãn; cột mục con bên trái (Của tôi / Video / Ảnh; Hiệu ứng / Meme / Nhạc / YouTube / Lồng tiếng / Kịch bản); bảng thuộc tính tab chữ; thanh "Xem trước"; timeline có nút **+** (mở thư viện) và **micro** (lồng tiếng); bảng màu xám than và màu nhấn xanh ngọc kiểu CapCut (đổi được trong Cài đặt).

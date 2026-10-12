@@ -1,12 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Scissors, Sparkle, WandSparkles } from 'lucide-react'
+import { Brain, Clapperboard, Scissors, Send, Sparkle, Trash2 } from 'lucide-react'
 import {
   removeSourceRanges,
   sourceToOutput,
   wordsToRanges,
   type AssistantCommand,
   type CutSuggestion,
+  type DirectorPlan,
 } from '@lumora/core'
 import { useAppStore } from '../store/app'
 import type { AiSummary } from '@shared/ipc'
@@ -43,65 +44,250 @@ function commandLabel(t: ReturnType<typeof useTranslation>['t'], c: AssistantCom
     case 'trimStart':
     case 'trimEnd':
       return `${t(`ai.assistant.kinds.${c.kind}`)}: ${(c.ms / 1000).toFixed(0)}s`
+    case 'effect':
+      return `${t('ai.assistant.kinds.effect')}: ${t(`editor.effects.kinds.${c.effect}`, { defaultValue: c.effect })}`
+    case 'transitions':
+      return `${t('ai.assistant.kinds.transitions')}: ${t(`editor.transition.kinds.${c.transition}`, { defaultValue: c.transition })}`
+    case 'music':
+      return `${t('ai.assistant.kinds.music')}${c.query ? `: ${c.query}` : ''} · ${Math.round(c.volume * 100)}%`
+    case 'captionsStyle':
+      return `${t('ai.assistant.kinds.captionsStyle')}: ${t(`captions.templateNames.${c.template}`, { defaultValue: c.template })}`
+    case 'export':
+      return `${t('ai.assistant.kinds.export')}: ${c.resolution}p ${c.format.toUpperCase()}`
+    case 'styleFrom':
+      return `${t('ai.assistant.kinds.styleFrom')}: ${c.project}`
     default:
       return t(`ai.assistant.kinds.${c.kind}`)
   }
 }
 
-/** Trợ lý AI kiểu EditPilot: gõ yêu cầu, AI hiểu thành lệnh rồi làm; hoàn tác một lần. */
-function Assistant() {
+/** Nhãn nguồn hiểu yêu cầu: AI local (Ollama), Claude, hay chỉ từ khóa. */
+function useDirectorEngine(): 'local' | 'claude' | 'keywords' {
+  const settings = useAppStore((s) => s.settings)
+  const secrets = useAppStore((s) => s.secrets)
+  if (settings?.localAi?.enabled) return 'local'
+  if (secrets?.anthropic?.state === 'saved') return 'claude'
+  return 'keywords'
+}
+
+/**
+ * Đạo diễn AI: trò chuyện với dự án. Gõ một yêu cầu, AI viết lại thành kế hoạch (cắt, phụ đề,
+ * hiệu ứng, nhạc nền, khung hình, xuất…), hỏi lại khi thiếu thông tin, nhớ lịch sử từng dự án,
+ * ghi quy tắc "luôn…/từ nay…" và học thói quen từ cách bạn chỉnh. Mỗi lượt làm là một bước hoàn tác.
+ */
+function Director() {
   const { t } = useTranslation()
+  const engine = useDirectorEngine()
+  const messages = useEditorStore((s) => s.directorMessages)
+  const plan = useEditorStore((s) => s.directorPlan)
+  const busy = useEditorStore((s) => s.directorBusy)
+  const memory = useEditorStore((s) => s.memory)
+  const askConfirm = useEditorStore((s) => s.askConfirm)
   const [text, setText] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [commands, setCommands] = useState<AssistantCommand[] | null>(null)
+  const [report, setReport] = useState<AutoEditReport[] | null>(null)
+  const [lastPlan, setLastPlan] = useState<DirectorPlan | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const run = async () => {
-    if (!text.trim()) return
-    setBusy(true)
+  const [showRules, setShowRules] = useState(false)
+  const historyRef = useRef<HTMLUListElement>(null)
+
+  // Cuộn xuống tin mới nhất khi lịch sử đổi.
+  useEffect(() => {
+    const el = historyRef.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [messages.length, plan])
+
+  const finish = (applied: boolean, result: AutoEditReport[], p: DirectorPlan) => {
+    setLastPlan(p)
+    setReport(applied ? result : null)
+    if (applied && result.some((r) => r.status === 'done'))
+      useJobs.getState().toast({ kind: 'success', text: t('ai.assistant.done') })
+  }
+
+  const send = async () => {
+    const goal = text.trim()
+    if (!goal || busy) return
+    setText('')
     setError(null)
+    setReport(null)
     try {
       const result = await runJob(t('ai.assistant.job'), (progress) =>
         useEditorStore
           .getState()
-          .runAssistant(text, (done, total, step) =>
-            progress(done / total, t(`ai.auto.steps.${step}`)),
+          .askDirector(goal, (done, total, step) =>
+            progress(done / total, t(`ai.auto.steps.${step}`, { defaultValue: step })),
           ),
       )
-      setCommands(result.commands)
-      if (result.commands.length > 0)
-        useJobs.getState().toast({ kind: 'success', text: t('ai.assistant.done') })
+      finish(result.applied, result.report, result.plan)
     } catch (e) {
       setError(aiErrorText(t, e))
-    } finally {
-      setBusy(false)
     }
   }
+
+  const apply = async () => {
+    if (!plan) return
+    setError(null)
+    try {
+      const pending = plan
+      const result = await runJob(t('ai.assistant.job'), (progress) =>
+        useEditorStore
+          .getState()
+          .applyDirectorPlan((done, total, step) =>
+            progress(done / total, t(`ai.auto.steps.${step}`, { defaultValue: step })),
+          ),
+      )
+      finish(true, result, pending)
+    } catch (e) {
+      setError(aiErrorText(t, e))
+    }
+  }
+
+  const habits = Object.entries(memory.counts)
+    .map(([key, bucket]) => {
+      const best = Object.entries(bucket).sort((a, b) => b[1] - a[1])[0]
+      return best ? { key, value: best[0], n: best[1] } : null
+    })
+    .filter((h): h is { key: string; value: string; n: number } => h !== null)
+
+  const hasPlan = plan !== null
+  const shownCommands = plan?.commands ?? lastPlan?.commands ?? null
+
   return (
     <section
       className="flex flex-col gap-2 rounded-xl border border-accent/30 bg-accent/5 p-3"
       data-testid="ai-assistant"
     >
-      <h3 className="flex items-center gap-1.5 text-sm font-semibold">
-        <WandSparkles size={15} className="text-accent" aria-hidden />
-        {t('ai.assistant.title')}
-      </h3>
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+          <Clapperboard size={15} className="text-accent" aria-hidden />
+          {t('ai.assistant.title')}
+        </h3>
+        <span
+          className={`rounded-md px-1.5 py-0.5 text-[10px] font-medium ${
+            engine === 'keywords' ? 'bg-surface-2 text-muted' : 'bg-success/15 text-success'
+          }`}
+          data-testid="director-engine"
+          data-engine={engine}
+          title={engine === 'keywords' ? t('ai.assistant.noAiHint') : undefined}
+        >
+          {t(`ai.assistant.engine.${engine}`)}
+        </span>
+      </div>
       <p className="text-xs text-muted">{t('ai.assistant.intro')}</p>
-      <textarea
-        value={text}
-        rows={2}
-        data-testid="assistant-input"
-        placeholder={t('ai.assistant.placeholder')}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault()
-            void run()
+
+      {(messages.length > 0 || hasPlan) && (
+        <ul
+          ref={historyRef}
+          className="flex max-h-56 flex-col gap-1.5 overflow-y-auto rounded-lg border border-border bg-surface-2/60 p-2"
+          data-testid="director-history"
+        >
+          {messages.map((m, i) => (
+            <li
+              key={`${m.at}-${i}`}
+              data-testid="director-message"
+              data-role={m.role}
+              className={`max-w-[92%] whitespace-pre-wrap rounded-lg px-2.5 py-1.5 text-xs ${
+                m.role === 'user'
+                  ? 'self-end bg-accent text-accent-fg'
+                  : 'self-start border border-border bg-surface text-text'
+              }`}
+            >
+              {m.text}
+            </li>
+          ))}
+          {hasPlan && (
+            <li
+              className="flex flex-col gap-1.5 self-stretch rounded-lg border border-accent/40 bg-surface p-2 text-xs"
+              data-testid="director-plan"
+            >
+              {plan.summary && <p className="font-medium">{plan.summary}</p>}
+              {plan.questions.map((q, i) => (
+                <p key={i} className="text-text" data-testid="director-question">
+                  {q}
+                </p>
+              ))}
+              {plan.commands.length > 0 && (
+                <ul className="flex flex-wrap gap-1">
+                  {plan.commands.map((c, i) => (
+                    <li
+                      key={i}
+                      data-testid="director-plan-command"
+                      data-kind={c.kind}
+                      className="rounded-md bg-accent/15 px-2 py-0.5 text-[11px] text-accent"
+                    >
+                      {commandLabel(t, c)}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {plan.commands.length > 0 && (
+                  <button
+                    type="button"
+                    data-testid="director-apply"
+                    disabled={busy}
+                    onClick={() => void apply()}
+                    className="rounded-md bg-accent px-2.5 py-1 text-[11px] font-semibold text-accent-fg hover:brightness-110 disabled:opacity-50"
+                  >
+                    {plan.questions.length > 0
+                      ? t('ai.assistant.applyAnyway')
+                      : t('ai.assistant.apply', { count: plan.commands.length })}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  data-testid="director-discard"
+                  disabled={busy}
+                  onClick={() => useEditorStore.getState().discardDirectorPlan()}
+                  className="rounded-md border border-border px-2.5 py-1 text-[11px] text-muted hover:text-text disabled:opacity-50"
+                >
+                  {t('ai.assistant.discard')}
+                </button>
+                {plan.questions.length > 0 && (
+                  <span className="text-[11px] text-muted">{t('ai.assistant.answerHint')}</span>
+                )}
+              </div>
+            </li>
+          )}
+        </ul>
+      )}
+
+      <div className="flex items-end gap-1.5">
+        <textarea
+          value={text}
+          rows={2}
+          data-testid="assistant-input"
+          placeholder={
+            hasPlan && plan.questions.length > 0
+              ? t('ai.assistant.answerPlaceholder')
+              : t('ai.assistant.placeholder')
           }
-        }}
-        className="resize-none rounded-lg border border-border bg-surface-2 px-2.5 py-2 text-sm outline-none focus:border-accent"
-      />
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault()
+              void send()
+            }
+          }}
+          className="min-w-0 flex-1 resize-none rounded-lg border border-border bg-surface-2 px-2.5 py-2 text-sm outline-none focus:border-accent"
+        />
+        <button
+          type="button"
+          data-testid="assistant-run"
+          disabled={busy || !text.trim()}
+          onClick={() => void send()}
+          aria-label={t('ai.assistant.run')}
+          title={t('ai.assistant.run')}
+          className="flex h-[46px] w-11 shrink-0 items-center justify-center rounded-lg bg-accent text-accent-fg shadow-sm hover:brightness-110 disabled:opacity-50"
+        >
+          {busy ? (
+            <Sparkle size={16} className="animate-pulse" aria-hidden />
+          ) : (
+            <Send size={16} aria-hidden />
+          )}
+        </button>
+      </div>
       <div className="flex flex-wrap gap-1">
-        {(['silences', 'captions', 'vertical', 'cinematic'] as const).map((k) => (
+        {(['full', 'silences', 'captions', 'vertical', 'cinematic'] as const).map((k) => (
           <button
             key={k}
             type="button"
@@ -113,34 +299,109 @@ function Assistant() {
           </button>
         ))}
       </div>
-      <button
-        type="button"
-        data-testid="assistant-run"
-        disabled={busy || !text.trim()}
-        onClick={() => void run()}
-        className="rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-accent-fg shadow-sm hover:brightness-110 disabled:opacity-50"
-      >
-        {busy ? t('ai.working') : t('ai.assistant.run')}
-      </button>
-      {commands && commands.length === 0 && (
+      <label className="flex items-center gap-2 text-xs text-muted">
+        <input
+          type="checkbox"
+          className="size-4 accent-accent"
+          data-testid="director-ask-confirm"
+          checked={askConfirm}
+          onChange={(e) => useEditorStore.getState().setAskConfirm(e.target.checked)}
+        />
+        {t('ai.assistant.askFirst')}
+      </label>
+
+      {report && report.length === 0 && shownCommands && shownCommands.length === 0 && (
         <p className="text-xs text-muted" data-testid="assistant-none">
           {t('ai.assistant.none')}
         </p>
       )}
-      {commands && commands.length > 0 && (
+      {report && report.length > 0 && (
         <ul className="flex flex-wrap gap-1" data-testid="assistant-commands">
-          {commands.map((c, i) => (
+          {report.map((r, i) => (
             <li
               key={i}
               data-testid="assistant-command"
-              data-kind={c.kind}
-              className="rounded-md bg-accent/15 px-2 py-0.5 text-[11px] text-accent"
+              data-kind={r.step}
+              data-status={r.status}
+              title={
+                r.status === 'done'
+                  ? t('ai.auto.status.done', { n: r.detail })
+                  : r.status === 'skipped'
+                    ? t('ai.auto.status.skipped', {
+                        reason: t(`ai.auto.reasons.${r.detail}`, {
+                          defaultValue: String(r.detail),
+                        }),
+                      })
+                    : t('ai.auto.status.error', { message: String(r.detail) })
+              }
+              className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] ${
+                r.status === 'done'
+                  ? 'bg-accent/15 text-accent'
+                  : r.status === 'skipped'
+                    ? 'bg-surface-2 text-muted line-through'
+                    : 'bg-danger/10 text-danger'
+              }`}
             >
-              {commandLabel(t, c)}
+              {t(`ai.assistant.kinds.${r.step}`, {
+                defaultValue: t(`ai.auto.steps.${r.step}`, { defaultValue: r.step }),
+              })}
             </li>
           ))}
         </ul>
       )}
+
+      <div className="flex flex-col gap-1.5">
+        <button
+          type="button"
+          data-testid="director-rules-toggle"
+          onClick={() => setShowRules((v) => !v)}
+          aria-expanded={showRules}
+          className="flex items-center gap-1.5 self-start text-[11px] font-medium text-muted hover:text-text"
+        >
+          <Brain size={13} aria-hidden />
+          {t('ai.assistant.memoryTitle', { count: memory.rules.length })}
+        </button>
+        {showRules && (
+          <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-surface-2/60 p-2 text-xs">
+            <p className="text-muted">{t('ai.assistant.memoryHint')}</p>
+            {memory.rules.length === 0 ? (
+              <p className="text-muted" data-testid="director-no-rules">
+                {t('ai.assistant.noRules')}
+              </p>
+            ) : (
+              <ul className="flex flex-col gap-1" data-testid="director-rules">
+                {memory.rules.map((rule) => (
+                  <li key={rule} className="flex items-center gap-2" data-testid="director-rule">
+                    <span className="min-w-0 flex-1 truncate">{rule}</span>
+                    <button
+                      type="button"
+                      data-testid="director-rule-forget"
+                      aria-label={t('ai.assistant.forget')}
+                      title={t('ai.assistant.forget')}
+                      onClick={() => useEditorStore.getState().forgetDirectorRule(rule)}
+                      className="rounded p-0.5 text-muted hover:text-danger"
+                    >
+                      <Trash2 size={12} aria-hidden />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {habits.length > 0 && (
+              <p className="text-muted" data-testid="director-habits">
+                {t('ai.assistant.habits')}{' '}
+                {habits
+                  .map(
+                    (h) =>
+                      `${t(`ai.assistant.habitKeys.${h.key}`, { defaultValue: h.key })}: ${h.value} (×${h.n})`,
+                  )
+                  .join(' · ')}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
       {error && (
         <p role="alert" className="rounded-lg bg-danger/10 p-3 text-sm text-danger">
           {error}
@@ -426,7 +687,7 @@ export function AiPanel() {
 
   return (
     <div className="flex flex-col gap-6" data-testid="ai-panel">
-      <Assistant />
+      <Director />
       <AutoEdit />
       <Shorts />
 

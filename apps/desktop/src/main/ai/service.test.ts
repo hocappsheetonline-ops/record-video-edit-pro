@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -116,6 +116,12 @@ function fakeApis() {
             { kind: 'filter', preset: 'bogus' },
             { kind: 'aspect', aspect: '9:16' },
           ],
+        })
+      if (system.includes('AI director'))
+        return message({
+          summary: 'Cắt khoảng lặng và thêm phụ đề',
+          questions: [],
+          commands: [{ kind: 'cutSilences' }, { kind: 'captions' }, { kind: 'bogus' }],
         })
       if (system.includes('metadata')) {
         return message({
@@ -321,6 +327,80 @@ describe('AiService.plan (trợ lý AI)', () => {
   })
 })
 
+describe('AiService.direct (đạo diễn AI)', () => {
+  const context = {
+    language: 'vi',
+    durationMs: 90_000,
+    hasTranscript: true,
+    hasCursor: false,
+    musicTracks: ['Lofi Chill Beats', 'Epic Trailer'],
+    projects: ['Demo tuần trước'],
+    memory: 'Quy tắc người dùng:\n- luôn dùng phụ đề tiktok',
+    history: [
+      { role: 'user' as const, text: 'thêm nhạc lofi', at: 1 },
+      { role: 'ai' as const, text: 'Đã thêm nhạc Lofi Chill Beats.', at: 2 },
+    ],
+  }
+
+  it('yêu cầu rỗng: kế hoạch trống, không gọi mạng', async () => {
+    const { calls, fetchImpl } = fakeApis()
+    expect(await service(fetchImpl).direct('   ', context)).toEqual({
+      summary: '',
+      questions: [],
+      commands: [],
+    })
+    expect(calls).toHaveLength(0)
+  })
+
+  it('gửi ngữ cảnh (thói quen, kho nhạc, hội thoại) trong lời nhắc hệ thống; lọc lệnh sai', async () => {
+    const { calls, fetchImpl } = fakeApis()
+    const plan = await service(fetchImpl).direct('dọn video rồi thêm phụ đề', context)
+    expect(plan).toEqual({
+      summary: 'Cắt khoảng lặng và thêm phụ đề',
+      questions: [],
+      commands: [{ kind: 'cutSilences' }, { kind: 'captions' }],
+    })
+    expect(calls).toHaveLength(1)
+    const body = calls[0]!.body as {
+      system: string
+      messages: { content: string }[]
+      output_config: { effort: string; format: { schema: { required: string[] } } }
+    }
+    expect(body.messages[0]!.content).toBe('dọn video rồi thêm phụ đề')
+    expect(body.system).toContain('AI director')
+    expect(body.system).toContain('duration 90 s')
+    expect(body.system).toContain('luôn dùng phụ đề tiktok')
+    expect(body.system).toContain('Lofi Chill Beats')
+    expect(body.system).toContain('Director: Đã thêm nhạc Lofi Chill Beats.')
+    expect(body.output_config.effort).toBe('medium')
+    expect(body.output_config.format.schema.required).toEqual(['summary', 'questions', 'commands'])
+  })
+
+  it('cắt gọn ngữ cảnh quá dài: 50 tên bài, 8 lượt hội thoại, bộ nhớ 2000 ký tự', async () => {
+    const { calls, fetchImpl } = fakeApis()
+    await service(fetchImpl).direct('x', {
+      ...context,
+      musicTracks: Array.from({ length: 60 }, (_, i) => `Track ${i} ${'y'.repeat(100)}`),
+      memory: 'm'.repeat(3000),
+      history: Array.from({ length: 12 }, (_, i) => ({
+        role: 'user' as const,
+        text: `turn ${i} ${'z'.repeat(600)}`,
+        at: i,
+      })),
+    })
+    const system = (calls[0]!.body as { system: string }).system
+    expect(system).toContain('Track 49')
+    expect(system).not.toContain('Track 50')
+    expect(system).not.toContain('y'.repeat(81))
+    expect(system).toContain('m'.repeat(2000))
+    expect(system).not.toContain('m'.repeat(2001))
+    expect(system).toContain('turn 4 ')
+    expect(system).not.toContain('turn 3 ')
+    expect(system).not.toContain('z'.repeat(500))
+    await expect(service(fetchImpl, {}).direct('x', context)).rejects.toThrow()
+  })
+})
+
 describe('AI cục bộ (Ollama)', () => {
   function ollamaFetch(models: string[] = ['qwen2.5:7b', 'llama3.2']) {
     const calls: { url: string; body?: unknown }[] = []
@@ -409,5 +489,157 @@ describe('AI cục bộ (Ollama)', () => {
         fetchImpl,
       }).plan('x', ctx),
     ).rejects.toThrow('missing_key:anthropic')
+  })
+})
+
+describe('pullOllamaModel', () => {
+  it('đọc tiến độ NDJSON từng dòng, báo lỗi model không có', async () => {
+    const { pullOllamaModel } = await import('./ollama')
+    const lines = [
+      JSON.stringify({ status: 'pulling manifest' }),
+      JSON.stringify({ status: 'pulling abc', total: 100, completed: 40 }),
+      JSON.stringify({ status: 'pulling abc', total: 100, completed: 100 }),
+      JSON.stringify({ status: 'success' }),
+    ]
+    const stream = new ReadableStream({
+      start(controller) {
+        const text = lines.join('\n')
+        controller.enqueue(new TextEncoder().encode(text.slice(0, 30)))
+        controller.enqueue(new TextEncoder().encode(text.slice(30)))
+        controller.close()
+      },
+    })
+    const fetchImpl: FetchLike = async (_input, init) => {
+      expect(JSON.parse(String(init!.body))).toEqual({ name: 'llama3.2', stream: true })
+      return new Response(stream, { status: 200 })
+    }
+    const seen: { status: string; completed: number; total: number }[] = []
+    await pullOllamaModel('http://127.0.0.1:11434', 'llama3.2', (p) => seen.push(p), fetchImpl)
+    expect(seen.map((p) => [p.status, p.completed, p.total])).toEqual([
+      ['pulling manifest', 0, 0],
+      ['pulling abc', 40, 100],
+      ['pulling abc', 100, 100],
+      ['success', 0, 0],
+    ])
+    const missing: FetchLike = async () =>
+      new Response(JSON.stringify({ error: 'pull model manifest: file does not exist' }), {
+        status: 200,
+      })
+    await expect(
+      pullOllamaModel('http://127.0.0.1:11434', 'nope', () => {}, missing),
+    ).rejects.toThrow('ollama_model')
+    await expect(
+      pullOllamaModel('http://127.0.0.1:11434', 'bad name!', () => {}, missing),
+    ).rejects.toThrow('ollama_model')
+  })
+})
+
+describe('AI cục bộ: độ bền và hiệu năng', () => {
+  it('contextSize / extractJson: ngữ cảnh đủ cho lời thoại dài, JSON bọc markdown vẫn đọc được', async () => {
+    const { contextSize, extractJson } = await import('./ollama')
+    expect(contextSize(100)).toBe(4096)
+    expect(contextSize(30_000)).toBe(16_384)
+    expect(contextSize(1_000_000)).toBe(32_768)
+    expect(extractJson('{"a":1}')).toEqual({ a: 1 })
+    expect(extractJson('Sure! ```json\n{"a": [1, 2]}\n```')).toEqual({ a: [1, 2] })
+    expect(extractJson('Here you go: {"cuts":[]} hope it helps')).toEqual({ cuts: [] })
+    expect(() => extractJson('no json here')).toThrow('ollama_bad_json')
+  })
+
+  it('JSON hỏng thì thử lại một lần với lời nhắc nghiêm hơn; gửi keep_alive và num_ctx', async () => {
+    const bodies: {
+      options: { num_ctx: number }
+      keep_alive: string
+      messages: { content: string }[]
+    }[] = []
+    let calls = 0
+    const fetchImpl: FetchLike = async (_input, init) => {
+      const body = JSON.parse(String(init!.body))
+      bodies.push(body)
+      calls++
+      const content =
+        calls === 1 ? 'oops not json' : JSON.stringify({ commands: [{ kind: 'autoZoom' }] })
+      return new Response(JSON.stringify({ message: { content } }), { status: 200 })
+    }
+    const ai = new AiService({
+      getKey: async () => undefined,
+      getLocalAi: async () => ({ enabled: true, baseUrl: 'http://127.0.0.1:11434', model: 'm' }),
+      run: runFfmpeg,
+      fetchImpl,
+    })
+    expect(await ai.plan('zoom', { language: 'vi', durationMs: 1, hasTranscript: false })).toEqual([
+      { kind: 'autoZoom' },
+    ])
+    expect(calls).toBe(2)
+    expect(bodies[0]!.keep_alive).toBe('15m')
+    expect(bodies[0]!.options.num_ctx).toBe(4096)
+    expect(bodies[1]!.messages[0]!.content).toContain('exactly one JSON object')
+    // Hỏng lần hai thì báo lỗi rõ.
+    const alwaysBad: FetchLike = async () =>
+      new Response(JSON.stringify({ message: { content: '???' } }), { status: 200 })
+    await expect(
+      new AiService({
+        getKey: async () => undefined,
+        getLocalAi: async () => ({ enabled: true, baseUrl: 'http://127.0.0.1:11434', model: 'm' }),
+        run: runFfmpeg,
+        fetchImpl: alwaysBad,
+      }).plan('zoom', { language: 'vi', durationMs: 1, hasTranscript: false }),
+    ).rejects.toThrow('ollama_bad_json')
+  })
+
+  it('tìm từ thừa với model cục bộ: chia lời thoại dài thành từng đoạn 400 từ, giữ chỉ số toàn cục', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'lumora-ai-local-'))
+    const words = Array.from({ length: 1000 }, (_, i) => ({
+      text: i === 450 ? 'ừm' : `w${i}`,
+      start: i * 100,
+      end: i * 100 + 80,
+    }))
+    await writeFile(join(dir, 'transcript.json'), JSON.stringify({ language: 'vi', words }))
+    const users: string[] = []
+    const fetchImpl: FetchLike = async (_input, init) => {
+      const body = JSON.parse(String(init!.body)) as { messages: { content: string }[] }
+      users.push(body.messages[1]!.content)
+      // Đoạn thứ hai (từ 400-799) chứa từ 450: model chỉ ra bằng chỉ số toàn cục.
+      const cuts =
+        users.length === 2 ? [{ from: 450, to: 450, kind: 'filler', reason: 'Từ đệm' }] : []
+      return new Response(JSON.stringify({ message: { content: JSON.stringify({ cuts }) } }), {
+        status: 200,
+      })
+    }
+    const ai = new AiService({
+      getKey: async () => undefined,
+      getLocalAi: async () => ({ enabled: true, baseUrl: 'http://127.0.0.1:11434', model: 'm' }),
+      run: runFfmpeg,
+      fetchImpl,
+    })
+    const cuts = await ai.suggestCuts(dir)
+    expect(users).toHaveLength(3)
+    expect(users[0]).toContain('words 0-399')
+    expect(users[1]).toContain('[450]ừm')
+    expect(users[2]).toContain('words 800-999')
+    expect(cuts.filter((c) => c.kind === 'filler').map((c) => c.start)).toEqual([45_000])
+    await rm(dir, { recursive: true, force: true })
+  })
+
+  it('benchmark: đọc tốc độ từ /api/generate', async () => {
+    const { benchmarkOllama } = await import('./ollama')
+    const fetchImpl: FetchLike = async (input, init) => {
+      expect(String(input)).toContain('/api/generate')
+      expect(JSON.parse(String(init!.body)).keep_alive).toBe('15m')
+      return new Response(
+        JSON.stringify({
+          load_duration: 1.5e9,
+          eval_count: 60,
+          eval_duration: 3e9,
+          total_duration: 5e9,
+        }),
+        { status: 200 },
+      )
+    }
+    expect(await benchmarkOllama('http://127.0.0.1:11434', 'm', fetchImpl)).toEqual({
+      loadMs: 1500,
+      tokensPerSecond: 20,
+      totalMs: 5000,
+    })
   })
 })

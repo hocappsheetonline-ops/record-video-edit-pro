@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { outputSize, RESOLUTIONS, type Resolution } from '@lumora/core'
 import type { ExportResult } from '@shared/ipc'
@@ -21,11 +21,8 @@ export function ExportPanel() {
   const [result, setResult] = useState<ExportResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const abort = useRef<AbortController | null>(null)
-  if (!edit) return null
-
-  const size = outputSize(edit.frame.aspect, edit.export.resolution, videoSize)
-  const setExport = (patch: Partial<typeof edit.export>) =>
-    change((e) => ({ ...e, export: { ...e.export, ...patch } }))
+  const autoExport = useEditorStore((s) => s.autoExport)
+  const busy = progress !== null
 
   const run = async () => {
     const { folder, project, events } = useEditorStore.getState()
@@ -90,7 +87,22 @@ export function ExportPanel() {
     }
   }
 
-  const busy = progress !== null
+  // Trợ lý / Đạo diễn AI yêu cầu xuất ngay: bắt đầu khi bảng hiện và đang rảnh, chỉ một lần
+  // (bảng luôn được giữ trong hộp thoại ẩn nên cờ đổi là chạy). Bắt đầu ở lượt sau để không
+  // đổi trạng thái ngay trong effect.
+  useEffect(() => {
+    if (!autoExport || busy || !useEditorStore.getState().autoExport) return
+    useEditorStore.setState({ autoExport: false })
+    queueMicrotask(() => void run())
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `run` đổi mỗi lần vẽ; chỉ chạy khi cờ đổi
+  }, [autoExport, busy])
+
+  if (!edit) return null
+
+  const size = outputSize(edit.frame.aspect, edit.export.resolution, videoSize)
+  const setExport = (patch: Partial<typeof edit.export>) =>
+    change((e) => ({ ...e, export: { ...e.export, ...patch } }))
+
   return (
     <div className="flex flex-col gap-4" data-testid="export-panel">
       <div className="flex flex-col gap-1.5 text-sm">

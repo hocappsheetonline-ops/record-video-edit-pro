@@ -32,6 +32,11 @@ import { loadFilmstrip } from './projects/filmstrip'
 import { IMPORT_VIDEO_EXT, importVideoSegment, mergeProject } from './projects/import-video'
 import { importImageFile, MEDIA_EXTENSIONS, MemeLibrary } from './projects/images'
 import { MusicLibrary, recentDownloads } from './projects/music'
+import { ollamaInstallerUrl } from './ai/ollama'
+import { createWriteStream } from 'node:fs'
+import { mkdir } from 'node:fs/promises'
+import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import { clearDirs, dirSize } from './content/cache'
 import { RnnoiseDenoiser } from './audio/denoise'
 import { AudioProcessor } from './audio/process'
@@ -152,8 +157,14 @@ if (!app.requestSingleInstanceLock()) {
 
     // File của AI xóa phông (MediaPipe + model): chỉ phục vụ đúng các file này.
     const aiFiles = aiAssetFiles()
+    // Thư viện chung (meme, nhạc): cho giao diện xem trước / nghe thử trước khi thêm vào dự án.
+    const memesDir = join(userData, 'memes')
+    const musicDir = join(userData, 'music')
     protocol.handle(MEDIA_SCHEME, async (request) =>
-      handleMediaRequest(request, await projectsDir(), aiFiles),
+      handleMediaRequest(request, await projectsDir(), aiFiles, {
+        memes: memesDir,
+        music: musicDir,
+      }),
     )
 
     const recording = new RecordingController({ mainWindow: () => mainWindow, projectsDir })
@@ -197,8 +208,8 @@ if (!app.requestSingleInstanceLock()) {
         : await dialog.showOpenDialog({ ...options, properties: [...options.properties] })
       return r.canceled ? [] : r.filePaths
     }
-    const memes = new MemeLibrary(join(userData, 'memes'), runFfmpeg)
-    const music = new MusicLibrary(join(userData, 'music'), runFfmpeg)
+    const memes = new MemeLibrary(memesDir, runFfmpeg)
+    const music = new MusicLibrary(musicDir, runFfmpeg)
     // Lọc tạp âm AI bằng RNNoise (WebAssembly, chạy ở luồng phụ) — cùng kết quả trên mọi máy.
     const audioProcessor = new AudioProcessor(
       runFfmpeg,
@@ -227,6 +238,32 @@ if (!app.requestSingleInstanceLock()) {
         add: (paths) => memes.add(paths),
         remove: (file) => memes.remove(file),
         useInProject: (file, dir) => memes.useInProject(file, dir),
+      },
+      localAi: {
+        sendProgress: (p) => mainWindow?.webContents.send(EVENTS.localAiProgress, p),
+        // Tải bộ cài Ollama về thư mục đệm rồi mở (người dùng bấm Next vài lần là xong).
+        installOllama: async (onProgress) => {
+          const { url, fileName } = ollamaInstallerUrl()
+          if (!fileName) {
+            await shell.openExternal(url)
+            return
+          }
+          const dir = join(userData, 'cache')
+          await mkdir(dir, { recursive: true })
+          const target = join(dir, fileName)
+          const response = await fetch(url, { signal: AbortSignal.timeout(30 * 60_000) })
+          if (!response.ok || !response.body) throw new Error(`ollama_download:${response.status}`)
+          const total = Number(response.headers.get('content-length') ?? 0)
+          let completed = 0
+          const body = Readable.fromWeb(response.body as never)
+          body.on('data', (chunk: Buffer) => {
+            completed += chunk.length
+            onProgress(completed, total)
+          })
+          await pipeline(body, createWriteStream(target))
+          const error = await shell.openPath(target)
+          if (error) throw new Error(`ollama_open:${error}`)
+        },
       },
       music: {
         list: () => music.list(),

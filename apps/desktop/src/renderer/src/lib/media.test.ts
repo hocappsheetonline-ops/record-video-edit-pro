@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { mediaUrl, pickMimeType, TrackRecorder, type ChunkSink } from './media'
+import { libraryUrl, mediaUrl, pickMimeType, TrackRecorder, type ChunkSink } from './media'
 
 describe('pickMimeType', () => {
   it('ưu tiên H.264 cho video và Opus cho âm thanh', () => {
@@ -21,6 +21,22 @@ describe('mediaUrl', () => {
     expect(mediaUrl('2026-10-12 09.00.00.lumora', 'seg0-screen.mkv')).toBe(
       'lumora-media://projects/2026-10-12%2009.00.00.lumora/seg0-screen.mkv',
     )
+  })
+
+  it('giữ nguyên khi file đã là URL tuyệt đối', () => {
+    const lib = libraryUrl('memes', 'meme-1.gif')
+    expect(mediaUrl('a.lumora', lib)).toBe(lib)
+    expect(mediaUrl('a.lumora', 'https://example.com/x.mp4')).toBe('https://example.com/x.mp4')
+    expect(mediaUrl('a.lumora', 'c:v.mp4')).toBe('lumora-media://projects/a.lumora/c%3Av.mp4')
+  })
+})
+
+describe('libraryUrl', () => {
+  it('trỏ tới thư viện chung và mã hóa tên file', () => {
+    expect(libraryUrl('music', 'music-abc123.mp3')).toBe(
+      'lumora-media://library/music/music-abc123.mp3',
+    )
+    expect(libraryUrl('memes', 'a b.gif')).toBe('lumora-media://library/memes/a%20b.gif')
   })
 })
 

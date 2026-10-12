@@ -2,6 +2,8 @@ import type {
   AppSettings,
   AssistantCommand,
   AssistantContext,
+  DirectorContext,
+  DirectorPlan,
   AudioFx,
   Destination,
   Filmstrip,
@@ -89,6 +91,10 @@ export const IPC = {
   aiSummarize: 'ai:summarize',
   aiPlan: 'ai:plan',
   aiLocalModels: 'ai:local-models',
+  aiPullModel: 'ai:pull-model',
+  aiInstallOllama: 'ai:install-ollama',
+  aiBenchmark: 'ai:benchmark',
+  aiDirect: 'ai:direct',
   aiTranslate: 'ai:translate',
   aiVoices: 'ai:voices',
   aiSpeak: 'ai:speak',
@@ -130,7 +136,16 @@ export const EVENTS = {
   recordingFinished: 'recording:finished',
   recordingError: 'recording:error',
   windowMaximized: 'window:maximized',
+  localAiProgress: 'ai:local-progress',
 } as const
+
+/** Tiến độ tải model / tải bộ cài Ollama (gửi liên tục trong lúc chạy). */
+export interface LocalAiProgress {
+  kind: 'pull' | 'install'
+  status: string
+  completed: number
+  total: number
+}
 
 export interface AppInfo {
   name: string
@@ -467,8 +482,23 @@ export interface LumoraApi {
   summarize(folder: string): Promise<AiSummary>
   /** Trợ lý AI: mô tả bằng lời → danh sách lệnh chỉnh sửa. */
   planEdits(instruction: string, context: AssistantContext): Promise<AssistantCommand[]>
+  /**
+   * Đạo diễn AI: từ câu yêu cầu + ngữ cảnh (thói quen, kho nhạc, lịch sử) → kế hoạch gồm tóm tắt,
+   * câu hỏi làm rõ (nếu cần) và danh sách lệnh. Lỗi khi không có AI (thiếu key / Ollama tắt).
+   */
+  directEdits(goal: string, context: DirectorContext): Promise<DirectorPlan>
   /** Model đã tải trong Ollama tại địa chỉ đó (AI cục bộ). */
   listLocalModels(baseUrl: string): Promise<string[]>
+  /** Tải một model về Ollama (tiến độ qua `onLocalAiProgress`). */
+  pullLocalModel(baseUrl: string, model: string): Promise<void>
+  /** Tải bộ cài Ollama về máy rồi mở nó (Windows / macOS); nơi khác mở trang tải. */
+  installOllama(): Promise<void>
+  /** Chạy thử model cục bộ: thời gian nạp và token / giây trên máy này. */
+  benchmarkLocalModel(
+    baseUrl: string,
+    model: string,
+  ): Promise<{ loadMs: number; tokensPerSecond: number; totalMs: number }>
+  onLocalAiProgress(listener: (p: LocalAiProgress) => void): Unsubscribe
   /** Lưu bản lồng tiếng vừa ghi (WebM) vào dự án. */
   addVoiceover(folder: string, data: ArrayBuffer): Promise<AudioAsset>
   /** Lọc tạp âm / hiệu ứng giọng cho một file trong dự án; trả về tên file đã xử lý. */

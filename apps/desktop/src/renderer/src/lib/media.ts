@@ -157,7 +157,17 @@ export class TrackRecorder {
   }
 }
 
-/** URL để phát file trong thư mục dự án qua giao thức lumora-media. */
+/**
+ * URL để phát file trong thư mục dự án qua giao thức lumora-media.
+ * Nếu `file` đã là URL tuyệt đối (vd. URL thư viện từ `libraryUrl`) thì trả nguyên để
+ * bộ xem trước có thể phát thẳng qua trường `file` của overlay.
+ */
 export function mediaUrl(folder: string, file: string): string {
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(file)) return file
   return `lumora-media://projects/${encodeURIComponent(folder)}/${encodeURIComponent(file)}`
+}
+
+/** URL để xem trước / nghe thử file trong thư viện chung (meme, nhạc) mà không cần chép vào dự án. */
+export function libraryUrl(library: 'memes' | 'music', file: string): string {
+  return `lumora-media://library/${library}/${encodeURIComponent(file)}`
 }

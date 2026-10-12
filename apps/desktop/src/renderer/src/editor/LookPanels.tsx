@@ -29,6 +29,7 @@ import {
 } from '@lumora/core'
 import { currentLook, lookTarget, useEditorStore, type LookTarget } from './store'
 import { secs, Section, SliderRow } from './ui'
+import { usePreviewHover } from './library/common'
 
 /** Phần trăm có dấu (+20%, -15%). */
 const signedPct = (v: number) => `${v > 0 ? '+' : ''}${Math.round(v * 100)}%`
@@ -118,6 +119,45 @@ function TargetNote({ target, clip }: { target: LookTarget; clip?: Clip }) {
   )
 }
 
+/** Ô bộ lọc: rê chuột để xem thử trên khung xem trước, bấm để áp dụng. */
+function FilterButton({
+  filter,
+  active,
+  target,
+  onChoose,
+}: {
+  filter: FilterPreset
+  active: boolean
+  target: LookTarget
+  onChoose: () => void
+}) {
+  const { t } = useTranslation()
+  const hover = usePreviewHover(() => ({ kind: 'filter', filter, target }))
+  return (
+    <button
+      type="button"
+      data-testid={`filter-${filter}`}
+      aria-pressed={active}
+      aria-label={t(`editor.look.filters.${filter}`)}
+      data-tooltip={t(`editor.look.filters.${filter}`)}
+      {...hover.props}
+      onClick={() => {
+        hover.stop()
+        onChoose()
+      }}
+      className={`flex flex-col gap-1 rounded-lg p-1 text-[11px] ${
+        active ? 'bg-accent/15 text-text ring-2 ring-accent' : 'text-muted hover:bg-surface-2'
+      }`}
+    >
+      <LookSwatch
+        className="aspect-square w-full"
+        look={{ filter, intensity: 1, adjust: DEFAULT_ADJUST }}
+      />
+      <span className="truncate text-center">{t(`editor.look.filters.${filter}`)}</span>
+    </button>
+  )
+}
+
 /** Thư viện "Bộ lọc": chọn mẫu màu cho cả video, clip đang chọn hoặc ảnh / video meme đang chọn. */
 export function FiltersTab() {
   const { t } = useTranslation()
@@ -132,31 +172,15 @@ export function FiltersTab() {
     <div className="flex flex-col gap-3 p-3" data-testid="filters-tab">
       <TargetNote target={target} clip={clip} />
       <div className="grid grid-cols-3 gap-2">
-        {FILTER_PRESETS.map((filter) => {
-          const active = look.filter === filter
-          return (
-            <button
-              key={filter}
-              type="button"
-              data-testid={`filter-${filter}`}
-              aria-pressed={active}
-              aria-label={t(`editor.look.filters.${filter}`)}
-              data-tooltip={t(`editor.look.filters.${filter}`)}
-              onClick={() => choose(filter)}
-              className={`flex flex-col gap-1 rounded-lg p-1 text-[11px] ${
-                active
-                  ? 'bg-accent/15 text-text ring-2 ring-accent'
-                  : 'text-muted hover:bg-surface-2'
-              }`}
-            >
-              <LookSwatch
-                className="aspect-square w-full"
-                look={{ filter, intensity: 1, adjust: DEFAULT_ADJUST }}
-              />
-              <span className="truncate text-center">{t(`editor.look.filters.${filter}`)}</span>
-            </button>
-          )
-        })}
+        {FILTER_PRESETS.map((filter) => (
+          <FilterButton
+            key={filter}
+            filter={filter}
+            active={look.filter === filter}
+            target={target}
+            onChoose={() => choose(filter)}
+          />
+        ))}
       </div>
       {look.filter !== 'none' && (
         <SliderRow
