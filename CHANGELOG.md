@@ -8,6 +8,8 @@ Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; a
 - **Trợ lý AI** (Thư viện → AI): mô tả bằng lời ("cắt khoảng lặng, thêm phụ đề, bộ lọc điện ảnh, làm video dọc 9:16, tốc độ 1.5x, cắt 5 giây đầu…"), Claude hiểu thành các bước và app làm ngay; không có key thì hiểu theo từ khóa tiếng Việt / tiếng Anh. Hoàn tác một lần.
 - **Chia nhỏ video thành video ngắn**: theo chương AI hoặc mỗi 60 / 90 / 120 giây, mỗi đoạn thành một dự án riêng (khung dọc 9:16 tuỳ chọn) để xuất cho TikTok, Shorts, Reels.
 - **Nâng cao chất lượng (HD)** khi xuất: giảm nhiễu và làm nét.
+- **AI cục bộ (Ollama)** (Cài đặt → AI cục bộ): bật để Trợ lý AI, cắt từ thừa / câu lặp, tóm tắt (tiêu đề, mô tả, chương) và dịch phụ đề chạy bằng model mở trên máy (qwen2.5, llama3.2, gemma3…), miễn phí, không cần key Claude và không gửi dữ liệu ra ngoài. Có nút kiểm tra kết nối và chọn model đã tải.
+- Biểu tượng Hiệu ứng mới (ngôi sao đơn), bo góc vừa phải hơn, thẻ lọc vuông góc.
 
 ## 1.2.0
 

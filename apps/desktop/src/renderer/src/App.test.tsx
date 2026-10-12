@@ -166,6 +166,26 @@ describe('Thanh tiêu đề cửa sổ không viền', () => {
   })
 })
 
+describe('AI cục bộ (Ollama)', () => {
+  it('bật, kiểm tra kết nối và chọn model đã tải', async () => {
+    const api = createFakeApi()
+    await renderApp(api)
+    await userEvent.click(screen.getByTestId('nav-settings'))
+    await userEvent.click(screen.getByTestId('local-ai-enabled'))
+    await waitFor(() => expect(useAppStore.getState().settings?.localAi.enabled).toBe(true))
+    await userEvent.click(screen.getByTestId('local-ai-check'))
+    expect(await screen.findByTestId('local-ai-status')).toHaveTextContent('2 model')
+    expect(api.listLocalModels).toHaveBeenCalledWith('http://127.0.0.1:11434')
+    await userEvent.selectOptions(screen.getByTestId('local-ai-model'), 'llama3.2')
+    await waitFor(() => expect(useAppStore.getState().settings?.localAi.model).toBe('llama3.2'))
+    api.listLocalModels.mockRejectedValueOnce(new Error('ollama_offline'))
+    await userEvent.click(screen.getByTestId('local-ai-check'))
+    await waitFor(() =>
+      expect(screen.getByTestId('local-ai-status')).toHaveTextContent('Không kết nối được'),
+    )
+  })
+})
+
 describe('Màu chủ đạo', () => {
   it('mặc định xanh dương; chọn màu khác thì cả app đổi theo', async () => {
     await renderApp(createFakeApi())

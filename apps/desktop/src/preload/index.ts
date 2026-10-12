@@ -101,6 +101,7 @@ const api: LumoraApi = {
   suggestCuts: (folder) => ipcRenderer.invoke(IPC.aiSuggestCuts, folder),
   summarize: (folder) => ipcRenderer.invoke(IPC.aiSummarize, folder),
   planEdits: (instruction, context) => ipcRenderer.invoke(IPC.aiPlan, instruction, context),
+  listLocalModels: (baseUrl) => ipcRenderer.invoke(IPC.aiLocalModels, baseUrl),
   translateLines: (lines, target) => ipcRenderer.invoke(IPC.aiTranslate, lines, target),
   listVoices: () => ipcRenderer.invoke(IPC.aiVoices),
   speak: (folder, text, voiceId, options) =>

@@ -14,6 +14,7 @@ import {
   type Filmstrip,
   parseAudioFx,
   type AudioFx,
+  normalizeLocalAi,
 } from '@lumora/core'
 import {
   IPC,
@@ -134,6 +135,7 @@ export interface IpcDeps {
     | 'suggestCuts'
     | 'summarize'
     | 'plan'
+    | 'listLocalModels'
     | 'translate'
     | 'voices'
     | 'speak'
@@ -522,6 +524,10 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
       durationMs: typeof c.durationMs === 'number' ? Math.max(0, c.durationMs) : 0,
       hasTranscript: c.hasTranscript === true,
     })
+  })
+  ipcMain.handle(IPC.aiLocalModels, (_event, baseUrl: unknown) => {
+    const url = normalizeLocalAi({ baseUrl }).baseUrl
+    return deps.ai.listLocalModels(url)
   })
   ipcMain.handle(IPC.aiVoices, () => deps.ai.voices())
   ipcMain.handle(

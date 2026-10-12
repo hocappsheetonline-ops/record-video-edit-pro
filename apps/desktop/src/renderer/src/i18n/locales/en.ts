@@ -1126,7 +1126,14 @@ export const en: Messages = {
       save: 'Save as .txt',
     },
     errors: {
-      missingKey: 'No {{name}} API key yet. Add it in Settings.',
+      missingKey:
+        'No {{name}} API key yet. Enter it in Settings (for Claude you can enable local AI with Ollama instead).',
+      ollama_offline:
+        'Could not reach Ollama (local AI). Start Ollama or turn local AI off in Settings.',
+      ollama_model:
+        'The local AI model is not pulled. Run "ollama pull <model>" or pick another model in Settings.',
+      ollama_bad_json:
+        'The local model answered in the wrong format. Try a larger model (e.g. qwen2.5:7b).',
       noAudio: 'This recording has no microphone or computer audio to transcribe.',
       noTranscript: 'Create captions first (Captions tab).',
       generic: 'Error: {{message}}',
@@ -1256,6 +1263,21 @@ export const en: Messages = {
     },
     onboardingHint: 'Show the quick tour again next time the editor opens.',
     onboardingReplay: 'Replay tour',
+    localAi: {
+      title: 'Local AI (Ollama)',
+      enable: 'Use AI running on this computer instead of Claude',
+      hint: 'The AI assistant, filler removal, summaries and translation run on an open model on your machine: free and nothing leaves your computer. Install Ollama and pull a model (e.g. ollama pull qwen2.5:7b).',
+      url: 'Ollama address',
+      model: 'Model',
+      check: 'Test connection',
+      checking: 'Checking…',
+      connected: 'Connected, {{count}} models ready',
+      noModels: 'Ollama is running but has no models. Run: ollama pull qwen2.5:7b',
+      offline: 'Could not reach Ollama. Start Ollama and try again.',
+      install: 'Get Ollama',
+      models:
+        'Suggested: qwen2.5:7b (good Vietnamese, ~8 GB RAM), llama3.2 (light, ~3 GB), gemma3. Captions still need an ElevenLabs key.',
+    },
     reduceTransparency: 'Reduce transparency',
     reduceTransparencyHint:
       'Toolbars, menus and dialogs use solid colours instead of frosted glass (lighter on slow machines).',

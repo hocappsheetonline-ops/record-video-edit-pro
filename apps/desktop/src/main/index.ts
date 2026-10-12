@@ -251,6 +251,7 @@ if (!app.requestSingleInstanceLock()) {
       live,
       ai: new AiService({
         getKey: (key) => secrets.get(key),
+        getLocalAi: async () => (await settings.get()).localAi,
         run: runFfmpeg,
         soundsDir: join(userData, 'sounds'),
       }),

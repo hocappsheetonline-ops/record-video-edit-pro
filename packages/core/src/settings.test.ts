@@ -27,7 +27,20 @@ describe('normalizeSettings', () => {
       previewQuality: 'low',
       projectTemplate: 'tiktok',
       reduceTransparency: false,
+      localAi: { enabled: false, baseUrl: 'http://127.0.0.1:11434', model: 'qwen2.5:7b' },
     })
+  })
+
+  it('AI cục bộ: nhận địa chỉ http(s) hợp lệ và tên model, bỏ giá trị sai', () => {
+    expect(
+      normalizeSettings({
+        localAi: { enabled: true, baseUrl: 'http://192.168.1.5:11434/', model: 'llama3.2:3b' },
+      }).localAi,
+    ).toEqual({ enabled: true, baseUrl: 'http://192.168.1.5:11434', model: 'llama3.2:3b' })
+    expect(
+      normalizeSettings({ localAi: { baseUrl: 'ftp://x', model: 'bad model!' } }).localAi,
+    ).toEqual(DEFAULT_SETTINGS.localAi)
+    expect(normalizeSettings({ localAi: 'nope' }).localAi).toEqual(DEFAULT_SETTINGS.localAi)
   })
 
   it('thay giá trị sai bằng mặc định và bỏ trường lạ', () => {

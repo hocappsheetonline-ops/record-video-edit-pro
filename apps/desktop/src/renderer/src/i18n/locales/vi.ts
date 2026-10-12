@@ -1116,7 +1116,14 @@ export const vi = {
       save: 'Lưu thành .txt',
     },
     errors: {
-      missingKey: 'Chưa có API key {{name}}. Hãy nhập trong Cài đặt.',
+      missingKey:
+        'Chưa có API key {{name}}. Hãy nhập trong Cài đặt (với Claude có thể bật AI cục bộ Ollama thay thế).',
+      ollama_offline:
+        'Không kết nối được Ollama (AI cục bộ). Hãy mở Ollama hoặc tắt AI cục bộ trong Cài đặt.',
+      ollama_model:
+        'Model AI cục bộ chưa được tải. Chạy "ollama pull <tên model>" hoặc chọn model khác trong Cài đặt.',
+      ollama_bad_json:
+        'Model AI cục bộ trả lời không đúng định dạng. Thử model lớn hơn (ví dụ qwen2.5:7b).',
       noAudio: 'Bản quay không có âm thanh micro hay âm thanh máy để nhận dạng.',
       noTranscript: 'Hãy tạo phụ đề trước (tab Phụ đề).',
       generic: 'Lỗi: {{message}}',
@@ -1246,6 +1253,21 @@ export const vi = {
     },
     onboardingHint: 'Xem lại phần giới thiệu nhanh lần sau khi mở trình chỉnh sửa.',
     onboardingReplay: 'Xem lại hướng dẫn',
+    localAi: {
+      title: 'AI cục bộ (Ollama)',
+      enable: 'Dùng AI chạy trên máy thay cho Claude',
+      hint: 'Trợ lý AI, cắt từ thừa, tóm tắt và dịch chạy bằng model mở trên máy bạn: miễn phí, không gửi dữ liệu ra ngoài. Cần cài Ollama và tải một model (ví dụ: ollama pull qwen2.5:7b).',
+      url: 'Địa chỉ Ollama',
+      model: 'Model',
+      check: 'Kiểm tra kết nối',
+      checking: 'Đang kiểm tra…',
+      connected: 'Đã kết nối, {{count}} model sẵn sàng',
+      noModels: 'Ollama chạy nhưng chưa có model nào. Chạy: ollama pull qwen2.5:7b',
+      offline: 'Không kết nối được Ollama. Hãy mở Ollama rồi thử lại.',
+      install: 'Tải Ollama',
+      models:
+        'Gợi ý: qwen2.5:7b (tiếng Việt tốt, cần ~8 GB RAM), llama3.2 (nhẹ, ~3 GB), gemma3. Phụ đề vẫn cần key ElevenLabs.',
+    },
     reduceTransparency: 'Giảm trong suốt',
     reduceTransparencyHint:
       'Thanh công cụ, menu và hộp thoại dùng màu đặc thay vì kính mờ (nhẹ hơn cho máy yếu).',
