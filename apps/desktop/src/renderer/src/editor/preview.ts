@@ -94,7 +94,8 @@ export class PreviewEngine {
         if (el instanceof HTMLVideoElement) el.playsInline = true
         el.addEventListener('loadeddata', () => this.requestDraw())
         el.addEventListener('seeked', () => this.requestDraw())
-        if (kind === 'screen') {
+        // Kích thước gốc lấy theo đoạn quay đầu tiên (đoạn video nhập có thể khác cỡ).
+        if (kind === 'screen' && item === this.segments[0]) {
           el.addEventListener('loadedmetadata', () => {
             const v = el as HTMLVideoElement
             if (v.videoWidth > 0)
@@ -393,11 +394,16 @@ export class PreviewEngine {
       edit,
       time,
       output: size,
-      video: store.videoSize,
+      // Mỗi đoạn dùng đúng kích thước video của nó (video nhập có thể khác cỡ bản quay).
+      video:
+        screen instanceof HTMLVideoElement && screen.videoWidth > 0
+          ? { width: screen.videoWidth, height: screen.videoHeight }
+          : store.videoSize,
       source,
       cursor: store.cursor,
       follow: store.follow,
       hasCamera: !!camera,
+      imported: item?.segment.kind === 'imported',
     })
     for (const item of scene.overlays)
       if (item.overlay.kind === 'image') void this.images.load(item.overlay.file)

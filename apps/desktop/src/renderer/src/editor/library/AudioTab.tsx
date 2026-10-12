@@ -16,6 +16,7 @@ import { lumora } from '../../api'
 import { MicMeter } from '../../components/MicMeter'
 import { getMicStream, stopStream } from '../../lib/media'
 import { useAppStore } from '../../store/app'
+import { dragProps } from '../library-drag'
 import { useEditorStore } from '../store'
 import { primaryButton, Segmented, SliderRow, Toggle } from '../ui'
 import { ErrorNote, Heading, useErrorText } from './common'
@@ -50,6 +51,7 @@ function SfxRow({ id, busy, onAdd }: { id: SoundEffectId; busy: Busy; onAdd: () 
     <button
       type="button"
       data-testid={`sfx-${id}`}
+      {...dragProps({ kind: 'sfx', id })}
       disabled={busy !== null}
       onClick={onAdd}
       className="group flex items-center gap-3 rounded-md px-2 py-1.5 text-sm hover:bg-surface-2 disabled:opacity-50"

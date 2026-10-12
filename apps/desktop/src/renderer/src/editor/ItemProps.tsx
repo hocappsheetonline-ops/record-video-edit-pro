@@ -152,7 +152,31 @@ export function ClipProps({ clip, index }: { clip: Clip; index: number }) {
       {tab === 'video' && <TransformPanel clip={clip} />}
       {tab === 'adjust' && <AdjustPanel />}
       {tab === 'audio' && (
-        <Section testId="clip-audio">
+        <Section
+          testId="clip-audio"
+          action={
+            !clip.freeze &&
+            !clip.reversed &&
+            !clip.speedCurve &&
+            clip.speed === 1 &&
+            !audio.muted ? (
+              <button
+                type="button"
+                data-testid="clip-detach-audio"
+                className={ghostButton}
+                onClick={() =>
+                  useEditorStore.getState().detachClipAudio(clip.id, {
+                    mic: t('editor.props.detachMic'),
+                    system: t('editor.props.detachSystem'),
+                  })
+                }
+              >
+                <Unlink size={13} aria-hidden />
+                {t('editor.props.detachAudio')}
+              </button>
+            ) : undefined
+          }
+        >
           <Toggle
             label={t('editor.props.muteClip')}
             checked={audio.muted}

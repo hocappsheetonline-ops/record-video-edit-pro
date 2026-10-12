@@ -1,4 +1,7 @@
-import type { AudioClip } from './audio-clips'
+import type { Segment } from '../project'
+import { MIN_AUDIO_CLIP_MS, newAudioClipId, type AudioClip } from './audio-clips'
+import { clipSegment } from './reverse'
+import { clipGain, clipPositions, mediaTime, type Clip } from './timeline'
 import type { EffectRegion } from './effects'
 import type { Overlay } from './overlays'
 
@@ -145,4 +148,53 @@ export function pasteClipboard(
       return [{ ...a, id: newId('audio'), start, duration: Math.min(a.duration, total - start) }]
     }),
   }
+}
+
+/**
+ * Tách tiếng của clip chính thành các đoạn âm thanh riêng (micro, âm thanh máy) đặt đúng chỗ
+ * trên timeline, để cắt / chỉnh / thêm hiệu ứng như nhạc. Chỉ làm được với clip tốc độ thường
+ * (không đường cong, không phát ngược, không đóng băng) nằm trong một đoạn quay.
+ * Trả về null nếu không tách được.
+ */
+export function detachClipAudio(
+  segments: readonly Segment[],
+  clips: readonly Clip[],
+  clipId: string,
+  mix: { mic: number; system: number },
+  names: { mic: string; system: string },
+): AudioClip[] | null {
+  const pos = clipPositions(clips).find((p) => p.clip.id === clipId)
+  if (!pos) return null
+  const { clip, outputStart } = pos
+  if (clip.freeze || clip.reversed || clip.speedCurve || clip.speed !== 1) return null
+  const item = clipSegment(segments, clip)
+  if (!item) return null
+  const length = clip.sourceEnd - clip.sourceStart
+  const out: AudioClip[] = []
+  for (const kind of ['mic', 'system'] as const) {
+    const at = mediaTime(item, kind, clip.sourceStart)
+    if (at === null) continue
+    // Track bắt đầu ghi muộn hơn đầu clip: đoạn âm thanh bắt đầu muộn tương ứng.
+    const lead = Math.max(0, -at * 1000)
+    const duration = length - lead
+    if (duration < MIN_AUDIO_CLIP_MS) continue
+    const volume = mix[kind] * clipGain(clip, kind)
+    if (volume <= 0) continue
+    const offset = Math.max(0, at * 1000)
+    out.push({
+      id: newAudioClipId(),
+      file: item.segment.tracks[kind]!.file,
+      name: names[kind],
+      kind: kind === 'mic' ? 'voice' : 'sfx',
+      start: Math.round(outputStart + lead),
+      offset: Math.round(offset),
+      duration: Math.round(duration),
+      sourceDuration: Math.round(offset + duration),
+      volume: Math.min(2, volume),
+      fadeIn: 0,
+      fadeOut: 0,
+      loop: false,
+    })
+  }
+  return out.length > 0 ? out : null
 }

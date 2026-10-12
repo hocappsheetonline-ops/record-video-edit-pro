@@ -115,6 +115,8 @@ export interface SceneInput {
   cursor: CursorTrack | null
   follow: CursorTrack | null
   hasCamera: boolean
+  /** Đang ở đoạn video nhập từ máy: không có con trỏ / click của bản quay. */
+  imported?: boolean
 }
 
 /** Tính bố cục một khung hình. Hàm thuần: cùng đầu vào luôn ra cùng kết quả (xem trước = xuất). */
@@ -131,8 +133,10 @@ export function computeScene(input: SceneInput): FrameScene {
   const content = layout.content
   // Lấp đầy: khung nhìn có đúng tỉ lệ vùng hiển thị và đi theo con trỏ (đã làm mượt) cả khi không zoom.
   const base = fill ? fillBaseView(video, content) : { width: 1, height: 1 }
-  const rest = (fill && input.follow ? cursorAt(input.follow, source) : null) ?? { x: 0.5, y: 0.5 }
-  const raw = cameraAt(edit.zooms, source, input.follow, rest, base, edit.motion.zoomTransitionMs)
+  // Đoạn video nhập: không có chuột để bám theo, khung đứng giữa.
+  const follow = input.imported ? null : input.follow
+  const rest = (fill && follow ? cursorAt(follow, source) : null) ?? { x: 0.5, y: 0.5 }
+  const raw = cameraAt(edit.zooms, source, follow, rest, base, edit.motion.zoomTransitionMs)
   // Tâm khung nhìn tính theo video gốc → đổi sang khung đã biến đổi rồi giữ trong mép.
   const centre = orient(raw)
   const camera = tf
@@ -153,7 +157,7 @@ export function computeScene(input: SceneInput): FrameScene {
 
   let cursor: FrameScene['cursor'] = null
   let ripple: FrameScene['ripple'] = null
-  if (edit.cursor.visible && input.cursor && input.cursor.samples.length > 0) {
+  if (!input.imported && edit.cursor.visible && input.cursor && input.cursor.samples.length > 0) {
     const pos = cursorAt(input.cursor, source)
     const opacity = edit.cursor.hideIdle ? cursorOpacity(input.cursor, source) : 1
     if (pos && opacity > 0) {

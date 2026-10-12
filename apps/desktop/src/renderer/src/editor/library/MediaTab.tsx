@@ -1,8 +1,19 @@
 import { useEffect, useState, type DragEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Clapperboard, ImagePlus, Loader2, Plus, Upload, Volume2, X } from 'lucide-react'
-import type { MemeItem, OnlineSource } from '@shared/ipc'
+import {
+  Clapperboard,
+  Combine,
+  Film,
+  ImagePlus,
+  Loader2,
+  Plus,
+  Upload,
+  Volume2,
+  X,
+} from 'lucide-react'
+import type { MemeItem, OnlineSource, ProjectSummary } from '@shared/ipc'
 import { lumora } from '../../api'
+import { dragProps } from '../library-drag'
 import { useEditorStore } from '../store'
 import { ghostButton, primaryButton, Segmented } from '../ui'
 import { EmptyState, ErrorNote, formatDuration, useErrorText } from './common'
@@ -127,6 +138,7 @@ function MyLibrary() {
                 type="button"
                 data-testid="meme-item"
                 data-kind={m.kind}
+                {...dragProps({ kind: 'meme', file: m.file })}
                 data-tooltip={t('editor.library.clickToAdd')}
                 disabled={busy}
                 onClick={() => use(m)}
@@ -187,12 +199,138 @@ export async function addLibraryItem(meme: MemeItem) {
   useEditorStore.getState().addMediaOverlay(await lumora().useMeme(folder, meme.file))
 }
 
+/** Nhập video từ máy làm clip chính (nối vào cuối video, như ghép clip trong CapCut). */
+function ImportVideoButton() {
+  const { t } = useTranslation()
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const run = async () => {
+    setBusy(true)
+    setError(null)
+    try {
+      await useEditorStore.getState().importVideo()
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String(e)
+      setError(
+        m.includes('import_no_video')
+          ? t('editor.library.importNoVideo')
+          : m.includes('import_too_long')
+            ? t('editor.library.importTooLong')
+            : t('editor.library.importFailed'),
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="flex flex-col gap-1.5">
+      <button
+        type="button"
+        data-testid="import-video"
+        disabled={busy}
+        onClick={() => void run()}
+        className={ghostButton}
+      >
+        {busy ? (
+          <Loader2 size={14} className="animate-spin" aria-hidden />
+        ) : (
+          <Film size={14} aria-hidden />
+        )}
+        {busy ? t('editor.library.importingVideo') : t('editor.library.importVideo')}
+      </button>
+      <ErrorNote text={error} />
+    </div>
+  )
+}
+
+/** Ghép một bản quay khác (trong Dự án) vào cuối video. */
+function MergeProjectButton() {
+  const { t } = useTranslation()
+  const folder = useEditorStore((s) => s.folder)
+  const [list, setList] = useState<ProjectSummary[] | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const open = async () => {
+    setError(null)
+    if (list) {
+      setList(null)
+      return
+    }
+    const all = await lumora()
+      .listProjects()
+      .catch(() => [])
+    setList(all.filter((p) => p.folder !== folder))
+  }
+  const merge = async (other: string) => {
+    setBusy(true)
+    setError(null)
+    try {
+      await useEditorStore.getState().mergeProject(other)
+      setList(null)
+    } catch {
+      setError(t('editor.library.mergeFailed'))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className="flex flex-col gap-1.5">
+      <button
+        type="button"
+        data-testid="merge-open"
+        disabled={busy}
+        aria-expanded={list !== null}
+        onClick={() => void open()}
+        className={ghostButton}
+      >
+        {busy ? (
+          <Loader2 size={14} className="animate-spin" aria-hidden />
+        ) : (
+          <Combine size={14} aria-hidden />
+        )}
+        {busy ? t('editor.library.merging') : t('editor.library.merge')}
+      </button>
+      {list && (
+        <div
+          className="flex max-h-48 flex-col overflow-y-auto rounded-md border border-border"
+          data-testid="merge-list"
+        >
+          {list.length === 0 ? (
+            <p className="p-2 text-[11px] text-muted">{t('editor.library.mergeEmpty')}</p>
+          ) : (
+            list.map((p) => (
+              <button
+                key={p.folder}
+                type="button"
+                data-testid="merge-project"
+                disabled={busy}
+                onClick={() => void merge(p.folder)}
+                className="flex items-center justify-between gap-2 px-2 py-1.5 text-left text-xs hover:bg-surface-2"
+              >
+                <span className="truncate">{p.name}</span>
+                <span className="shrink-0 font-mono text-[10px] text-muted">
+                  {formatDuration(p.durationMs)}
+                </span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+      <ErrorNote text={error} />
+    </div>
+  )
+}
+
 /** Mục Meme: thư viện của tôi, kho meme Tenor, video / ảnh miễn phí Pixabay. */
 export function MediaTab() {
   const { t } = useTranslation()
   const [source, setSource] = useState<MediaSource>('mine')
   return (
     <div className="flex min-h-full flex-col gap-3 p-3">
+      <div className="grid grid-cols-1 gap-2">
+        <ImportVideoButton />
+        <MergeProjectButton />
+      </div>
       <Segmented
         options={(['mine', 'tenor', 'pixabayVideo', 'pixabayImage'] as const).map((s) => ({
           value: s,

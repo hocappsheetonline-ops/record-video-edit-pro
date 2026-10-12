@@ -119,6 +119,17 @@ export function clipMenu(t: TFunction, id: string): MenuEntry[] {
       onClick: () => store().setClipReversed(id, !clip.reversed),
     },
     {
+      label: t('editor.props.detachAudio'),
+      testId: 'menu-detach-clip',
+      disabled:
+        !!clip.freeze || !!clip.reversed || !!clip.speedCurve || clip.speed !== 1 || audio.muted,
+      onClick: () =>
+        store().detachClipAudio(id, {
+          mic: t('editor.props.detachMic'),
+          system: t('editor.props.detachSystem'),
+        }),
+    },
+    {
       label: audio.muted ? t('editor.menu.unmute') : t('editor.menu.mute'),
       testId: 'menu-mute',
       onClick: () => store().updateClip(id, { audio: { ...audio, muted: !audio.muted } }),

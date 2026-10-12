@@ -142,6 +142,15 @@ export const en: Messages = {
       markers: 'Markers',
     },
     library: {
+      merge: 'Append another recording',
+      merging: 'Appending…',
+      mergeEmpty: 'No other recordings yet.',
+      mergeFailed: 'Could not append this recording.',
+      importVideo: 'Import video as main clip',
+      importingVideo: 'Importing video…',
+      importNoVideo: 'This file has no video.',
+      importTooLong: 'The video is longer than 2 hours.',
+      importFailed: 'Could not import this video.',
       title: 'Library',
       clear: 'Clear',
       sources: {
@@ -249,6 +258,8 @@ export const en: Messages = {
       },
     },
     props: {
+      detachMic: 'Microphone (detached)',
+      detachSystem: 'System audio (detached)',
       reset: 'Reset to default',
       detachAudio: 'Detach audio',
       clipTabs: { video: 'Video', adjust: 'Adjust', audio: 'Audio', speed: 'Speed' },

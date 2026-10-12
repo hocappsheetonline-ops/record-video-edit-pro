@@ -24,6 +24,7 @@ import {
 } from '@lumora/core'
 import { useEditorStore } from '../store'
 import { ghostButton, Segmented } from '../ui'
+import { dragProps } from '../library-drag'
 import { Card } from './common'
 import { addLibraryItem } from './MediaTab'
 import { OnlineGrid } from './OnlineGrid'
@@ -64,6 +65,7 @@ function EmojiGrid() {
           key={e}
           type="button"
           data-testid={`emoji-${i}`}
+          {...dragProps({ kind: 'emoji', text: e })}
           aria-label={e}
           onClick={() => addOverlay({ kind: 'emoji', text: e })}
           className="flex aspect-square items-center justify-center rounded-lg hover:scale-110 hover:bg-surface-2"
@@ -115,6 +117,7 @@ export function EffectsTab() {
             <Card
               key={kind}
               testId={`effect-add-${kind}`}
+              drag={{ kind: 'effect', id: kind }}
               title={t('editor.library.clickToAdd')}
               onClick={() => addEffect(kind)}
             >

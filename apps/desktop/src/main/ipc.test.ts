@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { IpcMain } from 'electron'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import type { Project } from '@lumora/core'
 import { IPC } from '@shared/ipc'
 import { registerIpc } from './ipc'
 import type { Validators } from './key-validation'
@@ -21,6 +22,11 @@ const KEY = 'sk-ant-api03-abcdefghijklmnopqrstuvwxyz-1234'
 
 let dir: string
 let handlers: Map<string, Handler>
+const pickVideo = vi.fn(async () => null as string | null)
+const importVideo = vi.fn(async (_dir: string, project: Project, source: string) => ({
+  ...project,
+  name: `${project.name}+${source}`,
+}))
 let trashed: string[]
 const recording = {
   capabilities: vi.fn(),
@@ -127,6 +133,9 @@ beforeEach(async () => {
         })),
         assetPeaks: vi.fn(async () => null),
         importImage: vi.fn(async () => null),
+        pickVideo,
+        importVideo,
+        mergeProject: vi.fn(async (_d: string, project: Project) => project),
         voiceover: vi.fn(async (_dir: string, data: Uint8Array) => ({
           file: 'asset-voice-1.m4a',
           name: 'voice',
@@ -295,6 +304,34 @@ describe('registerIpc', () => {
     await expect(call(IPC.projectsDelete, '../evil.lumora')).rejects.toThrow(/không hợp lệ/)
     await call(IPC.projectsDelete, 'a.lumora')
     expect(trashed).toEqual([join(dir, 'a.lumora')])
+  })
+
+  it('nhập video làm clip chính: dùng file kéo thả hoặc hộp thoại; hủy thì null', async () => {
+    const { mkdir: mk, writeFile: wf } = await import('node:fs/promises')
+    await mk(join(dir, 'a.lumora'))
+    await wf(
+      join(dir, 'a.lumora', 'project.json'),
+      JSON.stringify({
+        version: 1,
+        id: 'a',
+        name: 'A',
+        createdAt: 'x',
+        source: { kind: 'display' },
+        engine: 'ffmpeg',
+        segments: [],
+      }),
+    )
+    expect(await call(IPC.projectImportVideo, 'a.lumora')).toBeNull()
+    expect(pickVideo).toHaveBeenCalled()
+    const r = (await call(IPC.projectImportVideo, 'a.lumora', '/tmp/clip.mov')) as Project
+    expect(r.name).toBe('A+/tmp/clip.mov')
+    expect(importVideo).toHaveBeenCalledWith(
+      join(dir, 'a.lumora'),
+      expect.objectContaining({ id: 'a' }),
+      '/tmp/clip.mov',
+    )
+    await expect(call(IPC.projectImportVideo, '../x.lumora', 'a.mp4')).rejects.toThrow()
+    await expect(call(IPC.projectImportVideo, 'a.lumora', 42)).rejects.toThrow('import_no_video')
   })
 
   it('lưu phụ đề vào thư mục exports, chỉ cho phép đuôi văn bản', async () => {

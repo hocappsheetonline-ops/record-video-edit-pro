@@ -25,7 +25,11 @@ import {
   newOverlayId,
   templateStyle,
   addMarker,
+  DEFAULT_CLIP_AUDIO,
+  detachClipAudio,
   isClipboardEmpty,
+  newClipId,
+  sourceSegments,
   markerNear,
   pasteClipboard,
   rippleDelete,
@@ -175,6 +179,15 @@ interface EditorStore {
   removeMarker(id: string): void
   /** Nhảy tới marker sau (1) / trước (-1). */
   jumpMarker(dir: 1 | -1): void
+  /**
+   * Nhập video từ máy làm clip chính ở cuối video (`file` khi kéo thả; không có thì mở hộp thoại).
+   * Trả về false nếu người dùng hủy.
+   */
+  importVideo(file?: string): Promise<boolean>
+  /** Ghép bản quay khác (thư mục `other`) vào cuối video. */
+  mergeProject(other: string): Promise<void>
+  /** Tách tiếng clip chính thành đoạn âm thanh riêng, tắt tiếng clip. False nếu không tách được. */
+  detachClipAudio(id: string, names: { mic: string; system: string }): boolean
   /** Ẩn / tắt tiếng / khóa một hàng trên timeline. */
   setTrack(row: TimelineRow, patch: Partial<TrackState>): void
   setVideoSize(size: Size): void
@@ -357,6 +370,44 @@ function narrationCaption(text: string): Omit<Overlay, 'id' | 'start' | 'end'> {
     keyColor: '',
     keyStrength: 0.4,
   }
+}
+
+/**
+ * Dự án vừa có thêm đoạn ở cuối (nhập video / ghép bản quay): thêm clip cho các đoạn mới,
+ * tải lại sự kiện chuột (đường con trỏ), dạng sóng và dải phim.
+ */
+async function appendSegments(project: Project) {
+  const s = useEditorStore.getState()
+  const { folder, edit } = s
+  if (!folder || !edit) return
+  const covered = sourceDuration(s.project?.segments ?? [])
+  const added = sourceSegments(project.segments)
+    .filter((x) => x.duration > 0 && x.offset >= covered - 1)
+    .map((x) => ({
+      id: newClipId(),
+      sourceStart: x.offset,
+      sourceEnd: x.offset + x.duration,
+      speed: 1,
+    }))
+  useEditorStore.setState({ project, waveform: null, filmstrip: null })
+  s.change((e) => ({ ...e, clips: [...e.clips, ...added] }))
+  const same = () => useEditorStore.getState().folder === folder
+  const events = await lumora()
+    .getEvents(folder)
+    .catch(() => null)
+  if (events && same()) {
+    const current = useEditorStore.getState().edit
+    if (current) useEditorStore.setState({ events, ...tracksFor(project, events, current) })
+  }
+  void lumora()
+    .getWaveform(folder)
+    .then((waveform) => same() && useEditorStore.setState({ waveform }))
+    .catch(() => undefined)
+  void lumora()
+    .getFilmstrip(folder)
+    .then((filmstrip) => same() && useEditorStore.setState({ filmstrip }))
+    .catch(() => undefined)
+  if (added[0]) useEditorStore.getState().select({ kind: 'clip', id: added[0].id })
 }
 
 /** Dán nội dung đã sao chép bắt đầu tại `at` (một bước hoàn tác), chọn các mục vừa dán. */
@@ -643,6 +694,39 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const { edit, time } = get()
     const m = edit && markerNear(edit.markers, time, dir)
     if (m) get().setTime(m.t)
+  },
+
+  async importVideo(file) {
+    const { folder, edit } = get()
+    if (!folder || !edit) return false
+    const project = await lumora().importVideo(folder, file)
+    if (!project || get().folder !== folder) return false
+    await appendSegments(project)
+    return true
+  },
+
+  async mergeProject(other) {
+    const { folder, edit } = get()
+    if (!folder || !edit) return
+    const project = await lumora().mergeProject(folder, other)
+    if (get().folder !== folder) return
+    await appendSegments(project)
+  },
+
+  detachClipAudio(id, names) {
+    const { edit, project } = get()
+    if (!edit || !project) return false
+    const pieces = detachClipAudio(project.segments, edit.clips, id, edit.audio, names)
+    if (!pieces) return false
+    get().change((e) => ({
+      ...e,
+      audioClips: [...e.audioClips, ...pieces],
+      clips: e.clips.map((c) =>
+        c.id === id ? { ...c, audio: { ...(c.audio ?? DEFAULT_CLIP_AUDIO), muted: true } } : c,
+      ),
+    }))
+    get().select({ kind: 'audio', id: pieces[0]!.id })
+    return true
   },
 
   setTrack(row, patch) {

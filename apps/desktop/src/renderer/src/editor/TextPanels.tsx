@@ -33,6 +33,7 @@ import { useAppStore } from '../store/app'
 import { loadFonts } from './fonts'
 import { VoiceSettings } from './library/AudioTab'
 import { drawShape } from './shape-draw'
+import { dragProps } from './library-drag'
 import { useEditorStore } from './store'
 import { pct, Section, Segmented, SliderRow, Toggle } from './ui'
 
@@ -107,6 +108,7 @@ export function TextTemplatesTab() {
             key={id}
             type="button"
             data-testid={`text-add-${id}`}
+            {...dragProps({ kind: 'text', id, text: t('editor.library.defaultText') })}
             aria-label={t(`editor.textTemplates.${id}`)}
             data-tooltip={t(`editor.textTemplates.${id}`)}
             onClick={() => add(id, style)}
@@ -571,6 +573,7 @@ export function ShapesGrid() {
             key={shape}
             type="button"
             data-testid={`shape-${shape}`}
+            {...dragProps({ kind: 'shape', shape, color })}
             aria-label={t(`editor.shapes.${shape}`)}
             data-tooltip={t(`editor.shapes.${shape}`)}
             onClick={() => addOverlay({ kind: 'shape', shape, color, text: '', strokeWidth: 0.08 })}

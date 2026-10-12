@@ -67,6 +67,8 @@ export const IPC = {
   exportFinish: 'export:finish',
   exportCancel: 'export:cancel',
   revealFile: 'files:reveal',
+  projectImportVideo: 'project:import-video',
+  projectMerge: 'project:merge',
   aiTranscribe: 'ai:transcribe',
   aiGetTranscript: 'ai:get-transcript',
   aiSuggestCuts: 'ai:suggest-cuts',
@@ -403,6 +405,13 @@ export interface LumoraApi {
     sourceStart: number,
     sourceEnd: number,
   ): Promise<Partial<Record<'screen' | 'camera' | 'mic' | 'system', string>>>
+  /**
+   * Nhập video từ máy làm clip chính ở cuối dự án (`file` có sẵn khi kéo thả, không có thì mở hộp
+   * thoại chọn file). Trả về dự án đã cập nhật, null nếu hủy.
+   */
+  importVideo(folder: string, file?: string): Promise<Project | null>
+  /** Ghép bản quay `other` vào cuối dự án `folder`. Trả về dự án đã cập nhật. */
+  mergeProject(folder: string, other: string): Promise<Project>
   /** Giọng đọc AI có trong tài khoản ElevenLabs. */
   listVoices(): Promise<{ id: string; name: string }[]>
   /** Đọc câu bằng giọng AI và chép vào dự án (meme sound, lời bình). */

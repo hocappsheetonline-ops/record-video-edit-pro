@@ -141,6 +141,7 @@ export async function exportVideo(options: {
   const { folder, project, signal } = options
   // Hàng bị ẩn / tắt tiếng trên timeline: giống khi xem trước.
   const edit = applyTrackState(options.edit)
+  const segmentList = sourceSegments(project.segments)
   const api = lumora()
   const fps = edit.export.fps
   const size = outputSize(edit.frame.aspect, edit.export.resolution, options.videoSize)
@@ -292,6 +293,7 @@ export async function exportVideo(options: {
         cursor,
         follow,
         hasCamera: !!camera,
+        imported: segmentAt(segmentList, frame.source)?.segment.kind === 'imported',
       })
       const cameraMask =
         ai && camera && edit.camera.background.mode !== 'none'

@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import type { Segment } from '../project'
 import type { AudioClip } from './audio-clips'
 import { createDefaultEdit, parseEditState } from './edit-state'
+import type { Clip } from './timeline'
 import { applyTrackState, DEFAULT_TRACKS, parseTracks } from './tracks'
 import type { EffectRegion } from './effects'
 import { addMarker, chaptersText, markerNear, parseMarkers } from './markers'
 import {
+  detachClipAudio,
   isClipboardEmpty,
   pasteClipboard,
   rippleDelete,
@@ -193,5 +195,52 @@ describe('ẩn / tắt tiếng / khóa hàng', () => {
     )
     expect(back.markers).toMatchObject([{ t: 1000, label: 'A' }])
     expect(back.tracks.audio).toEqual({ hidden: false, muted: true, locked: true })
+  })
+})
+
+describe('tách tiếng clip chính', () => {
+  const segs = [
+    {
+      index: 0,
+      startedAt: 10_000,
+      endedAt: 15_000,
+      tracks: {
+        screen: { file: 's.mp4', startedAt: 10_000 },
+        mic: { file: 'mic.m4a', startedAt: 10_500 },
+        system: { file: 'sys.m4a', startedAt: 10_000 },
+      },
+    },
+  ] as Segment[]
+  const names = { mic: 'Micro', system: 'Âm thanh máy' }
+
+  it('mỗi track một đoạn đặt đúng chỗ; micro ghi muộn thì đoạn bắt đầu muộn tương ứng', () => {
+    const clips = [
+      { id: 'a', sourceStart: 0, sourceEnd: 1000, speed: 1 },
+      {
+        id: 'b',
+        sourceStart: 2000,
+        sourceEnd: 4000,
+        speed: 1,
+        audio: { mic: 1.5, system: 0, muted: false },
+      },
+    ]
+    const a = detachClipAudio(segs, clips, 'a', { mic: 1, system: 1 }, names)!
+    expect(a.map((c) => [c.file, c.start, c.offset, c.duration])).toEqual([
+      ['mic.m4a', 500, 0, 500],
+      ['sys.m4a', 0, 0, 1000],
+    ])
+    // Clip b bắt đầu ở 1000 trên video xuất; âm thanh máy bị tắt (0) thì bỏ.
+    const b = detachClipAudio(segs, clips, 'b', { mic: 1, system: 1 }, names)!
+    expect(b.map((c) => [c.name, c.start, c.offset, c.duration, c.volume])).toEqual([
+      ['Micro', 1000, 1500, 2000, 1.5],
+    ])
+  })
+
+  it('clip đổi tốc độ / phát ngược / đóng băng: không tách được', () => {
+    const mix = { mic: 1, system: 1 }
+    for (const patch of [{ speed: 2 }, { reversed: true }, { freeze: 1000 }] as Partial<Clip>[]) {
+      const clips = [{ id: 'a', sourceStart: 0, sourceEnd: 1000, speed: 1, ...patch }]
+      expect(detachClipAudio(segs, clips, 'a', mix, names)).toBeNull()
+    }
   })
 })

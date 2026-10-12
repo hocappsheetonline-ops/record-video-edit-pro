@@ -6,7 +6,9 @@ import { snapDelta } from '../editor/snap'
 import { useEditorStore } from '../editor/store'
 import i18n from '../i18n'
 import { useAppStore } from '../store/app'
-import { createFakeApi, sampleSummary } from '../test/fake-api'
+import { templateStyle } from '@lumora/core'
+import { DRAG_TYPE, dropPayload } from '../editor/library-drag'
+import { createFakeApi, sampleProject, sampleSummary } from '../test/fake-api'
 import { EditorPage } from './EditorPage'
 
 beforeEach(async () => {
@@ -178,5 +180,98 @@ describe('timeline chuyên nghiệp', () => {
     await userEvent.keyboard('n')
     expect(s().snapping).toBe(false)
     expect(snapDelta({ start: 1000, end: 1500 }, 'move', 460, pxPerMs, 'x')).toBe(460)
+  })
+})
+
+const withImported = {
+  ...sampleProject,
+  segments: [
+    ...sampleProject.segments,
+    {
+      index: 2,
+      startedAt: 12_000,
+      endedAt: 15_000,
+      tracks: {
+        screen: { file: 'import2-screen.mp4', startedAt: 12_000 },
+        system: { file: 'import2-system.m4a', startedAt: 12_000 },
+      },
+      kind: 'imported' as const,
+    },
+  ],
+  durationMs: 10_000,
+}
+
+describe('nhập video ngoài, ghép bản quay, kéo thả, tách tiếng', () => {
+  it('nút Nhập video: thêm clip chính ở cuối, tải lại dải phim / dạng sóng; hủy thì không đổi', async () => {
+    const api = await setup()
+    await userEvent.click(screen.getByTestId('lib-media'))
+    await userEvent.click(screen.getByTestId('import-video'))
+    expect(api.importVideo).toHaveBeenCalledWith(sampleSummary.folder, undefined)
+    expect(s().edit!.clips).toHaveLength(2)
+    api.importVideo.mockResolvedValueOnce(withImported)
+    const filmCalls = api.getFilmstrip.mock.calls.length
+    await userEvent.click(screen.getByTestId('import-video'))
+    await waitFor(() => expect(s().edit!.clips).toHaveLength(3))
+    expect(s().edit!.clips[2]).toMatchObject({ sourceStart: 7000, sourceEnd: 10_000 })
+    expect(screen.getByTestId('timecode')).toHaveTextContent('/ 0:10.0')
+    await waitFor(() => expect(api.getFilmstrip.mock.calls.length).toBeGreaterThan(filmCalls))
+    expect(s().selection).toEqual({ kind: 'clip', id: s().edit!.clips[2]!.id })
+    // Lỗi: báo dễ hiểu.
+    api.importVideo.mockRejectedValueOnce(
+      new Error('Error invoking remote method: Error: import_no_video'),
+    )
+    await userEvent.click(screen.getByTestId('import-video'))
+    expect(await screen.findByText('File này không có hình video.')).toBeInTheDocument()
+  })
+
+  it('ghép bản quay khác: chọn trong danh sách → clip mới ở cuối', async () => {
+    const api = await setup()
+    api.listProjects.mockResolvedValue([
+      { ...sampleSummary },
+      { ...sampleSummary, folder: 'khac.lumora', name: 'Bản quay khác', durationMs: 3000 },
+    ])
+    api.mergeProject.mockResolvedValueOnce(withImported)
+    await userEvent.click(screen.getByTestId('lib-media'))
+    await userEvent.click(screen.getByTestId('merge-open'))
+    const items = await screen.findAllByTestId('merge-project')
+    expect(items.map((i) => i.textContent)).toEqual([expect.stringContaining('Bản quay khác')])
+    await userEvent.click(items[0]!)
+    expect(api.mergeProject).toHaveBeenCalledWith(sampleSummary.folder, 'khac.lumora')
+    await waitFor(() => expect(s().edit!.clips).toHaveLength(3))
+  })
+
+  it('thả thẻ thư viện vào timeline: thêm đúng thời điểm thả', async () => {
+    await setup()
+    await dropPayload({ kind: 'effect', id: 'glitch' }, 2500)
+    await dropPayload({ kind: 'text', id: 'neon', text: 'Hi' }, 1200)
+    await dropPayload({ kind: 'shape', shape: 'arrow', color: '#ef4444' }, 3000)
+    expect(s().edit!.effects.map((e) => [e.kind, e.start])).toEqual([['glitch', 2500]])
+    expect(s().edit!.overlays.map((o) => [o.kind, o.start])).toEqual([
+      ['text', 1200],
+      ['shape', 3000],
+    ])
+    expect(s().edit!.overlays[0]!.textStyle).toEqual(templateStyle('neon'))
+    // Thẻ có thể kéo, mang dữ liệu đúng.
+    await userEvent.click(screen.getByTestId('lib-effects'))
+    const card = screen.getByTestId('effect-add-vhs')
+    expect(card).toHaveAttribute('draggable', 'true')
+    const data: Record<string, string> = {}
+    fireEvent.dragStart(card, {
+      dataTransfer: { setData: (k: string, v: string) => (data[k] = v), effectAllowed: '' },
+    })
+    expect(JSON.parse(data[DRAG_TYPE]!)).toEqual({ kind: 'effect', id: 'vhs' })
+  })
+
+  it('tách tiếng clip chính (menu chuột phải): đoạn micro riêng đúng chỗ, clip tắt tiếng', async () => {
+    await setup()
+    fireEvent.contextMenu(screen.getAllByTestId('timeline-clip')[0]!)
+    await userEvent.click(screen.getByTestId('menu-detach-clip'))
+    const { audioClips, clips } = s().edit!
+    // Micro ghi muộn 50ms so với đầu đoạn quay.
+    expect(audioClips.map((c) => [c.file, c.start, c.offset, c.kind])).toEqual([
+      ['seg0-mic.webm', 50, 0, 'voice'],
+    ])
+    expect(clips[0]!.audio?.muted).toBe(true)
+    expect(screen.getAllByTestId('timeline-audio')).toHaveLength(1)
   })
 })

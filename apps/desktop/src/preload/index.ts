@@ -77,6 +77,8 @@ const api: LumoraApi = {
   cancelExport: (id) => ipcRenderer.invoke(IPC.exportCancel, id),
   revealFile: (path) => ipcRenderer.invoke(IPC.revealFile, path),
 
+  importVideo: (folder, file) => ipcRenderer.invoke(IPC.projectImportVideo, folder, file),
+  mergeProject: (folder, other) => ipcRenderer.invoke(IPC.projectMerge, folder, other),
   transcribe: (folder, language) => ipcRenderer.invoke(IPC.aiTranscribe, folder, language),
   getTranscript: (folder) => ipcRenderer.invoke(IPC.aiGetTranscript, folder),
   suggestCuts: (folder) => ipcRenderer.invoke(IPC.aiSuggestCuts, folder),

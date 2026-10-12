@@ -137,6 +137,15 @@ export const vi = {
       markers: 'Marker',
     },
     library: {
+      merge: 'Ghép bản quay khác vào cuối',
+      merging: 'Đang ghép…',
+      mergeEmpty: 'Chưa có bản quay nào khác.',
+      mergeFailed: 'Không ghép được bản quay này.',
+      importVideo: 'Nhập video làm clip chính',
+      importingVideo: 'Đang nhập video…',
+      importNoVideo: 'File này không có hình video.',
+      importTooLong: 'Video dài quá 2 giờ.',
+      importFailed: 'Không nhập được video này.',
       title: 'Thư viện',
       clear: 'Xóa',
       sources: {
@@ -242,6 +251,8 @@ export const vi = {
       },
     },
     props: {
+      detachMic: 'Micro (đã tách)',
+      detachSystem: 'Âm thanh máy (đã tách)',
       reset: 'Về mặc định',
       detachAudio: 'Tách âm thanh',
       clipTabs: { video: 'Video', adjust: 'Điều chỉnh', audio: 'Âm thanh', speed: 'Tốc độ' },

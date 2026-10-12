@@ -85,6 +85,12 @@ export interface ProjectsIpc {
   assetPeaks(dir: string, file: string): Promise<Waveform | null>
   /** Hộp thoại chọn ảnh/GIF rồi chép vào dự án (null nếu hủy). */
   importImage(dir: string): Promise<MediaAsset | null>
+  /** Hộp thoại chọn video để nhập làm clip chính (null nếu hủy). */
+  pickVideo(): Promise<string | null>
+  /** Nhập video làm đoạn mới ở cuối dự án; trả về dự án đã cập nhật. */
+  importVideo(dir: string, project: Project, source: string): Promise<Project>
+  /** Ghép bản quay khác vào cuối dự án; trả về dự án đã cập nhật. */
+  mergeProject(dir: string, project: Project, otherDir: string, other: Project): Promise<Project>
   trash(path: string): Promise<void>
   reveal(path: string): void
 }
@@ -386,6 +392,22 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
     if (!path || !project) throw new Error('Dự án không hợp lệ')
     return { path, project }
   }
+
+  ipcMain.handle(IPC.projectImportVideo, async (_event, folder: unknown, file: unknown) => {
+    if (file !== undefined && file !== null && (typeof file !== 'string' || file.length > 1000))
+      throw new Error('import_no_video')
+    const { path, project } = await projectPath(folder)
+    const source = typeof file === 'string' && file ? file : await projects.pickVideo()
+    if (!source) return null
+    return projects.importVideo(path, project, source)
+  })
+
+  ipcMain.handle(IPC.projectMerge, async (_event, folder: unknown, otherFolder: unknown) => {
+    const target = await projectPath(folder)
+    const other = await projectPath(otherFolder)
+    if (target.path === other.path) throw new Error('merge_same')
+    return projects.mergeProject(target.path, target.project, other.path, other.project)
+  })
 
   ipcMain.handle(IPC.aiTranscribe, async (_event, folder: unknown, language: unknown) => {
     const { path, project } = await projectPath(folder)

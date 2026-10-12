@@ -1,9 +1,9 @@
-import { spawnSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import ffmpegPath from 'ffmpeg-static'
 import { expect, test, type Page } from '@playwright/test'
-import { createFixtureProject } from './fixtures'
+import { createFixtureProject, pixelAt } from './fixtures'
 import { createTestDirs, launchApp, type TestDirs } from './helpers'
 
 test.describe.configure({ timeout: 180_000 })
@@ -127,6 +127,93 @@ test('timeline: chép / dán, khung chọn nhiều, menu chuột phải, marker 
   await expect(page.getByTestId('export-result')).toBeVisible({ timeout: 150_000 })
   const mp4 = readdirSync(join(projectDir, 'exports')).find((f) => f.endsWith('.mp4'))!
   expect(saturation(join(projectDir, 'exports', mp4), 0.5)).toBeGreaterThan(30)
+
+  expect(errors).toEqual([])
+  await app.close()
+})
+
+test('nhập video ngoài làm clip chính, kéo thẻ hiệu ứng vào timeline, tách tiếng clip; video xuất có cảnh nhập ở cuối', async () => {
+  // Video ngoài: 2 giây màu đỏ có tiếng 880 Hz.
+  const red = join(dirs.userData, 'red.mov')
+  execFileSync(ffmpegPath as unknown as string, [
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-y',
+    '-f',
+    'lavfi',
+    '-i',
+    'color=c=red:s=640x360:r=30:d=2',
+    '-f',
+    'lavfi',
+    '-i',
+    'sine=f=880:d=2',
+    '-c:v',
+    'libx264',
+    '-pix_fmt',
+    'yuv420p',
+    '-c:a',
+    'aac',
+    '-shortest',
+    red,
+  ])
+  const { app, page, errors } = await launchApp(dirs.userData)
+  await app.evaluate(({ dialog }, path) => {
+    dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [path] })) as never
+  }, red)
+  await openEditor(page)
+  await expect(page.getByTestId('timeline-clip')).toHaveCount(1)
+  await expect(page.getByTestId('timecode')).toContainText('/ 0:04.0')
+
+  await page.getByTestId('lib-media').click()
+  await page.getByTestId('import-video').click()
+  await expect(page.getByTestId('timeline-clip')).toHaveCount(2, { timeout: 60_000 })
+  await expect(page.getByTestId('timecode')).toContainText('/ 0:06.0')
+  const project = JSON.parse(readFileSync(join(projectDir, 'project.json'), 'utf8'))
+  expect(project.segments.at(-1)).toMatchObject({ kind: 'imported' })
+  expect(project.segments.at(-1).tracks.system.file).toMatch(/^import\d+-system\.m4a$/)
+  // Dải phim tạo lại có cả đoạn mới.
+  await expect(
+    page.getByTestId('timeline-clip').nth(1).getByTestId('filmstrip-tile').first(),
+  ).toBeVisible({ timeout: 30_000 })
+
+  // Kéo thẻ "Rung lắc" thả vào hàng Hiệu ứng ở khoảng 3 giây.
+  await page.getByTestId('lib-effects').click()
+  const ruler = (await page.getByTestId('timeline-ruler').boundingBox())!
+  const clipRow = (await page.getByTestId('timeline-clip').first().boundingBox())!
+  await page.getByTestId('effect-add-shake').dragTo(page.getByTestId('timeline-ruler'), {
+    targetPosition: { x: (ruler.width * 3) / 6, y: ruler.height / 2 },
+  })
+  await expect(page.getByTestId('timeline-effect')).toHaveCount(1)
+  await expect.poll(() => saved().effects?.[0]?.start ?? -1).toBeGreaterThan(2700)
+  expect(saved().effects[0].start).toBeLessThan(3300)
+  expect(clipRow.height).toBeGreaterThan(0)
+
+  // Tách tiếng clip đầu (menu chuột phải).
+  await page.getByTestId('timeline-clip').first().click({ button: 'right' })
+  await page.getByTestId('menu-detach-clip').click()
+  await expect.poll(() => saved().clips?.[0]?.audio?.muted).toBe(true)
+  expect(saved().audioClips.length).toBeGreaterThan(0)
+
+  await page.getByTestId('export-open').click()
+  await page.getByTestId('resolution-720').click()
+  await page.getByTestId('export-start').click()
+  await expect(page.getByTestId('export-result')).toBeVisible({ timeout: 150_000 })
+  const mp4 = readdirSync(join(projectDir, 'exports')).find((f) => f.endsWith('.mp4'))!
+  const file = join(projectDir, 'exports', mp4)
+  // Giây 5 (trong đoạn nhập): giữa khung là màu đỏ của video ngoài; giây 1 thì không.
+  const [r5, g5, b5] = pixelAt(file, 640, 360, 5)
+  expect(r5).toBeGreaterThan(180)
+  expect(g5 + b5).toBeLessThan(120)
+  const [r1, g1, b1] = pixelAt(file, 640, 360, 1)
+  expect(r1 > 180 && g1 + b1 < 120).toBe(false)
+  // Có tiếng 880 Hz của video nhập ở giây 5.
+  const { stderr } = spawnSync(
+    ffmpegPath as unknown as string,
+    ['-hide_banner', '-ss', '4.5', '-t', '1', '-i', file, '-af', 'volumedetect', '-f', 'null', '-'],
+    { encoding: 'utf8' },
+  )
+  expect(Number(/mean_volume: (-?[\d.]+) dB/.exec(stderr)?.[1] ?? -100)).toBeGreaterThan(-40)
 
   expect(errors).toEqual([])
   await app.close()

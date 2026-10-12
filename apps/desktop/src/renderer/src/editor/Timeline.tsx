@@ -40,6 +40,9 @@ import {
   sourceDuration,
   type ZoomRegion,
   type TimelineRow,
+  thumbAt,
+  type Filmstrip,
+  type Clip,
 } from '@lumora/core'
 import { AudioTrack } from './AudioTrack'
 import { CaptionTrack } from './CaptionTrack'
@@ -47,7 +50,9 @@ import { ClipFilmstrip } from './ClipFilmstrip'
 import { EffectTrack } from './EffectTrack'
 import { OverlayTrack } from './OverlayTrack'
 import { ClipWaveform } from './ClipWaveform'
+import { mediaUrl } from '../lib/media'
 import { openContextMenu } from './ContextMenu'
+import { DRAG_TYPE, dropFiles, dropPayload, readPayload } from './library-drag'
 import { useEditorStore, type SelItem } from './store'
 import { clipMenu, emptyMenu } from './timeline-menus'
 import { MarkerFlags, TrackControls } from './TimelineMarkers'
@@ -224,6 +229,54 @@ function TimelineToolbar({ zoom, setZoom }: { zoom: number; setZoom: (z: number)
   )
 }
 
+/** Rê chuột trên clip video: ảnh thu nhỏ của khung hình tại đó + thời gian (giống CapCut). */
+function ClipHoverPreview({
+  at,
+  duration,
+  clips,
+  filmstrip,
+  folder,
+}: {
+  at: number
+  duration: number
+  clips: Clip[]
+  filmstrip: Filmstrip
+  folder: string
+}) {
+  const hit = outputToSource(clips, at)
+  const thumb = hit ? thumbAt(filmstrip, hit.source) : null
+  if (!thumb) return null
+  const h = 72
+  const w = (filmstrip.thumb.width / filmstrip.thumb.height) * h
+  return (
+    <div
+      data-testid="clip-hover"
+      className="pointer-events-none absolute bottom-full z-30 mb-1 -translate-x-1/2 overflow-hidden rounded-md border border-white/70 bg-black shadow-xl"
+      style={{ left: `${(at / duration) * 100}%` }}
+    >
+      <div
+        style={{
+          width: w,
+          height: h,
+          backgroundImage: `url("${mediaUrl(folder, thumb.sheet.file)}")`,
+          backgroundSize: `${thumb.sheet.columns * w}px ${thumb.sheet.rows * h}px`,
+          backgroundPosition: `${-thumb.column * w}px ${-thumb.row * h}px`,
+        }}
+      />
+      <span className="block bg-black/80 px-1 text-center font-mono text-[10px] text-white">
+        {formatTimecode(at)}
+      </span>
+    </div>
+  )
+}
+
+/** Lỗi khi thả file / nhập video: mã lỗi thường gặp có lời giải thích riêng. */
+function dropErrorText(t: (k: string) => string, message: string) {
+  if (message.includes('import_no_video')) return t('editor.library.importNoVideo')
+  if (message.includes('import_too_long')) return t('editor.library.importTooLong')
+  return t('editor.library.importFailed')
+}
+
 /** Chiều cao một hàng con (px) của các hàng có thể xếp chồng. */
 const LANE = { effects: 28, overlays: 32, audio: 40 }
 
@@ -299,6 +352,10 @@ export function Timeline() {
     null,
   )
   const snapLine = useEditorStore((s) => s.snapLine)
+  const [dropAt, setDropAt] = useState<number | null>(null)
+  const [hoverAt, setHoverAt] = useState<number | null>(null)
+  const [dropBusy, setDropBusy] = useState(false)
+  const [dropError, setDropError] = useState<string | null>(null)
   const clipsLocked = useEditorStore((s) => s.edit?.tracks.clips.locked ?? false)
   const hasEdit = edit !== null
 
@@ -516,6 +573,33 @@ export function Timeline() {
             className="relative mx-2"
             style={{ width }}
             onContextMenu={(e) => openContextMenu(e, emptyMenu(t))}
+            onDragOver={(e) => {
+              const types = Array.from(e.dataTransfer.types)
+              if (!types.includes(DRAG_TYPE) && !types.includes('Files')) return
+              e.preventDefault()
+              e.dataTransfer.dropEffect = 'copy'
+              setDropAt(timeAt(e.clientX))
+            }}
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropAt(null)
+            }}
+            onDrop={(e) => {
+              e.preventDefault()
+              setDropAt(null)
+              const at = timeAt(e.clientX)
+              const payload = readPayload(e)
+              const files = Array.from(e.dataTransfer.files)
+              const task = payload
+                ? dropPayload(payload, at)
+                : files.length > 0
+                  ? dropFiles(files, at)
+                  : null
+              if (!task) return
+              setDropBusy(true)
+              void Promise.resolve(task)
+                .catch((err) => setDropError(String(err?.message ?? err)))
+                .finally(() => setDropBusy(false))
+            }}
           >
             <div
               className="relative h-7 cursor-pointer border-b border-border text-[10px] text-muted"
@@ -594,7 +678,20 @@ export function Timeline() {
               </div>
             </Row>
             <Row height={heights.clips} row="clips">
-              <div className="relative flex-1 py-1" onPointerDown={seekAndDeselect}>
+              <div
+                className="relative flex-1 py-1"
+                onPointerDown={seekAndDeselect}
+                onPointerLeave={() => setHoverAt(null)}
+              >
+                {hoverAt !== null && filmstrip && folder && (
+                  <ClipHoverPreview
+                    at={hoverAt}
+                    duration={duration}
+                    clips={edit.clips}
+                    filmstrip={filmstrip}
+                    folder={folder}
+                  />
+                )}
                 {clipPositions(edit.clips).map(({ clip, outputStart }, i) => {
                   const selected = selection?.kind === 'clip' && selection.id === clip.id
                   // Dải phim hiện đúng màu của bộ lọc (của clip, hoặc của cả video).
@@ -605,6 +702,7 @@ export function Timeline() {
                       type="button"
                       data-testid="timeline-clip"
                       data-selected={selected}
+                      onPointerMove={(e) => setHoverAt(timeAt(e.clientX))}
                       data-freeze={clip.freeze ? true : undefined}
                       onPointerDown={(e) => {
                         if (e.button !== 0) return
@@ -697,6 +795,25 @@ export function Timeline() {
               <AudioTrack duration={duration} pxPerMs={pxPerMs} onSeek={seekAndDeselect} />
             </Row>
 
+            {dropAt !== null && (
+              <div
+                data-testid="drop-line"
+                className="pointer-events-none absolute inset-y-0 z-20 w-0.5 bg-accent"
+                style={{ left: `${(dropAt / duration) * 100}%` }}
+              />
+            )}
+            {(dropBusy || dropError) && (
+              <div
+                data-testid={dropBusy ? 'drop-busy' : 'drop-error'}
+                role={dropError ? 'alert' : undefined}
+                onClick={() => setDropError(null)}
+                className={`absolute left-2 top-8 z-30 rounded-md px-2 py-1 text-[11px] shadow ${
+                  dropBusy ? 'bg-surface-2 text-text' : 'cursor-pointer bg-danger/90 text-white'
+                }`}
+              >
+                {dropBusy ? t('editor.library.importingVideo') : dropErrorText(t, dropError!)}
+              </div>
+            )}
             {snapLine !== null && (
               <div
                 data-testid="snap-line"

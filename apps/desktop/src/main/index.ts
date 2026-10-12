@@ -29,6 +29,7 @@ import {
   importVoiceover,
 } from './projects/assets'
 import { loadFilmstrip } from './projects/filmstrip'
+import { IMPORT_VIDEO_EXT, importVideoSegment, mergeProject } from './projects/import-video'
 import { importImageFile, MEDIA_EXTENSIONS, MemeLibrary } from './projects/images'
 import { clearDirs, dirSize } from './content/cache'
 import { RnnoiseDenoiser } from './audio/denoise'
@@ -272,6 +273,10 @@ if (!app.requestSingleInstanceLock()) {
           return file[0] ? importImageFile(file[0], dir, runFfmpeg) : null
         },
         assetPeaks: (dir, file) => assetPeaks(dir, file, runFfmpeg),
+        pickVideo: async () => (await pickFiles(IMPORT_VIDEO_EXT, false))[0] ?? null,
+        importVideo: (dir, project, source) => importVideoSegment(dir, project, source, runFfmpeg),
+        mergeProject: (dir, project, otherDir, other) =>
+          mergeProject(dir, project, otherDir, other),
         pickPackToImport: async () => {
           const options = {
             properties: ['openFile' as const],

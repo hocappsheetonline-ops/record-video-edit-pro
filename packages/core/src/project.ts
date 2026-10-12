@@ -22,6 +22,11 @@ export interface Segment {
   startedAt: number
   endedAt: number
   tracks: Partial<Record<TrackKind, TrackFile>>
+  /**
+   * `imported`: video nhập từ máy (ghép vào cuối), không có webcam / sự kiện chuột;
+   * âm thanh của video nằm ở track `system`. Không có = đoạn quay bình thường.
+   */
+  kind?: 'imported'
 }
 
 export interface ProjectSource {
@@ -104,7 +109,13 @@ function parseSegment(v: unknown): Segment | null {
       }
     }
   }
-  return { index: v.index, startedAt: v.startedAt, endedAt: v.endedAt, tracks }
+  return {
+    index: v.index,
+    startedAt: v.startedAt,
+    endedAt: v.endedAt,
+    tracks,
+    ...(v.kind === 'imported' ? { kind: 'imported' as const } : {}),
+  }
 }
 
 /** Đọc và kiểm tra project.json. Trả về `null` nếu file không phải dự án Lumora hợp lệ. */

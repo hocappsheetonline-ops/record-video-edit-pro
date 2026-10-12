@@ -488,3 +488,28 @@ describe('computeScene — video dọc tự cắt theo con trỏ', () => {
     expect(computeScene(input).time).toBe(1000)
   })
 })
+
+describe('đoạn video nhập', () => {
+  it('không vẽ con trỏ / click của bản quay', () => {
+    const edit = createDefaultEdit(project)
+    const cursor = {
+      stepMs: 10,
+      samples: [{ s: 0, x: 0.5, y: 0.5 }],
+      clicks: [],
+      keys: [],
+      moves: [],
+    }
+    const base = {
+      edit,
+      time: 100,
+      output,
+      video,
+      source: 100,
+      cursor,
+      follow: null,
+      hasCamera: false,
+    }
+    expect(computeScene(base).cursor).not.toBeNull()
+    expect(computeScene({ ...base, imported: true }).cursor).toBeNull()
+  })
+})

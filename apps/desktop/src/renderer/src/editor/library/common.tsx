@@ -1,3 +1,4 @@
+import { dragProps, type DragPayload } from '../library-drag'
 import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, Search, X, type LucideIcon } from 'lucide-react'
@@ -49,16 +50,20 @@ export function Card({
   testId,
   title,
   disabled,
+  drag,
 }: {
   onClick: () => void
   children: ReactNode
   testId?: string
   title?: string
   disabled?: boolean
+  /** Kéo thẻ vào timeline để thêm đúng chỗ thả. */
+  drag?: DragPayload
 }) {
   return (
     <button
       type="button"
+      {...(drag ? dragProps(drag) : {})}
       onClick={onClick}
       disabled={disabled}
       data-testid={testId}
