@@ -1,6 +1,7 @@
 import type {
   AppSettings,
   Destination,
+  Filmstrip,
   LiveComment,
   Waveform,
   CutSuggestion,
@@ -45,6 +46,7 @@ export const IPC = {
   projectsSaveEdit: 'projects:save-edit',
   projectsGetEvents: 'projects:get-events',
   projectsWaveform: 'projects:waveform',
+  projectsFilmstrip: 'projects:filmstrip',
   exportStart: 'export:start',
   exportWrite: 'export:write',
   exportFinish: 'export:finish',
@@ -269,6 +271,8 @@ export interface LumoraApi {
   getEvents(folder: string): Promise<InputEvent[]>
   /** Dạng sóng âm thanh của bản quay (null nếu không có âm thanh). */
   getWaveform(folder: string): Promise<Waveform | null>
+  /** Ảnh thu nhỏ của video màn hình cho dải phim trên timeline (null nếu không có). */
+  getFilmstrip(folder: string): Promise<Filmstrip | null>
   startExport(folder: string): Promise<string>
   writeExport(id: string, position: number, data: ArrayBuffer): Promise<void>
   finishExport(id: string, folder: string, edit: EditState): Promise<ExportResult>

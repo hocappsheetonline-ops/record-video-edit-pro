@@ -58,6 +58,51 @@ describe('EditorPage', () => {
     expect(await screen.findAllByTestId('clip-waveform')).toHaveLength(3)
   })
 
+  it('dải ảnh thu nhỏ kiểu CapCut: lấp đầy clip, mỗi ô lấy đúng khung hình theo thời gian', async () => {
+    // jsdom không đo được kích thước: giả lập clip rộng 300px.
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(300)
+    const api = setup()
+    api.getFilmstrip.mockResolvedValue({
+      version: 1,
+      intervalMs: 1000,
+      thumb: { width: 128, height: 72 },
+      sheets: [
+        {
+          segment: 0,
+          file: 'filmstrip-0.jpg',
+          count: 5,
+          columns: 5,
+          rows: 1,
+          startMs: 0,
+          endMs: 5000,
+          offsetMs: 0,
+        },
+        {
+          segment: 1,
+          file: 'filmstrip-1.jpg',
+          count: 2,
+          columns: 2,
+          rows: 1,
+          startMs: 5000,
+          endMs: 7000,
+          offsetMs: 5000,
+        },
+      ],
+    })
+    await screen.findByTestId('editor-title')
+    const strips = await screen.findAllByTestId('clip-filmstrip')
+    expect(strips).toHaveLength(2)
+    // Ô rộng 128/72 × 44 ≈ 78px → 4 ô cho 300px.
+    const tiles = strips[0]!.querySelectorAll<HTMLElement>('[data-testid="filmstrip-tile"]')
+    expect(tiles).toHaveLength(4)
+    expect(tiles[0]!.style.backgroundImage).toContain('filmstrip-0.jpg')
+    expect(tiles[0]!.style.backgroundPosition).toBe('0px 0px')
+    // Ô cuối của clip 1 (5 giây) rơi vào ảnh thứ 4 hoặc 5.
+    expect(tiles[3]!.style.backgroundPosition).toMatch(/^-(23[0-9]|31[0-9])\.\d+px 0px$/)
+    const second = strips[1]!.querySelectorAll<HTMLElement>('[data-testid="filmstrip-tile"]')
+    expect(second[0]!.style.backgroundImage).toContain('filmstrip-1.jpg')
+  })
+
   it('không có âm thanh thì không vẽ sóng', async () => {
     setup()
     await screen.findByTestId('editor-title')

@@ -9,11 +9,14 @@ import {
   sourceDuration,
   type ZoomRegion,
 } from '@lumora/core'
+import { ClipFilmstrip } from './ClipFilmstrip'
 import { ClipWaveform } from './ClipWaveform'
 import { useEditorStore } from './store'
 import { formatTimecode, tickInterval, zoomOutputIntervals } from './timeline-math'
 
 const LABEL_W = 72
+/** Chiều cao dải ảnh thu nhỏ trong clip (px): clip cao 64px − viền 4px − dải sóng 16px. */
+const FILM_H = 44
 
 type Drag = { id: string; mode: 'move' | 'start' | 'end'; originX: number; origin: ZoomRegion }
 
@@ -21,6 +24,8 @@ export function Timeline() {
   const { t } = useTranslation()
   const edit = useEditorStore((s) => s.edit)
   const waveform = useEditorStore((s) => s.waveform)
+  const filmstrip = useEditorStore((s) => s.filmstrip)
+  const folder = useEditorStore((s) => s.folder)
   const project = useEditorStore((s) => s.project)
   const time = useEditorStore((s) => s.time)
   const selection = useEditorStore((s) => s.selection)
@@ -131,7 +136,7 @@ export function Timeline() {
           <div style={{ width: LABEL_W }} className="text-muted">
             {t('editor.tracks.clips')}
           </div>
-          <div ref={trackRef} className="relative h-12 flex-1" onPointerDown={seek}>
+          <div ref={trackRef} className="relative h-16 flex-1" onPointerDown={seek}>
             {clipPositions(edit.clips).map(({ clip, outputStart }, i) => {
               const selected = selection?.kind === 'clip' && selection.id === clip.id
               return (
@@ -145,21 +150,32 @@ export function Timeline() {
                     store().select({ kind: 'clip', id: clip.id })
                     seek(e)
                   }}
-                  className={`absolute top-0 h-full overflow-hidden rounded-md border px-2 text-left ${
-                    selected
-                      ? 'border-accent bg-accent/40'
-                      : 'border-accent/40 bg-accent/20 hover:bg-accent/30'
+                  className={`absolute top-0 flex h-full flex-col overflow-hidden rounded-md border-2 bg-surface-2 text-left ${
+                    selected ? 'border-white' : 'border-transparent hover:border-white/40'
                   }`}
                   style={{
                     left: `${(outputStart / duration) * 100}%`,
                     width: `calc(${(clipDuration(clip) / duration) * 100}% - 2px)`,
                   }}
                 >
-                  {waveform && <ClipWaveform clip={clip} waveform={waveform} />}
-                  <span className="relative font-medium">{i + 1}</span>
-                  {clip.speed !== 1 && (
-                    <span className="relative ml-1 rounded bg-black/40 px-1">{clip.speed}×</span>
-                  )}
+                  {/* Kiểu CapCut: dải ảnh thu nhỏ ở trên, dạng sóng âm thanh ở dưới. */}
+                  <div className="relative min-h-0 flex-1 bg-accent/25">
+                    {filmstrip && folder && (
+                      <ClipFilmstrip
+                        clip={clip}
+                        filmstrip={filmstrip}
+                        folder={folder}
+                        height={FILM_H}
+                      />
+                    )}
+                    <span className="absolute left-1 top-1 rounded bg-black/60 px-1.5 text-[11px] font-medium text-white">
+                      {i + 1}
+                      {clip.speed !== 1 && ` · ${clip.speed}×`}
+                    </span>
+                  </div>
+                  <div className="relative h-4 shrink-0 bg-black/40 text-accent">
+                    {waveform && <ClipWaveform clip={clip} waveform={waveform} />}
+                  </div>
                 </button>
               )
             })}

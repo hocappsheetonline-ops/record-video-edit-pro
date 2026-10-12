@@ -218,6 +218,18 @@ test('timeline hiện dạng sóng âm thanh của bản quay trong clip video',
   expect(heights.length).toBeGreaterThan(50)
   expect(heights.filter((h) => h > 35).length / heights.length).toBeGreaterThan(0.8)
   expect(JSON.parse(readFileSync(join(projectDir, 'waveform.json'), 'utf8')).bucketMs).toBe(20)
+  // Dải ảnh thu nhỏ kiểu CapCut ở trên, sóng âm ở dưới.
+  await expect(page.getByTestId('filmstrip-tile').first()).toBeVisible({ timeout: 30_000 })
+  expect(await page.getByTestId('filmstrip-tile').count()).toBeGreaterThan(5)
+  expect(await page.getByTestId('filmstrip-tile').first().getAttribute('style')).toContain(
+    'filmstrip-0.jpg',
+  )
+  expect(existsSync(join(projectDir, 'filmstrip-0.jpg'))).toBe(true)
+  // Ảnh thu nhỏ thật sự hiện ra: chụp clip, phần trên có màu của video mẫu (không phải nền trơn).
+  const shot = join(projectDir, '.timeline.png')
+  await page.getByTestId('timeline-clip').screenshot({ path: shot })
+  const colors = [20, 120, 220, 320, 420].map((x) => pixelAt(shot, x, 20, 0).join(','))
+  expect(new Set(colors).size).toBeGreaterThan(2)
   expect(errors).toEqual([])
   await app.close()
 })

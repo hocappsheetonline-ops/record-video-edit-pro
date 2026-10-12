@@ -11,6 +11,7 @@ import {
   type Project,
   type TrackKind,
   type Waveform,
+  type Filmstrip,
 } from '@lumora/core'
 import {
   IPC,
@@ -58,6 +59,7 @@ export interface RecordingIpc {
 export interface ProjectsIpc {
   dir(): Promise<string>
   waveform(project: Project, dir: string): Promise<Waveform | null>
+  filmstrip(project: Project, dir: string): Promise<Filmstrip | null>
   trash(path: string): Promise<void>
   reveal(path: string): void
 }
@@ -214,13 +216,17 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
   ipcMain.handle(IPC.projectsGetEvents, async (_event, folder: unknown) =>
     readEvents(await projects.dir(), assertFolder(folder)),
   )
-  ipcMain.handle(IPC.projectsWaveform, async (_event, folder: unknown) => {
-    const root = await projects.dir()
-    const name = assertFolder(folder)
-    const project = await readProject(root, name)
-    const path = safeJoin(root, name)
-    return project && path ? projects.waveform(project, path) : null
-  })
+  const withProject =
+    <T>(load: (project: Project, dir: string) => Promise<T>) =>
+    async (_event: unknown, folder: unknown): Promise<T | null> => {
+      const root = await projects.dir()
+      const name = assertFolder(folder)
+      const project = await readProject(root, name)
+      const path = safeJoin(root, name)
+      return project && path ? load(project, path) : null
+    }
+  ipcMain.handle(IPC.projectsWaveform, withProject(projects.waveform))
+  ipcMain.handle(IPC.projectsFilmstrip, withProject(projects.filmstrip))
 
   ipcMain.handle(IPC.exportStart, async (_event, folder: unknown) => {
     const path = safeJoin(await projects.dir(), assertFolder(folder))

@@ -20,6 +20,7 @@ import {
   type InputEvent,
   type Project,
   type Size,
+  type Filmstrip,
   type Transcript,
   type Waveform,
 } from '@lumora/core'
@@ -35,6 +36,8 @@ interface EditorStore {
   transcript: Transcript | null
   /** Dạng sóng âm thanh (tải sau, không chặn việc mở trình chỉnh sửa). */
   waveform: Waveform | null
+  /** Ảnh thu nhỏ cho dải phim trên timeline (tải sau). */
+  filmstrip: Filmstrip | null
   cursor: CursorTrack | null
   follow: CursorTrack | null
   /** Kích thước gốc của video màn hình. */
@@ -87,6 +90,7 @@ const initial = {
   events: [],
   transcript: null,
   waveform: null,
+  filmstrip: null,
   cursor: null,
   follow: null,
   videoSize: { width: 1920, height: 1080 },
@@ -135,6 +139,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       .getWaveform(folder)
       .then((waveform) => {
         if (get().folder === folder) set({ waveform })
+      })
+      .catch(() => undefined)
+    void api
+      .getFilmstrip(folder)
+      .then((filmstrip) => {
+        if (get().folder === folder) set({ filmstrip })
       })
       .catch(() => undefined)
   },

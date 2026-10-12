@@ -212,6 +212,7 @@ export function createFakeApi(
     saveEdit: vi.fn<LumoraApi['saveEdit']>(async () => {}),
     getEvents: vi.fn<LumoraApi['getEvents']>(async () => []),
     getWaveform: vi.fn<LumoraApi['getWaveform']>(async () => null),
+    getFilmstrip: vi.fn<LumoraApi['getFilmstrip']>(async () => null),
     startExport: vi.fn<LumoraApi['startExport']>(async () => 'e1'),
     writeExport: vi.fn<LumoraApi['writeExport']>(async () => {}),
     finishExport: vi.fn<LumoraApi['finishExport']>(async () => ({

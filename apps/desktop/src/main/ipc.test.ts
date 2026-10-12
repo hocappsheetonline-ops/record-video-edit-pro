@@ -94,6 +94,7 @@ beforeEach(async () => {
       projects: {
         dir: async () => dir,
         waveform: vi.fn(async () => ({ bucketMs: 20, peaks: [1, 2] })),
+        filmstrip: vi.fn(async () => null),
         trash: async (path: string) => {
           trashed.push(path)
         },
@@ -127,6 +128,7 @@ describe('registerIpc', () => {
   it('dạng sóng: kiểm tra tên thư mục, dự án không tồn tại thì null', async () => {
     await expect(call(IPC.projectsWaveform, '../x')).rejects.toThrow('Thư mục dự án không hợp lệ')
     expect(await call(IPC.projectsWaveform, 'Missing.lumora')).toBeNull()
+    await expect(call(IPC.projectsFilmstrip, '..\\x')).rejects.toThrow('Thư mục dự án không hợp lệ')
   })
 
   it('cập nhật settings', async () => {

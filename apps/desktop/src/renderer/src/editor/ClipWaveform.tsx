@@ -21,7 +21,7 @@ export const ClipWaveform = memo(function ClipWaveform({
   // Một path duy nhất: mỗi cột là một hình chữ nhật đối xứng quanh đường giữa (y = 50).
   const d = bars
     .map((v, i) => {
-      const h = Math.max(0.8, v * 40)
+      const h = Math.max(1.5, v * 46)
       return `M${i + 0.15} ${50 - h}h0.7v${h * 2}h-0.7z`
     })
     .join('')
@@ -32,7 +32,7 @@ export const ClipWaveform = memo(function ClipWaveform({
       aria-hidden
       viewBox={`0 0 ${bars.length} 100`}
       preserveAspectRatio="none"
-      className="pointer-events-none absolute inset-0 h-full w-full text-white/70"
+      className="pointer-events-none absolute inset-0 h-full w-full"
     >
       <path d={d} fill="currentColor" />
     </svg>
