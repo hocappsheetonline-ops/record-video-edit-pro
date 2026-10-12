@@ -48,6 +48,7 @@ Mở một dự án và bấm **Chỉnh sửa**:
 - **Video dọc 9:16 (TikTok, Shorts, Reels)**: bấm **Dọc 9:16 tự động** ở tab **Khung**. Video màn hình phủ kín khung dọc, phần thừa được cắt và khung nhìn tự đi theo con trỏ (giống Screen Studio), các đoạn zoom vẫn giữ nguyên. Webcam nằm trong khung (bong bóng) hoặc thành một dải riêng ở trên/dưới (tab **Webcam** → **Bố cục** → **Dải riêng**). Tùy chọn **Lấp đầy khung** dùng được cho mọi tỉ lệ.
 - **Webcam**: bong bóng tròn, bo góc hoặc vuông, chỉnh kích thước và góc đặt; hoặc dải webcam chiếm trọn chiều ngang.
 - Mọi thay đổi hiện ngay trên khung xem trước, không cần bấm phát.
+- **Dạng sóng âm thanh** hiện ngay trong từng clip video trên timeline (micro + âm thanh máy), nên dễ thấy chỗ đang nói và chỗ im lặng để cắt.
 - **Timeline**: tách (phím S), xóa (Delete), đổi tốc độ từng đoạn, hoàn tác/làm lại (Ctrl+Z / Ctrl+Y). Bản chỉnh sửa được tự lưu vào `edit.json`.
 - **Xuất**: MP4 (H.264 + AAC) hoặc GIF; 720p, 1080p, 1440p hoặc 4K; 30 hoặc 60 fps. File được lưu trong thư mục `exports` của dự án.
 

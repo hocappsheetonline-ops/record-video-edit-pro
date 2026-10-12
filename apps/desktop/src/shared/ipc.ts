@@ -2,6 +2,7 @@ import type {
   AppSettings,
   Destination,
   LiveComment,
+  Waveform,
   CutSuggestion,
   Transcript,
   EditState,
@@ -43,6 +44,7 @@ export const IPC = {
   projectsGetEdit: 'projects:get-edit',
   projectsSaveEdit: 'projects:save-edit',
   projectsGetEvents: 'projects:get-events',
+  projectsWaveform: 'projects:waveform',
   exportStart: 'export:start',
   exportWrite: 'export:write',
   exportFinish: 'export:finish',
@@ -265,6 +267,8 @@ export interface LumoraApi {
   getEdit(folder: string): Promise<EditState | null>
   saveEdit(folder: string, edit: EditState): Promise<void>
   getEvents(folder: string): Promise<InputEvent[]>
+  /** Dạng sóng âm thanh của bản quay (null nếu không có âm thanh). */
+  getWaveform(folder: string): Promise<Waveform | null>
   startExport(folder: string): Promise<string>
   writeExport(id: string, position: number, data: ArrayBuffer): Promise<void>
   finishExport(id: string, folder: string, edit: EditState): Promise<ExportResult>

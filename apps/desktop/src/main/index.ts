@@ -12,6 +12,7 @@ import { GUEST_SCRIPT, guestHtml } from './live/guest-page'
 import { SignalingServer } from './live/signaling'
 import { Vault } from './vault'
 import { handleMediaRequest, MEDIA_SCHEME } from './projects/media-protocol'
+import { loadWaveform } from './projects/waveform'
 import { RecordingController } from './recording/controller'
 import { SecretStore } from './secret-store'
 import { SettingsStore } from './settings-store'
@@ -143,6 +144,7 @@ if (!app.requestSingleInstanceLock()) {
       exports: new ExportManager(runFfmpeg),
       projects: {
         dir: projectsDir,
+        waveform: (project, dir) => loadWaveform(project, dir, runFfmpeg),
         trash: (path) => shell.trashItem(path),
         reveal: (path) => shell.showItemInFolder(path),
       },

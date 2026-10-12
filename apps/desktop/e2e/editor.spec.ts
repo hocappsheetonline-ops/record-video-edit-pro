@@ -202,3 +202,21 @@ test('xem trước đổi ngay khi chỉnh (không cần bấm Play); chế đ�
   expect(errors).toEqual([])
   await app.close()
 })
+
+test('timeline hiện dạng sóng âm thanh của bản quay trong clip video', async () => {
+  const { app, page, errors } = await launchApp(dirs.userData)
+  await openEditor(page)
+  const wave = page.getByTestId('clip-waveform')
+  await expect(wave).toHaveCount(1, { timeout: 30_000 })
+  // Bản mẫu có micro (sine 440 Hz) suốt 4 giây: mọi cột đều có độ cao đáng kể.
+  const heights = await wave
+    .locator('path')
+    .evaluate((p) =>
+      [...(p.getAttribute('d') ?? '').matchAll(/v([\d.]+)/g)].map((m) => Number(m[1])),
+    )
+  expect(heights.length).toBeGreaterThan(50)
+  expect(heights.filter((h) => h > 35).length / heights.length).toBeGreaterThan(0.8)
+  expect(JSON.parse(readFileSync(join(projectDir, 'waveform.json'), 'utf8')).bucketMs).toBe(20)
+  expect(errors).toEqual([])
+  await app.close()
+})

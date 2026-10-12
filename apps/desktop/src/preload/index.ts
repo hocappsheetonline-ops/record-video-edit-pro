@@ -47,6 +47,7 @@ const api: LumoraApi = {
   getEdit: (folder) => ipcRenderer.invoke(IPC.projectsGetEdit, folder),
   saveEdit: (folder, edit) => ipcRenderer.invoke(IPC.projectsSaveEdit, folder, edit),
   getEvents: (folder) => ipcRenderer.invoke(IPC.projectsGetEvents, folder),
+  getWaveform: (folder) => ipcRenderer.invoke(IPC.projectsWaveform, folder),
   startExport: (folder) => ipcRenderer.invoke(IPC.exportStart, folder),
   writeExport: (id, position, data) => ipcRenderer.invoke(IPC.exportWrite, id, position, data),
   finishExport: (id, folder, edit) => ipcRenderer.invoke(IPC.exportFinish, id, folder, edit),

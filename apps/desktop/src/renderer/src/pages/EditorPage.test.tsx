@@ -41,6 +41,30 @@ describe('EditorPage', () => {
     expect(screen.getByTestId('timecode')).toHaveTextContent('0:00.0 / 0:07.0')
   })
 
+  it('hiện dạng sóng âm thanh trong từng clip; tách clip thì sóng chia theo', async () => {
+    const api = setup()
+    // 7 giây nguồn, 20ms một giá trị: im lặng 2 giây đầu rồi có tiếng.
+    api.getWaveform.mockResolvedValue({
+      bucketMs: 20,
+      peaks: Array.from({ length: 350 }, (_, i) => (i < 100 ? 0 : 200)),
+    })
+    await screen.findByTestId('editor-title')
+    const waves = await screen.findAllByTestId('clip-waveform')
+    expect(api.getWaveform).toHaveBeenCalledWith(sampleSummary.folder)
+    // Clip 1 dài 5 giây, clip 2 dài 2 giây.
+    expect(waves.map((w) => Number(w.getAttribute('data-bars')))).toEqual([84, 34])
+    act(() => useEditorStore.getState().setTime(3500))
+    await userEvent.keyboard('s')
+    expect(await screen.findAllByTestId('clip-waveform')).toHaveLength(3)
+  })
+
+  it('không có âm thanh thì không vẽ sóng', async () => {
+    setup()
+    await screen.findByTestId('editor-title')
+    await waitFor(() => expect(window.lumora.getWaveform).toHaveBeenCalled())
+    expect(screen.queryByTestId('clip-waveform')).not.toBeInTheDocument()
+  })
+
   it('đổi tỉ lệ khung hình làm đổi kích thước xuất', async () => {
     setup()
     await screen.findByTestId('editor')

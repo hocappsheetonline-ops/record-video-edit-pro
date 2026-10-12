@@ -20,6 +20,7 @@ import {
   type Project,
   type Size,
   type Transcript,
+  type Waveform,
 } from '@lumora/core'
 import { lumora } from '../api'
 
@@ -31,6 +32,8 @@ interface EditorStore {
   edit: EditState | null
   events: InputEvent[]
   transcript: Transcript | null
+  /** Dạng sóng âm thanh (tải sau, không chặn việc mở trình chỉnh sửa). */
+  waveform: Waveform | null
   cursor: CursorTrack | null
   follow: CursorTrack | null
   /** Kích thước gốc của video màn hình. */
@@ -75,6 +78,7 @@ const initial = {
   edit: null,
   events: [],
   transcript: null,
+  waveform: null,
   cursor: null,
   follow: null,
   videoSize: { width: 1920, height: 1080 },
@@ -122,6 +126,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       ...tracks,
       videoSize: rect ? { width: rect.width, height: rect.height } : { width: 1920, height: 1080 },
     })
+    // Lần đầu FFmpeg cần vài giây để đọc âm thanh; timeline hiện sóng khi xong.
+    void api
+      .getWaveform(folder)
+      .then((waveform) => {
+        if (get().folder === folder) set({ waveform })
+      })
+      .catch(() => undefined)
   },
 
   reset() {

@@ -9,6 +9,7 @@ import {
   sourceDuration,
   type ZoomRegion,
 } from '@lumora/core'
+import { ClipWaveform } from './ClipWaveform'
 import { useEditorStore } from './store'
 import { formatTimecode, tickInterval, zoomOutputIntervals } from './timeline-math'
 
@@ -19,6 +20,7 @@ type Drag = { id: string; mode: 'move' | 'start' | 'end'; originX: number; origi
 export function Timeline() {
   const { t } = useTranslation()
   const edit = useEditorStore((s) => s.edit)
+  const waveform = useEditorStore((s) => s.waveform)
   const project = useEditorStore((s) => s.project)
   const time = useEditorStore((s) => s.time)
   const selection = useEditorStore((s) => s.selection)
@@ -153,9 +155,10 @@ export function Timeline() {
                     width: `calc(${(clipDuration(clip) / duration) * 100}% - 2px)`,
                   }}
                 >
-                  <span className="font-medium">{i + 1}</span>
+                  {waveform && <ClipWaveform clip={clip} waveform={waveform} />}
+                  <span className="relative font-medium">{i + 1}</span>
                   {clip.speed !== 1 && (
-                    <span className="ml-1 rounded bg-black/40 px-1">{clip.speed}×</span>
+                    <span className="relative ml-1 rounded bg-black/40 px-1">{clip.speed}×</span>
                   )}
                 </button>
               )

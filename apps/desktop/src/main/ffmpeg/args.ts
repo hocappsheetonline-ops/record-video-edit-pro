@@ -292,8 +292,11 @@ export function buildSpeechAudioArgs(options: {
   pieces: readonly MuxAudioPiece[]
   durationS: number
   output: string
+  /** `pcm`: PCM 16-bit mono 8 kHz thô (để vẽ dạng sóng), mặc định MP3 16 kHz. */
+  format?: 'mp3' | 'pcm'
 }): string[] {
   const { pieces, durationS, output } = options
+  const pcm = options.format === 'pcm'
   const files = [...new Set(pieces.map((p) => p.path))]
   const filters: string[] = []
   const labels = new Map<string, string[]>()
@@ -337,11 +340,8 @@ export function buildSpeechAudioArgs(options: {
     '-ac',
     '1',
     '-ar',
-    '16000',
-    '-c:a',
-    'libmp3lame',
-    '-b:a',
-    '64k',
+    pcm ? '8000' : '16000',
+    ...(pcm ? ['-f', 's16le', '-c:a', 'pcm_s16le'] : ['-c:a', 'libmp3lame', '-b:a', '64k']),
     output,
   ]
 }
