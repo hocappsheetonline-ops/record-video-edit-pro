@@ -44,6 +44,7 @@ export function createMainWindow(): BrowserWindow {
     minHeight: 600,
     show: false,
     title: 'Lumora',
+    icon: join(__dirname, '../../resources/icon.png'),
     backgroundColor: '#0b0b10',
     autoHideMenuBar: true,
     // Studio livestream cần chạy đều 30 khung/giây kể cả khi cửa sổ bị che.

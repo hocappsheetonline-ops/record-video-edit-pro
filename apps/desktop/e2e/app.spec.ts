@@ -104,3 +104,36 @@ test('đổi ngôn ngữ và giao diện, giữ lại sau khi mở lại app', a
   await expect(page.locator('html')).toHaveAttribute('lang', 'en')
   await app.close()
 })
+
+test('nhật ký lỗi: ghi lúc khởi động, ghi lỗi IPC và che API key; bản chưa cài không tự cập nhật', async () => {
+  const { app, page } = await launch()
+  await page.getByTestId('nav-settings').click()
+  await expect(page.getByTestId('update-status')).toHaveText('Tự cập nhật chỉ có ở bản cài đặt.')
+  await expect(page.getByTestId('update-check')).toHaveCount(0)
+
+  // Gọi IPC với dữ liệu sai để main process ghi lỗi.
+  const failed = await page.evaluate(async (key) => {
+    const api = (
+      globalThis as unknown as {
+        lumora: {
+          getProject(folder: string): Promise<unknown>
+          testSecret(k: string, v: string): Promise<unknown>
+        }
+      }
+    ).lumora
+    await api.testSecret('not-a-key', key).catch(() => undefined)
+    return api.getProject('../outside').then(
+      () => false,
+      () => true,
+    )
+  }, CLAUDE_KEY)
+  expect(failed).toBe(true)
+
+  const logFile = join(userDataDir, 'logs', 'main.log')
+  await expect.poll(() => readFile(logFile, 'utf8').catch(() => '')).toContain('[ipc projects:get]')
+  const log = await readFile(logFile, 'utf8')
+  expect(log).toMatch(/INFO {2}\[app\] Lumora 0\.1\.0/)
+  expect(log).toContain('Thư mục dự án không hợp lệ')
+  expect(log).not.toContain('abcdefghijklmnop')
+  await app.close()
+})

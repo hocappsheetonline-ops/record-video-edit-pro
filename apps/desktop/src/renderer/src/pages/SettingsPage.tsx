@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { LANGUAGES, SECRET_KEYS, THEMES, type Language, type Theme } from '@lumora/core'
+import { AboutCard } from '../components/AboutCard'
 import { ApiKeyCard } from '../components/ApiKeyCard'
 import { PageHeader } from '../components/PageHeader'
 import { useAppStore } from '../store/app'
@@ -75,9 +76,7 @@ export function SettingsPage() {
           <h2 className="mb-3 text-sm font-medium uppercase tracking-wide text-muted">
             {t('settings.about')}
           </h2>
-          <p className="text-sm text-muted" data-testid="app-version">
-            {appInfo.name} · {t('settings.version', { version: appInfo.version })}
-          </p>
+          <AboutCard appInfo={appInfo} />
         </>
       )}
     </div>

@@ -1,10 +1,13 @@
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { app, BrowserWindow, ipcMain, protocol, safeStorage, session, shell } from 'electron'
+import { EVENTS } from '@shared/ipc'
 import { AiService } from './ai/service'
 import { ExportManager } from './export/manager'
 import { runFfmpeg } from './ffmpeg/runner'
 import { registerIpc } from './ipc'
 import { LiveController } from './live/controller'
+import { Logger, loggingIpc } from './logger'
+import { UpdateService, type UpdaterLike } from './updater'
 import { GUEST_SCRIPT, guestHtml } from './live/guest-page'
 import { SignalingServer } from './live/signaling'
 import { Vault } from './vault'
@@ -17,6 +20,34 @@ import { createMainWindow } from './windows'
 // Cho phép test E2E chạy với thư mục dữ liệu riêng, không đụng vào dữ liệu thật của người dùng.
 const userDataOverride = process.env.LUMORA_USER_DATA_DIR
 if (userDataOverride) app.setPath('userData', userDataOverride)
+
+// Nhật ký lỗi: %APPDATA%\Lumora\logs\main.log (đã che API key, stream key).
+const logger = new Logger(join(app.getPath('userData'), 'logs', 'main.log'))
+process.on('uncaughtException', (error) => logger.error('main', error))
+process.on('unhandledRejection', (reason) => logger.error('main', reason))
+app.on('render-process-gone', (_event, _wc, details) =>
+  logger.warn('renderer', `Giao diện bị dừng: ${details.reason} (exit ${details.exitCode})`),
+)
+app.on('child-process-gone', (_event, details) => {
+  if (details.reason !== 'clean-exit')
+    logger.warn('process', `${details.type} dừng: ${details.reason} (exit ${details.exitCode})`)
+})
+
+/** Bộ tự cập nhật chỉ chạy ở bản đã cài (đóng gói); chạy từ mã nguồn thì bỏ qua. */
+async function loadUpdater(): Promise<UpdaterLike | null> {
+  if (!app.isPackaged || process.env.LUMORA_DISABLE_UPDATES === '1') return null
+  // electron-updater là CommonJS: khi import động, các export nằm trong `default`.
+  type UpdaterModule = typeof import('electron-updater')
+  const mod = (await import('electron-updater')) as UpdaterModule & { default?: UpdaterModule }
+  const autoUpdater = mod.default?.autoUpdater ?? mod.autoUpdater
+  autoUpdater.logger = {
+    info: (m: unknown) => void logger.info('update', String(m)),
+    warn: (m: unknown) => void logger.warn('update', String(m)),
+    error: (m: unknown) => void logger.error('update', m),
+    debug: () => undefined,
+  }
+  return autoUpdater
+}
 
 // Giao thức riêng để giao diện phát video trong thư mục dự án (hỗ trợ tua).
 protocol.registerSchemesAsPrivileged([
@@ -51,8 +82,12 @@ if (!app.requestSingleInstanceLock()) {
     }
   })
 
-  void app.whenReady().then(() => {
+  void app.whenReady().then(async () => {
     app.setAppUserModelId('app.lumora.desktop')
+    logger.info(
+      'app',
+      `Lumora ${app.getVersion()} (${process.platform} ${process.arch}, Electron ${process.versions.electron})`,
+    )
     // Chỉ dùng cho test E2E trên Linux CI/container không có keyring. Windows luôn dùng DPAPI.
     if (process.platform === 'linux' && process.env.LUMORA_E2E_PLAINTEXT_SECRETS === '1') {
       safeStorage.setUsePlainTextEncryption(true)
@@ -85,7 +120,21 @@ if (!app.requestSingleInstanceLock()) {
     })
     app.on('before-quit', () => void live.shutdown())
 
-    registerIpc(ipcMain, {
+    const updates = new UpdateService({
+      // Lỗi khi nạp bộ cập nhật không được làm hỏng việc mở app.
+      updater: await loadUpdater().catch((error: unknown) => {
+        logger.error('update', error)
+        return null
+      }),
+      send: (state) => mainWindow?.webContents.send(EVENTS.updateState, state),
+      log: (message) => logger.warn('update', message),
+    })
+
+    registerIpc(loggingIpc(ipcMain, logger), {
+      updates,
+      openLogs: async () => {
+        await shell.openPath(dirname(logger.file))
+      },
       settings,
       secrets,
       live,
@@ -111,6 +160,8 @@ if (!app.requestSingleInstanceLock()) {
       // Đóng cửa sổ chính khi đang quay: lưu lại phần đã quay.
       if (recording.isRecording) void recording.finish().catch(() => undefined)
     })
+    // Kiểm tra bản mới sau khi app mở xong, không làm chậm lúc khởi động.
+    setTimeout(() => void updates.check(), 10_000)
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) mainWindow = createMainWindow()
     })

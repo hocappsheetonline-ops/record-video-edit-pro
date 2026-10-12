@@ -34,6 +34,7 @@ import {
   writeEdit,
 } from './projects/library'
 import type { SecretStore } from './secret-store'
+import type { UpdateService } from './updater'
 import type { SettingsStore } from './settings-store'
 
 /** Những gì IPC cần từ bộ điều phối quay (RecordingController). */
@@ -82,6 +83,8 @@ export interface IpcDeps {
     | 'stopComments'
     | 'caption'
   >
+  updates: Pick<UpdateService, 'state' | 'check' | 'install'>
+  openLogs(): Promise<void>
 }
 
 function assertSecretKey(value: unknown) {
@@ -124,6 +127,10 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
   const { settings, secrets, recording, projects } = deps
 
   ipcMain.handle(IPC.appInfo, () => deps.appInfo())
+  ipcMain.handle(IPC.updateState, () => deps.updates.state)
+  ipcMain.handle(IPC.updateCheck, () => deps.updates.check())
+  ipcMain.handle(IPC.updateInstall, () => deps.updates.install())
+  ipcMain.handle(IPC.openLogs, () => deps.openLogs())
   ipcMain.handle(IPC.settingsGet, () => settings.get())
   ipcMain.handle(IPC.settingsUpdate, (_event, patch: unknown) =>
     settings.update(

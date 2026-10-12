@@ -36,6 +36,11 @@ const recording = {
   finish: vi.fn(),
   cancel: vi.fn(),
 }
+const updates = {
+  state: { state: 'none' } as const,
+  check: vi.fn(async () => ({ state: 'checking' }) as const),
+  install: vi.fn(),
+}
 let validators: { [K in keyof Validators]: Mock<Validators[K]> }
 
 // Electron biến lỗi ném ra trong handler (kể cả đồng bộ) thành promise bị từ chối.
@@ -93,6 +98,8 @@ beforeEach(async () => {
         },
         reveal: () => {},
       },
+      updates,
+      openLogs: vi.fn(async () => {}),
       appInfo: () => ({
         name: 'Lumora',
         version: '0.0.0',
@@ -107,6 +114,13 @@ afterEach(() => rm(dir, { recursive: true, force: true }))
 describe('registerIpc', () => {
   it('đăng ký đủ các kênh', () => {
     expect([...handlers.keys()].sort()).toEqual(Object.values(IPC).sort())
+  })
+
+  it('cập nhật app: đọc trạng thái, kiểm tra, cài đặt', async () => {
+    expect(await call(IPC.updateState)).toEqual({ state: 'none' })
+    expect(await call(IPC.updateCheck)).toEqual({ state: 'checking' })
+    await call(IPC.updateInstall)
+    expect(updates.install).toHaveBeenCalled()
   })
 
   it('cập nhật settings', async () => {

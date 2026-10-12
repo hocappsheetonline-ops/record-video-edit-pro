@@ -1,0 +1,52 @@
+name: Release
+
+# Phát hành bản mới: tăng "version" trong apps/desktop/package.json, rồi push tag cùng số, ví dụ:
+#   git tag v0.2.0 && git push origin v0.2.0
+# Workflow chạy toàn bộ test, build bộ cài và đăng lên GitHub Releases. App đã cài sẽ tự tải bản mới.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & publish (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Cài thư viện
+        run: pnpm install --frozen-lockfile
+
+      - name: Kiểm tra tag khớp phiên bản app
+        shell: bash
+        run: |
+          version=$(node -p "require('./apps/desktop/package.json').version")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME không khớp version $version trong apps/desktop/package.json"
+            exit 1
+          fi
+
+      - name: Kiểm tra (format, lint, typecheck, unit test)
+        run: pnpm check
+
+      - name: Cài Chromium cho test khách mời livestream
+        run: pnpm --filter @lumora/desktop exec playwright install chromium
+
+      - name: Test E2E
+        run: pnpm test:e2e
+
+      - name: Build và đăng lên GitHub Releases
+        run: pnpm --filter @lumora/desktop release:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

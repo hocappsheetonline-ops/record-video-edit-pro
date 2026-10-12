@@ -326,6 +326,18 @@ export const vi = {
     encryptionUnavailable: 'Máy này không hỗ trợ mã hóa nên không thể lưu API key an toàn.',
     about: 'Thông tin',
     version: 'Phiên bản {{version}}',
+    openLogs: 'Mở thư mục nhật ký lỗi',
+    logsHint: 'Gửi file main.log khi báo lỗi. API key và stream key đã được che trong nhật ký.',
+    update: {
+      check: 'Kiểm tra cập nhật',
+      install: 'Khởi động lại để cập nhật',
+      checking: 'Đang kiểm tra…',
+      none: 'Bạn đang dùng bản mới nhất.',
+      downloading: 'Đang tải bản {{version}}… {{percent}}%',
+      ready: 'Bản {{version}} đã tải xong.',
+      error: 'Không kiểm tra được cập nhật: {{message}}',
+      unsupported: 'Tự cập nhật chỉ có ở bản cài đặt.',
+    },
   },
   keys: {
     elevenlabs: { name: 'ElevenLabs', purpose: 'Chuyển giọng nói thành phụ đề' },

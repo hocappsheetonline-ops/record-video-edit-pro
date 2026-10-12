@@ -9,6 +9,11 @@ function subscribe<T>(channel: string, listener: (payload: T) => void): Unsubscr
 
 const api: LumoraApi = {
   getAppInfo: () => ipcRenderer.invoke(IPC.appInfo),
+  getUpdateState: () => ipcRenderer.invoke(IPC.updateState),
+  checkForUpdates: () => ipcRenderer.invoke(IPC.updateCheck),
+  installUpdate: () => ipcRenderer.invoke(IPC.updateInstall),
+  onUpdateState: (listener) => subscribe(EVENTS.updateState, listener),
+  openLogs: () => ipcRenderer.invoke(IPC.openLogs),
   getSettings: () => ipcRenderer.invoke(IPC.settingsGet),
   updateSettings: (patch) => ipcRenderer.invoke(IPC.settingsUpdate, patch),
   getSecretsStatus: () => ipcRenderer.invoke(IPC.secretsStatus),

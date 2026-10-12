@@ -66,10 +66,15 @@ export const IPC = {
   liveCommentsStart: 'live:comments-start',
   liveCommentsStop: 'live:comments-stop',
   liveCaption: 'live:caption',
+  updateState: 'update:state',
+  updateCheck: 'update:check',
+  updateInstall: 'update:install',
+  openLogs: 'app:open-logs',
 } as const
 
 /** Sự kiện main process gửi xuống giao diện. */
 export const EVENTS = {
+  updateState: 'update:state-changed',
   liveStatus: 'live:status',
   liveEnded: 'live:ended',
   liveComments: 'live:comments',
@@ -86,6 +91,16 @@ export interface AppInfo {
   /** false khi hệ điều hành không hỗ trợ mã hóa (khi đó không cho lưu API key). */
   encryptionAvailable: boolean
 }
+
+/** Trạng thái tự cập nhật (GitHub Releases). */
+export type UpdateState =
+  | { state: 'unsupported' }
+  | { state: 'idle' }
+  | { state: 'checking' }
+  | { state: 'none' }
+  | { state: 'downloading'; version: string; percent: number }
+  | { state: 'ready'; version: string }
+  | { state: 'error'; message: string }
 
 export type SecretsStatus = Record<SecretKey, KeyStatus>
 
@@ -209,6 +224,12 @@ export type Unsubscribe = () => void
 /** API mà preload cung cấp cho giao diện qua `window.lumora`. */
 export interface LumoraApi {
   getAppInfo(): Promise<AppInfo>
+  getUpdateState(): Promise<UpdateState>
+  checkForUpdates(): Promise<UpdateState>
+  installUpdate(): Promise<void>
+  onUpdateState(listener: (state: UpdateState) => void): Unsubscribe
+  /** Mở thư mục nhật ký lỗi (gửi kèm khi báo lỗi). */
+  openLogs(): Promise<void>
   getSettings(): Promise<AppSettings>
   updateSettings(patch: Partial<AppSettings>): Promise<AppSettings>
   getSecretsStatus(): Promise<SecretsStatus>

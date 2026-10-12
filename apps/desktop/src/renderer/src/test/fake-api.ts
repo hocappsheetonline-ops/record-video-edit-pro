@@ -16,6 +16,7 @@ import type {
   ProjectSummary,
   RecordingCommand,
   SecretsStatus,
+  UpdateState,
 } from '@shared/ipc'
 
 export const sampleProject: Project = {
@@ -110,6 +111,7 @@ export function createFakeApi(
   let projects = [sampleSummary]
   const commandListeners = new Set<(c: RecordingCommand) => void>()
   const commentListeners = new Set<(c: LiveComment[]) => void>()
+  const updateListeners = new Set<(s: UpdateState) => void>()
   const statusListeners = new Set<(s: LiveStatus) => void>()
   const endedListeners = new Set<(e: LiveEnded) => void>()
   let liveConfig: LiveConfig = {
@@ -145,6 +147,14 @@ export function createFakeApi(
       platform: 'win32',
       encryptionAvailable: options.encryptionAvailable ?? true,
     }),
+    getUpdateState: vi.fn<LumoraApi['getUpdateState']>(async () => ({ state: 'idle' })),
+    checkForUpdates: vi.fn<LumoraApi['checkForUpdates']>(async () => ({ state: 'none' })),
+    installUpdate: vi.fn<LumoraApi['installUpdate']>(async () => {}),
+    onUpdateState: (l: (s: UpdateState) => void) => {
+      updateListeners.add(l)
+      return () => updateListeners.delete(l)
+    },
+    openLogs: vi.fn<LumoraApi['openLogs']>(async () => {}),
     getSettings: async () => settings,
     updateSettings: async (patch: Partial<AppSettings>) => (settings = { ...settings, ...patch }),
     getSecretsStatus: async () => status(),
@@ -276,6 +286,7 @@ export function createFakeApi(
     emitCommand: (c: RecordingCommand) => commandListeners.forEach((l) => l(c)),
     emitFinished: (folder: string) => finishedListeners.forEach((l) => l(folder)),
     emitComments: (comments: LiveComment[]) => commentListeners.forEach((l) => l(comments)),
+    emitUpdate: (state: UpdateState) => updateListeners.forEach((l) => l(state)),
     emitLiveStatus: (status: LiveStatus) => statusListeners.forEach((l) => l(status)),
     emitLiveEnded: (ended: LiveEnded) => endedListeners.forEach((l) => l(ended)),
   }

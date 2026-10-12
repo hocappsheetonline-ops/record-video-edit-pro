@@ -7,6 +7,7 @@ directories:
   buildResources: build
 files:
   - out/**/*
+  - resources/**
   - package.json
   - '!**/*.{map,md,ts,tsx}'
 # File thực thi và thư viện native không chạy được từ bên trong gói asar.
@@ -15,6 +16,7 @@ asarUnpack:
   - node_modules/ffmpeg-static/**
   - node_modules/uiohook-napi/**
 win:
+  icon: build/icon.ico
   target:
     - target: nsis
       arch: [x64]
@@ -26,3 +28,9 @@ nsis:
   createDesktopShortcut: always
   shortcutName: Lumora
 npmRebuild: false
+# Tự cập nhật: app đọc bản mới từ GitHub Releases của repo (công khai, không cần token).
+publish:
+  provider: github
+  owner: hocappsheetonline-ops
+  repo: record-video-edit-pro
+  releaseType: release

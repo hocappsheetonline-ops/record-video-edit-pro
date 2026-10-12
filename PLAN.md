@@ -106,10 +106,12 @@ Mỗi nguồn được ghi thành **file riêng**. Nhờ vậy lúc chỉnh sử
 - **4e. AI:** phụ đề trực tiếp (gửi từng đoạn 5 giây tới ElevenLabs Scribe). Bản ghi sau buổi live thành dự án, nên dùng được toàn bộ công cụ AI của Giai đoạn 3 (phụ đề, cắt, tiêu đề, chương).
 - Test: FFmpeg làm máy chủ RTMP thật (kiểm tra H.264/AAC, kích thước, banner trong khung hình), khách mời bằng Chromium với thiết bị giả, máy chủ giả lập YouTube và ElevenLabs.
 
-### Giai đoạn 5: Hoàn thiện và phát hành
+### Giai đoạn 5: Hoàn thiện và phát hành ✅ Đã xong
 
-- Ký số Windows (tùy chọn): không ký thì app vẫn chạy, chỉ hiện cảnh báo SmartScreen "Windows protected your PC" khi cài lần đầu. Bấm "More info" → "Run anyway" là cài được. Dùng cá nhân thì không cần ký.
-- Tự động cập nhật, báo lỗi (Sentry, tùy chọn), tối ưu hiệu năng trên máy cấu hình yếu.
+- Icon app (`apps/desktop/scripts/make-icon.py` tạo `build/icon.ico` và `resources/icon.png`).
+- Tự cập nhật bằng `electron-updater` từ GitHub Releases; workflow **Release** chạy khi push tag `v*`: chạy toàn bộ test, build và đăng bộ cài.
+- Nhật ký lỗi `logs/main.log`: lỗi IPC, lỗi chưa bắt, giao diện hoặc tiến trình con bị dừng; che API key và stream key; tự xoay file khi quá 5 MB.
+- Ký số Windows (tùy chọn): không ký thì app vẫn chạy, chỉ hiện cảnh báo SmartScreen khi cài lần đầu. Bấm "More info" → "Run anyway" là cài được.
 
 ## 4. Cài đặt trên máy Windows
 
@@ -142,4 +144,8 @@ Cấu hình máy khuyến nghị để quay 1080p/60fps: CPU 4 nhân trở lên,
 
 ## 6. Bước tiếp theo
 
-Bắt đầu **Giai đoạn 5**: hoàn thiện và phát hành.
+Cả 5 giai đoạn đã xong. Các hướng mở rộng có thể làm sau:
+
+- Ký số Windows để không còn cảnh báo SmartScreen.
+- Bản macOS (cần máy Mac để test quay màn hình và quyền truy cập).
+- Máy chủ TURN để khách ở mạng khó (NAT đối xứng) vẫn vào được studio.

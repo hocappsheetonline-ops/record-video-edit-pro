@@ -330,6 +330,19 @@ export const en: Messages = {
       'This computer does not support encryption, so API keys cannot be stored safely.',
     about: 'About',
     version: 'Version {{version}}',
+    openLogs: 'Open log folder',
+    logsHint:
+      'Attach main.log when reporting a bug. API keys and stream keys are masked in the log.',
+    update: {
+      check: 'Check for updates',
+      install: 'Restart to update',
+      checking: 'Checking…',
+      none: 'You are on the latest version.',
+      downloading: 'Downloading {{version}}… {{percent}}%',
+      ready: 'Version {{version}} is ready.',
+      error: 'Could not check for updates: {{message}}',
+      unsupported: 'Auto-update is only available in the installed app.',
+    },
   },
   keys: {
     elevenlabs: { name: 'ElevenLabs', purpose: 'Speech-to-text captions' },

@@ -7,14 +7,14 @@ Kế hoạch đầy đủ nằm trong [PLAN.md](PLAN.md).
 
 ## Tình trạng
 
-| Giai đoạn | Nội dung                                                              | Trạng thái   |
-| --------- | --------------------------------------------------------------------- | ------------ |
-| 0         | Khung app, Cài đặt (API key, ngôn ngữ, giao diện), CI tự build `.exe` | ✅ Xong      |
-| 1         | Quay màn hình, webcam, micro                                          | ✅ Xong      |
-| 2         | Trình chỉnh sửa, auto-zoom                                            | ✅ Xong      |
-| 3         | AI: phụ đề, tự biên tập                                               | ✅ Xong      |
-| 4         | Livestream (đa nền tảng, khách mời, bình luận, phụ đề trực tiếp)      | ✅ Xong      |
-| 5         | Hoàn thiện: icon, tự cập nhật, nhật ký lỗi                            | ⏳ Tiếp theo |
+| Giai đoạn | Nội dung                                                              | Trạng thái |
+| --------- | --------------------------------------------------------------------- | ---------- |
+| 0         | Khung app, Cài đặt (API key, ngôn ngữ, giao diện), CI tự build `.exe` | ✅ Xong    |
+| 1         | Quay màn hình, webcam, micro                                          | ✅ Xong    |
+| 2         | Trình chỉnh sửa, auto-zoom                                            | ✅ Xong    |
+| 3         | AI: phụ đề, tự biên tập                                               | ✅ Xong    |
+| 4         | Livestream (đa nền tảng, khách mời, bình luận, phụ đề trực tiếp)      | ✅ Xong    |
+| 5         | Hoàn thiện: icon, tự cập nhật, nhật ký lỗi                            | ✅ Xong    |
 
 ## Tải bản cài về chạy thử (không cần cài gì thêm)
 
@@ -82,6 +82,17 @@ Mở tab **Livestream**. Studio vẽ cảnh 30 khung hình/giây (720p hoặc 10
 
 Nếu FFmpeg dừng giữa chừng (mất mạng, sai key) hoặc mọi kênh đều lỗi mà không ghi trong máy, buổi phát tự kết thúc và app báo lỗi.
 
+## Cập nhật và nhật ký lỗi
+
+- **Tự cập nhật**: bản đã cài tự kiểm tra GitHub Releases khoảng 10 giây sau khi mở, rồi tải bản mới ở nền. Tải xong, vào **Cài đặt → Thông tin** và bấm **Khởi động lại để cập nhật**. Nếu không bấm, bản mới tự cài khi bạn thoát app. Bạn cũng kiểm tra được bằng tay ở cùng chỗ đó.
+- **Nhật ký lỗi**: `%APPDATA%\Lumora\logs\main.log` (tối đa 5 MB, giữ thêm một bản cũ `main.old.log`). Bấm **Mở thư mục nhật ký lỗi** trong **Cài đặt → Thông tin**. API key, token và stream key được che trước khi ghi.
+
+## Phát hành bản mới
+
+1. Tăng `version` trong `apps/desktop/package.json` (ví dụ `0.2.0`) rồi commit.
+2. Tạo tag cùng số và push: `git tag v0.2.0 && git push origin v0.2.0`.
+3. Workflow **Release** chạy toàn bộ test, build bộ cài và đăng lên **GitHub Releases**. Các máy đã cài sẽ tự nhận bản mới.
+
 ## Chạy từ mã nguồn
 
 Cần cài: [Node.js 22 LTS](https://nodejs.org), [Git](https://git-scm.com) và pnpm (`npm install -g pnpm`).
@@ -90,6 +101,7 @@ Cần cài: [Node.js 22 LTS](https://nodejs.org), [Git](https://git-scm.com) và
 pnpm install       # cài thư viện
 pnpm dev           # mở app ở chế độ phát triển (tự tải lại khi sửa code)
 pnpm package:win   # tạo bộ cài .exe trong apps/desktop/release/
+python3 apps/desktop/scripts/make-icon.py   # vẽ lại icon (cần Pillow) nếu muốn đổi
 ```
 
 ## Kiểm thử tự động
@@ -124,6 +136,8 @@ apps/desktop/          Ứng dụng Electron
   src/main/projects/   Đọc danh sách dự án, giao thức lumora-media:// (hỗ trợ tua video)
   src/main/export/     Ghi file xuất, trộn âm thanh, tạo GIF
   src/main/ai/         ElevenLabs (phụ đề) và Claude (cắt, tiêu đề, chương, dịch)
+  src/main/logger.ts   Nhật ký lỗi (che thông tin bí mật)
+  src/main/updater.ts  Tự cập nhật từ GitHub Releases
   src/main/live/       Phát RTMP, máy chủ báo hiệu + trang khách mời, bình luận, phụ đề trực tiếp
   src/renderer/src/editor/  Trình chỉnh sửa: timeline, xem trước, xuất video
   src/renderer/src/live/    Studio livestream: ghép cảnh, trộn âm thanh, WebRTC với khách
