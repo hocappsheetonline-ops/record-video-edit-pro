@@ -47,6 +47,8 @@ export const IPC = {
   projectsGetEvents: 'projects:get-events',
   projectsWaveform: 'projects:waveform',
   projectsFilmstrip: 'projects:filmstrip',
+  projectsSharePack: 'projects:share-pack',
+  projectsImportPack: 'projects:import-pack',
   exportStart: 'export:start',
   exportWrite: 'export:write',
   exportFinish: 'export:finish',
@@ -223,6 +225,15 @@ export interface LiveEnded {
   folder: string | null
 }
 
+/** `full`: video + bản chỉnh sửa (gửi lần đầu). `edits`: chỉ bản chỉnh sửa (gửi qua lại). */
+export type PackMode = 'full' | 'edits'
+
+export interface PackImportResult {
+  folder: string
+  status: 'created' | 'updated'
+  mode: PackMode
+}
+
 export type Unsubscribe = () => void
 
 /** API mà preload cung cấp cho giao diện qua `window.lumora`. */
@@ -273,6 +284,10 @@ export interface LumoraApi {
   getWaveform(folder: string): Promise<Waveform | null>
   /** Ảnh thu nhỏ của video màn hình cho dải phim trên timeline (null nếu không có). */
   getFilmstrip(folder: string): Promise<Filmstrip | null>
+  /** Đóng gói dự án thành file .lumorapack (hỏi nơi lưu). null nếu người dùng hủy. */
+  sharePack(folder: string, mode: PackMode): Promise<{ path: string; bytes: number } | null>
+  /** Chọn và nhập file .lumorapack. null nếu người dùng hủy. */
+  importPack(): Promise<PackImportResult | null>
   startExport(folder: string): Promise<string>
   writeExport(id: string, position: number, data: ArrayBuffer): Promise<void>
   finishExport(id: string, folder: string, edit: EditState): Promise<ExportResult>

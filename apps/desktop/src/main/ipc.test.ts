@@ -95,6 +95,8 @@ beforeEach(async () => {
         dir: async () => dir,
         waveform: vi.fn(async () => ({ bucketMs: 20, peaks: [1, 2] })),
         filmstrip: vi.fn(async () => null),
+        pickPackSavePath: vi.fn(async () => null),
+        pickPackToImport: vi.fn(async () => null),
         trash: async (path: string) => {
           trashed.push(path)
         },
@@ -129,6 +131,16 @@ describe('registerIpc', () => {
     await expect(call(IPC.projectsWaveform, '../x')).rejects.toThrow('Thư mục dự án không hợp lệ')
     expect(await call(IPC.projectsWaveform, 'Missing.lumora')).toBeNull()
     await expect(call(IPC.projectsFilmstrip, '..\\x')).rejects.toThrow('Thư mục dự án không hợp lệ')
+  })
+
+  it('chia sẻ: kiểm tra kiểu gói, hủy hộp thoại thì trả null', async () => {
+    await expect(call(IPC.projectsSharePack, 'A.lumora', 'everything')).rejects.toThrow(
+      'Kiểu gói không hợp lệ',
+    )
+    await expect(call(IPC.projectsSharePack, 'Missing.lumora', 'full')).rejects.toThrow(
+      'Không tìm thấy dự án',
+    )
+    expect(await call(IPC.projectsImportPack)).toBeNull()
   })
 
   it('cập nhật settings', async () => {

@@ -213,6 +213,15 @@ export function createFakeApi(
     getEvents: vi.fn<LumoraApi['getEvents']>(async () => []),
     getWaveform: vi.fn<LumoraApi['getWaveform']>(async () => null),
     getFilmstrip: vi.fn<LumoraApi['getFilmstrip']>(async () => null),
+    sharePack: vi.fn<LumoraApi['sharePack']>(async (_folder, mode) => ({
+      path: `/x/Demo${mode === 'edits' ? ' (bản chỉnh sửa)' : ''}.lumorapack`,
+      bytes: mode === 'edits' ? 4096 : 52_428_800,
+    })),
+    importPack: vi.fn<LumoraApi['importPack']>(async () => ({
+      folder: sampleSummary.folder,
+      status: 'created',
+      mode: 'full',
+    })),
     startExport: vi.fn<LumoraApi['startExport']>(async () => 'e1'),
     writeExport: vi.fn<LumoraApi['writeExport']>(async () => {}),
     finishExport: vi.fn<LumoraApi['finishExport']>(async () => ({

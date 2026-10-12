@@ -68,3 +68,45 @@ describe('ProjectsPage', () => {
     expect(api.deleteProject).not.toHaveBeenCalled()
   })
 })
+
+describe('Chia sẻ dự án', () => {
+  it('đóng gói đầy đủ hoặc chỉ bản chỉnh sửa, báo tên file và dung lượng', async () => {
+    const api = setup()
+    await userEvent.click(await screen.findByTestId('project-card'))
+    await userEvent.click(await screen.findByTestId('share-open'))
+    await userEvent.click(screen.getByTestId('share-full'))
+    expect(api.sharePack).toHaveBeenCalledWith(sampleSummary.folder, 'full')
+    expect(await screen.findByTestId('share-result')).toHaveTextContent(
+      'Đã lưu Demo.lumorapack (50 MB)',
+    )
+    await userEvent.click(screen.getByTestId('share-edits'))
+    expect(api.sharePack).toHaveBeenLastCalledWith(sampleSummary.folder, 'edits')
+    expect(await screen.findByTestId('share-result')).toHaveTextContent('(0.0 MB)')
+  })
+
+  it('nhập gói: dự án mới thì mở luôn; gói hỏng thì báo lỗi dễ hiểu', async () => {
+    const api = setup()
+    await screen.findByTestId('project-card')
+    await userEvent.click(screen.getByTestId('import-pack'))
+    await waitFor(() => expect(useAppStore.getState().openProject).toBe(sampleSummary.folder))
+
+    useAppStore.setState({ openProject: null })
+    vi.mocked(api.importPack).mockRejectedValueOnce(
+      new Error("Error invoking remote method 'projects:import-pack': Error: pack_needs_full"),
+    )
+    await userEvent.click(await screen.findByTestId('import-pack'))
+    expect(await screen.findByTestId('import-result')).toHaveTextContent(
+      'Cần nhập gói đầy đủ của dự án này trước',
+    )
+
+    vi.mocked(api.importPack).mockResolvedValueOnce({
+      folder: sampleSummary.folder,
+      status: 'updated',
+      mode: 'edits',
+    })
+    await userEvent.click(screen.getByTestId('import-pack'))
+    expect(await screen.findByTestId('import-result')).toHaveTextContent(
+      'Đã cập nhật bản chỉnh sửa từ người khác',
+    )
+  })
+})

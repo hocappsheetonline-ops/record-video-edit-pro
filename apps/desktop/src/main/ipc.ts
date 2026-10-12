@@ -36,6 +36,7 @@ import {
   safeJoin,
   writeEdit,
 } from './projects/library'
+import { exportPack, importPack, packFileName } from './projects/share'
 import type { SecretStore } from './secret-store'
 import type { UpdateService } from './updater'
 import type { SettingsStore } from './settings-store'
@@ -60,6 +61,10 @@ export interface ProjectsIpc {
   dir(): Promise<string>
   waveform(project: Project, dir: string): Promise<Waveform | null>
   filmstrip(project: Project, dir: string): Promise<Filmstrip | null>
+  /** Hộp thoại chọn nơi lưu gói chia sẻ (null nếu hủy). */
+  pickPackSavePath(defaultName: string): Promise<string | null>
+  /** Hộp thoại chọn gói chia sẻ để nhập (null nếu hủy). */
+  pickPackToImport(): Promise<string | null>
   trash(path: string): Promise<void>
   reveal(path: string): void
 }
@@ -201,6 +206,23 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
     if (!path) throw new Error('Thư mục dự án không hợp lệ')
     await projects.trash(path)
     return listProjects(dir)
+  })
+  ipcMain.handle(IPC.projectsSharePack, async (_event, folder: unknown, mode: unknown) => {
+    if (mode !== 'full' && mode !== 'edits') throw new Error('Kiểu gói không hợp lệ')
+    const root = await projects.dir()
+    const name = assertFolder(folder)
+    const project = await readProject(root, name)
+    const dir = safeJoin(root, name)
+    if (!project || !dir) throw new Error('Không tìm thấy dự án')
+    const out = await projects.pickPackSavePath(packFileName(project, mode))
+    if (!out) return null
+    const result = await exportPack(dir, project, mode, out)
+    projects.reveal(result.path)
+    return result
+  })
+  ipcMain.handle(IPC.projectsImportPack, async () => {
+    const pack = await projects.pickPackToImport()
+    return pack ? importPack(pack, await projects.dir()) : null
   })
   ipcMain.handle(IPC.projectsReveal, async (_event, folder: unknown) => {
     const path = safeJoin(await projects.dir(), assertFolder(folder), PROJECT_FILE)

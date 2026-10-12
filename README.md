@@ -48,6 +48,10 @@ Mở một dự án và bấm **Chỉnh sửa**:
 - **Video dọc 9:16 (TikTok, Shorts, Reels)**: bấm **Dọc 9:16 tự động** ở tab **Khung**. Video màn hình phủ kín khung dọc, phần thừa được cắt và khung nhìn tự đi theo con trỏ (giống Screen Studio), các đoạn zoom vẫn giữ nguyên. Webcam nằm trong khung (bong bóng) hoặc thành một dải riêng ở trên/dưới (tab **Webcam** → **Bố cục** → **Dải riêng**). Tùy chọn **Lấp đầy khung** dùng được cho mọi tỉ lệ.
 - **Webcam**: bong bóng tròn, bo góc hoặc vuông, chỉnh kích thước và góc đặt; hoặc dải webcam chiếm trọn chiều ngang.
 - Mọi thay đổi hiện ngay trên khung xem trước, không cần bấm phát.
+- **Chuyển động** (tab riêng): tốc độ con trỏ, tốc độ khung nhìn đi theo con trỏ, tốc độ zoom vào/ra — kéo về "Chậm" cho chuyển động mượt kiểu điện ảnh.
+- **Làm đẹp mặt** (tab Webcam): bấm **Làm đẹp tự động** hoặc chỉnh mịn da, làm sáng, tông ấm. Áp dụng cả khi xuất và khi livestream (thanh trượt **Làm đẹp mặt** trong studio).
+- **Timeline kiểu CapCut**: mỗi clip có dải ảnh thu nhỏ của video ở trên và dạng sóng âm thanh ở dưới.
+- **Phím tắt**: Space phát/dừng · S tách · **A xóa phần bên trái đầu phát** · **D xóa phần bên phải đầu phát** · Delete xóa clip · Ctrl+Z / Ctrl+Y.
 - **Dạng sóng âm thanh** hiện ngay trong từng clip video trên timeline (micro + âm thanh máy), nên dễ thấy chỗ đang nói và chỗ im lặng để cắt.
 - **Timeline**: tách (phím S), xóa (Delete), đổi tốc độ từng đoạn, hoàn tác/làm lại (Ctrl+Z / Ctrl+Y). Bản chỉnh sửa được tự lưu vào `edit.json`.
 - **Xuất**: MP4 (H.264 + AAC) hoặc GIF; 720p, 1080p, 1440p hoặc 4K; 30 hoặc 60 fps. File được lưu trong thư mục `exports` của dự án.
@@ -84,6 +88,14 @@ Mở tab **Livestream**. Studio vẽ cảnh 30 khung hình/giây (720p hoặc 10
 - **Ghi lại trong máy** (bật sẵn): kết thúc buổi live, bản ghi `live.mkv` thành một dự án. Bạn mở dự án đó để chỉnh sửa, làm phụ đề và tạo chương bằng AI như video quay thường.
 
 Nếu FFmpeg dừng giữa chừng (mất mạng, sai key) hoặc mọi kênh đều lỗi mà không ghi trong máy, buổi phát tự kết thúc và app báo lỗi.
+
+## Chia sẻ dự án để người khác cùng chỉnh sửa
+
+1. Mở dự án ở trang **Dự án** → **Chia sẻ** → **Gói đầy đủ**: tạo một file `.lumorapack` (video + bản chỉnh sửa). Gửi file qua Google Drive, Zalo, USB…
+2. Người nhận bấm **Nhập dự án được chia sẻ** ở trang **Dự án**, rồi mở ra chỉnh sửa trên máy họ.
+3. Gửi qua lại sau đó chỉ cần **Chỉ bản chỉnh sửa** (vài KB, không kèm video). Nhập gói này thì dự án được cập nhật theo bản chỉnh sửa mới; bản cũ được sao lưu (`edit.backup-….json`) trong thư mục dự án.
+
+Màu chủ đạo của app đổi được trong **Cài đặt** (mặc định xanh dương).
 
 ## Cập nhật và nhật ký lỗi
 

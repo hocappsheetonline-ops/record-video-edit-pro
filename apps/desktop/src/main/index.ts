@@ -1,5 +1,14 @@
 import { dirname, join } from 'node:path'
-import { app, BrowserWindow, ipcMain, protocol, safeStorage, session, shell } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  protocol,
+  safeStorage,
+  session,
+  shell,
+} from 'electron'
 import { EVENTS } from '@shared/ipc'
 import { AiService } from './ai/service'
 import { ExportManager } from './export/manager'
@@ -13,6 +22,7 @@ import { SignalingServer } from './live/signaling'
 import { Vault } from './vault'
 import { handleMediaRequest, MEDIA_SCHEME } from './projects/media-protocol'
 import { loadFilmstrip } from './projects/filmstrip'
+import { PACK_EXTENSION } from './projects/share'
 import { loadWaveform } from './projects/waveform'
 import { RecordingController } from './recording/controller'
 import { SecretStore } from './secret-store'
@@ -147,6 +157,26 @@ if (!app.requestSingleInstanceLock()) {
         dir: projectsDir,
         waveform: (project, dir) => loadWaveform(project, dir, runFfmpeg),
         filmstrip: (project, dir) => loadFilmstrip(project, dir, runFfmpeg),
+        pickPackSavePath: async (defaultName) => {
+          const options = {
+            defaultPath: join(app.getPath('documents'), defaultName),
+            filters: [{ name: 'Lumora', extensions: [PACK_EXTENSION] }],
+          }
+          const r = mainWindow
+            ? await dialog.showSaveDialog(mainWindow, options)
+            : await dialog.showSaveDialog(options)
+          return r.canceled || !r.filePath ? null : r.filePath
+        },
+        pickPackToImport: async () => {
+          const options = {
+            properties: ['openFile' as const],
+            filters: [{ name: 'Lumora', extensions: [PACK_EXTENSION] }],
+          }
+          const r = mainWindow
+            ? await dialog.showOpenDialog(mainWindow, options)
+            : await dialog.showOpenDialog(options)
+          return r.canceled ? null : (r.filePaths[0] ?? null)
+        },
         trash: (path) => shell.trashItem(path),
         reveal: (path) => shell.showItemInFolder(path),
       },

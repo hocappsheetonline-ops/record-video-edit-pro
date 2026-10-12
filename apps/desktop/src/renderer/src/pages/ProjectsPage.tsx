@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ArrowLeft, Clock, FolderOpen, Trash2, Wand2 } from 'lucide-react'
+import { ArrowLeft, Clock, Download, FolderOpen, Share2, Trash2, Wand2 } from 'lucide-react'
 import { formatDuration, TRACK_KINDS, type Project } from '@lumora/core'
-import type { ProjectSummary } from '@shared/ipc'
+import type { PackMode, ProjectSummary } from '@shared/ipc'
 import { lumora } from '../api'
 import { PageHeader } from '../components/PageHeader'
 import { SegmentPlayer } from '../components/SegmentPlayer'
 import { mediaUrl } from '../lib/media'
+import { ipcErrorMessage } from '../lib/prefs'
 import { useAppStore } from '../store/app'
 
 function formatDate(iso: string, language: string) {
@@ -19,12 +20,74 @@ function formatDate(iso: string, language: string) {
 const actionButton =
   'flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm hover:bg-surface-2'
 
+const megabytes = (bytes: number) => (bytes / 1024 / 1024).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)
+
+/** Đóng gói dự án để gửi cho người khác chỉnh sửa (gói đầy đủ lần đầu, sau đó chỉ bản chỉnh sửa). */
+function SharePanel({ folder }: { folder: string }) {
+  const { t } = useTranslation()
+  const [busy, setBusy] = useState<PackMode | null>(null)
+  const [result, setResult] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const share = async (mode: PackMode) => {
+    setBusy(mode)
+    setError(null)
+    setResult(null)
+    try {
+      const r = await lumora().sharePack(folder, mode)
+      if (r) {
+        const name = r.path.split(/[\\/]/).pop()
+        setResult(t('projects.share.saved', { name, size: megabytes(r.bytes) }))
+      }
+    } catch (e) {
+      setError(t('projects.share.error', { message: ipcErrorMessage(e) }))
+    } finally {
+      setBusy(null)
+    }
+  }
+  return (
+    <div
+      className="mb-4 rounded-xl border border-border bg-surface p-4 text-sm"
+      data-testid="share-panel"
+    >
+      <p className="mb-3 text-muted">{t('projects.share.intro')}</p>
+      <div className="flex flex-wrap gap-2">
+        {(['full', 'edits'] as const).map((mode) => (
+          <button
+            key={mode}
+            type="button"
+            data-testid={`share-${mode}`}
+            disabled={busy !== null}
+            onClick={() => void share(mode)}
+            className={`flex flex-col items-start rounded-lg border px-3 py-2 text-left disabled:opacity-50 ${mode === 'full' ? 'border-accent bg-accent/10' : 'border-border'}`}
+          >
+            <span className="font-medium">
+              {busy === mode ? t('projects.share.working') : t(`projects.share.${mode}`)}
+            </span>
+            <span className="text-xs text-muted">{t(`projects.share.${mode}Hint`)}</span>
+          </button>
+        ))}
+      </div>
+      {result && (
+        <p className="mt-3 text-success" data-testid="share-result">
+          {result}
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="mt-3 text-danger">
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function ProjectDetail({ folder, onDeleted }: { folder: string; onDeleted: () => void }) {
   const { t, i18n } = useTranslation()
   const showProject = useAppStore((s) => s.showProject)
   const openEditor = useAppStore((s) => s.openEditor)
   const [project, setProject] = useState<Project | null | undefined>(undefined)
   const [segmentIndex, setSegmentIndex] = useState(0)
+  const [sharing, setSharing] = useState(false)
 
   useEffect(() => {
     void lumora().getProject(folder).then(setProject)
@@ -94,6 +157,16 @@ function ProjectDetail({ folder, onDeleted }: { folder: string; onDeleted: () =>
           </button>
           <button
             type="button"
+            data-testid="share-open"
+            aria-expanded={sharing}
+            className={actionButton}
+            onClick={() => setSharing((v) => !v)}
+          >
+            <Share2 size={16} aria-hidden />
+            {t('projects.share.button')}
+          </button>
+          <button
+            type="button"
             className={`${actionButton} text-danger`}
             onClick={() => void remove()}
           >
@@ -102,6 +175,8 @@ function ProjectDetail({ folder, onDeleted }: { folder: string; onDeleted: () =>
           </button>
         </div>
       </div>
+
+      {sharing && <SharePanel folder={folder} />}
 
       {project.segments.length > 1 && (
         <div className="mb-3 flex gap-1" role="tablist">
@@ -146,6 +221,26 @@ export function ProjectsPage() {
   const [projects, setProjects] = useState<ProjectSummary[] | null>(null)
 
   const reload = useCallback(() => void lumora().listProjects().then(setProjects), [])
+  const [importMessage, setImportMessage] = useState<{ text: string; error: boolean } | null>(null)
+  const importShared = async () => {
+    setImportMessage(null)
+    try {
+      const r = await lumora().importPack()
+      if (!r) return
+      reload()
+      setImportMessage({ text: t(`projects.import.${r.status}`), error: false })
+      if (r.status === 'created') showProject(r.folder)
+    } catch (e) {
+      const code = ipcErrorMessage(e)
+      setImportMessage({
+        text:
+          code === 'pack_invalid' || code === 'pack_needs_full'
+            ? t(`projects.import.${code}`)
+            : t('projects.share.error', { message: code }),
+        error: true,
+      })
+    }
+  }
   useEffect(() => {
     if (!openProject) reload()
   }, [openProject, reload])
@@ -156,7 +251,27 @@ export function ProjectsPage() {
 
   return (
     <div className="p-8">
-      <PageHeader title={t('projects.title')} description={t('projects.description')} />
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <PageHeader title={t('projects.title')} description={t('projects.description')} />
+        <button
+          type="button"
+          data-testid="import-pack"
+          className={actionButton}
+          onClick={() => void importShared()}
+        >
+          <Download size={16} aria-hidden />
+          {t('projects.import.button')}
+        </button>
+      </div>
+      {importMessage && (
+        <p
+          role={importMessage.error ? 'alert' : 'status'}
+          data-testid="import-result"
+          className={`mb-4 rounded-lg border p-3 text-sm ${importMessage.error ? 'border-danger/40 text-danger' : 'border-success/40 text-success'}`}
+        >
+          {importMessage.text}
+        </p>
+      )}
       {projects && projects.length === 0 && (
         <p className="rounded-xl border border-dashed border-border bg-surface p-6 text-sm text-muted">
           {t('projects.empty')}

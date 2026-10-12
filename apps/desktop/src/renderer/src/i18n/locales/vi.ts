@@ -67,6 +67,25 @@ export const vi = {
     cancel: 'Hủy',
   },
   projects: {
+    share: {
+      button: 'Chia sẻ',
+      intro:
+        'Gửi dự án cho người khác chỉnh sửa: lần đầu gửi gói đầy đủ (có video). Sau đó hai bên chỉ cần gửi qua lại bản chỉnh sửa (rất nhẹ). Người nhận bấm "Nhập dự án được chia sẻ" ở trang Dự án.',
+      full: 'Gói đầy đủ',
+      fullHint: 'Video + bản chỉnh sửa — gửi lần đầu',
+      edits: 'Chỉ bản chỉnh sửa',
+      editsHint: 'Vài KB — gửi lại sau khi chỉnh',
+      working: 'Đang đóng gói…',
+      saved: 'Đã lưu {{name}} ({{size}} MB). Gửi file này qua Google Drive, Zalo, USB…',
+      error: 'Lỗi: {{message}}',
+    },
+    import: {
+      button: 'Nhập dự án được chia sẻ',
+      created: 'Đã nhập dự án. Bạn có thể mở và chỉnh sửa ngay.',
+      updated: 'Đã cập nhật bản chỉnh sửa từ người khác (bản cũ được sao lưu trong thư mục dự án).',
+      pack_invalid: 'File này không phải gói dự án Lumora hoặc đã bị hỏng.',
+      pack_needs_full: 'Đây là gói chỉ có bản chỉnh sửa. Cần nhập gói đầy đủ của dự án này trước.',
+    },
     title: 'Dự án',
     description: 'Các video bạn đã quay.',
     empty: 'Chưa có dự án nào. Bấm "Quay" để bắt đầu.',

@@ -70,6 +70,27 @@ export const en: Messages = {
     cancel: 'Cancel',
   },
   projects: {
+    share: {
+      button: 'Share',
+      intro:
+        'Send this project to someone to edit: the first time, send the full package (with video). After that, just send edits back and forth (tiny). The recipient clicks "Import shared project" on the Projects page.',
+      full: 'Full package',
+      fullHint: 'Video + edits — send the first time',
+      edits: 'Edits only',
+      editsHint: 'A few KB — send after editing',
+      working: 'Packing…',
+      saved: 'Saved {{name}} ({{size}} MB). Send it via Google Drive, chat, USB…',
+      error: 'Error: {{message}}',
+    },
+    import: {
+      button: 'Import shared project',
+      created: 'Project imported. You can open and edit it now.',
+      updated:
+        'Updated with edits from someone else (the previous edit is backed up in the project folder).',
+      pack_invalid: 'This file is not a Lumora project package, or it is damaged.',
+      pack_needs_full:
+        'This package only has edits. Import the full package of this project first.',
+    },
     title: 'Projects',
     description: 'Your recordings.',
     empty: 'No projects yet. Click "Record" to get started.',
