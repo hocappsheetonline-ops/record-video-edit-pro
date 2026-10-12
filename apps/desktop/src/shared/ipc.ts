@@ -1,5 +1,7 @@
 import type {
   AppSettings,
+  AssistantCommand,
+  AssistantContext,
   AudioFx,
   Destination,
   Filmstrip,
@@ -85,6 +87,8 @@ export const IPC = {
   aiGetTranscript: 'ai:get-transcript',
   aiSuggestCuts: 'ai:suggest-cuts',
   aiSummarize: 'ai:summarize',
+  aiPlan: 'ai:plan',
+  aiLocalModels: 'ai:local-models',
   aiTranslate: 'ai:translate',
   aiVoices: 'ai:voices',
   aiSpeak: 'ai:speak',
@@ -461,6 +465,10 @@ export interface LumoraApi {
   getTranscript(folder: string): Promise<Transcript | null>
   suggestCuts(folder: string): Promise<CutSuggestion[]>
   summarize(folder: string): Promise<AiSummary>
+  /** Trợ lý AI: mô tả bằng lời → danh sách lệnh chỉnh sửa. */
+  planEdits(instruction: string, context: AssistantContext): Promise<AssistantCommand[]>
+  /** Model đã tải trong Ollama tại địa chỉ đó (AI cục bộ). */
+  listLocalModels(baseUrl: string): Promise<string[]>
   /** Lưu bản lồng tiếng vừa ghi (WebM) vào dự án. */
   addVoiceover(folder: string, data: ArrayBuffer): Promise<AudioAsset>
   /** Lọc tạp âm / hiệu ứng giọng cho một file trong dự án; trả về tên file đã xử lý. */

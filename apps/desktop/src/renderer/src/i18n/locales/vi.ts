@@ -147,7 +147,7 @@ export const vi = {
       markers: 'Marker',
     },
     library: {
-      merge: 'Ghép bản quay khác vào cuối',
+      merge: 'Ghép bản quay',
       merging: 'Đang ghép…',
       mergeEmpty: 'Chưa có bản quay nào khác.',
       mergeFailed: 'Không ghép được bản quay này.',
@@ -288,6 +288,8 @@ export const vi = {
       animation: 'Chuyển động',
     },
     timeline: {
+      add: 'Thêm phương tiện (mở Thư viện)',
+      voiceover: 'Ghi lồng tiếng',
       zoom: 'Phóng to timeline',
       zoomIn: 'Phóng to timeline',
       zoomOut: 'Thu nhỏ timeline',
@@ -951,6 +953,8 @@ export const vi = {
       format: 'Định dạng',
       resolution: 'Độ phân giải',
       fps: 'Số khung hình/giây',
+      enhance: 'Nâng cao chất lượng (HD)',
+      enhanceHint: 'Giảm nhiễu và làm nét khi xuất; xuất lâu hơn một chút.',
       start: 'Xuất video',
       rendering: 'Đang dựng hình… {{percent}}%',
       muxing: 'Đang ghép âm thanh…',
@@ -1021,6 +1025,47 @@ export const vi = {
   },
   ai: {
     working: 'Đang xử lý…',
+    assistant: {
+      title: 'Trợ lý AI',
+      intro:
+        'Mô tả những gì bạn muốn chỉnh sửa, AI hiểu thành các bước rồi làm ngay (Claude; không có key thì hiểu theo từ khóa). Hoàn tác một lần để quay lại.',
+      placeholder: 'Ví dụ: cắt khoảng lặng, thêm phụ đề, bộ lọc điện ảnh, làm video dọc 9:16…',
+      run: 'Làm ngay',
+      job: 'Trợ lý AI',
+      done: 'Trợ lý AI đã làm xong. Hoàn tác (Ctrl+Z) để quay lại.',
+      none: 'AI chưa hiểu yêu cầu này. Thử nói rõ hơn, ví dụ "cắt khoảng lặng và thêm phụ đề".',
+      examples: {
+        silences: 'Cắt khoảng lặng và bỏ từ thừa',
+        captions: 'Thêm phụ đề và làm sạch âm thanh',
+        vertical: 'Làm video dọc 9:16 cho TikTok',
+        cinematic: 'Bộ lọc điện ảnh, tốc độ 1.5x',
+      },
+      kinds: {
+        cutSilences: 'Cắt khoảng lặng',
+        removeFillers: 'Bỏ từ thừa',
+        autoZoom: 'Tự zoom',
+        captions: 'Phụ đề',
+        cleanAudio: 'Làm sạch âm thanh',
+        title: 'Tiêu đề',
+        filter: 'Bộ lọc',
+        speed: 'Tốc độ',
+        aspect: 'Khung hình',
+        trimStart: 'Cắt đầu',
+        trimEnd: 'Cắt cuối',
+      },
+    },
+    shorts: {
+      title: 'Chia nhỏ video thành video ngắn',
+      intro:
+        'Mỗi đoạn thành một dự án riêng (bản sao chỉ giữ đoạn đó) để xuất thành video ngắn. Chia theo chương do AI tìm (cần phụ đề và key Claude) hoặc mỗi N giây.',
+      byChapters: 'Theo chương (AI)',
+      every: 'Mỗi {{s}} giây',
+      vertical: 'Khung dọc 9:16 (TikTok, Shorts, Reels)',
+      run: 'Chia thành video ngắn',
+      job: 'Chia nhỏ video',
+      done: 'Đã tạo {{count}} dự án video ngắn. Xem ở trang Dự án.',
+      tooShort: 'Video quá ngắn để chia (mỗi đoạn tối thiểu 5 giây).',
+    },
     auto: {
       title: 'AI tự biên tập',
       intro:
@@ -1071,7 +1116,14 @@ export const vi = {
       save: 'Lưu thành .txt',
     },
     errors: {
-      missingKey: 'Chưa có API key {{name}}. Hãy nhập trong Cài đặt.',
+      missingKey:
+        'Chưa có API key {{name}}. Hãy nhập trong Cài đặt (với Claude có thể bật AI cục bộ Ollama thay thế).',
+      ollama_offline:
+        'Không kết nối được Ollama (AI cục bộ). Hãy mở Ollama hoặc tắt AI cục bộ trong Cài đặt.',
+      ollama_model:
+        'Model AI cục bộ chưa được tải. Chạy "ollama pull <tên model>" hoặc chọn model khác trong Cài đặt.',
+      ollama_bad_json:
+        'Model AI cục bộ trả lời không đúng định dạng. Thử model lớn hơn (ví dụ qwen2.5:7b).',
       noAudio: 'Bản quay không có âm thanh micro hay âm thanh máy để nhận dạng.',
       noTranscript: 'Hãy tạo phụ đề trước (tab Phụ đề).',
       generic: 'Lỗi: {{message}}',
@@ -1201,6 +1253,21 @@ export const vi = {
     },
     onboardingHint: 'Xem lại phần giới thiệu nhanh lần sau khi mở trình chỉnh sửa.',
     onboardingReplay: 'Xem lại hướng dẫn',
+    localAi: {
+      title: 'AI cục bộ (Ollama)',
+      enable: 'Dùng AI chạy trên máy thay cho Claude',
+      hint: 'Trợ lý AI, cắt từ thừa, tóm tắt và dịch chạy bằng model mở trên máy bạn: miễn phí, không gửi dữ liệu ra ngoài. Cần cài Ollama và tải một model (ví dụ: ollama pull qwen2.5:7b).',
+      url: 'Địa chỉ Ollama',
+      model: 'Model',
+      check: 'Kiểm tra kết nối',
+      checking: 'Đang kiểm tra…',
+      connected: 'Đã kết nối, {{count}} model sẵn sàng',
+      noModels: 'Ollama chạy nhưng chưa có model nào. Chạy: ollama pull qwen2.5:7b',
+      offline: 'Không kết nối được Ollama. Hãy mở Ollama rồi thử lại.',
+      install: 'Tải Ollama',
+      models:
+        'Gợi ý: qwen2.5:7b (tiếng Việt tốt, cần ~8 GB RAM), llama3.2 (nhẹ, ~3 GB), gemma3. Phụ đề vẫn cần key ElevenLabs.',
+    },
     reduceTransparency: 'Giảm trong suốt',
     reduceTransparencyHint:
       'Thanh công cụ, menu và hộp thoại dùng màu đặc thay vì kính mờ (nhẹ hơn cho máy yếu).',

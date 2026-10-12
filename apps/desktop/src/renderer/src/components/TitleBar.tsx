@@ -1,21 +1,25 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Copy, Minus, Square, X } from 'lucide-react'
 import { lumora } from '../api'
 import { useAppStore } from '../store/app'
 
-/** Nút đèn giao thông kiểu macOS: đỏ đóng, vàng thu nhỏ, xanh phóng to; ký hiệu hiện khi rê chuột. */
-function TrafficLight({
-  color,
+/** Chỗ để trang hiện tại (trình chỉnh sửa) đặt tên dự án và nút Xuất vào thanh tiêu đề (như CapCut). */
+export const TITLE_BAR_SLOT = 'title-bar-slot'
+
+/** Nút cửa sổ kiểu Windows: thu nhỏ, phóng to / thu về, đóng (đóng đỏ khi rê chuột). */
+function WindowButton({
   label,
   testId,
   onClick,
+  danger,
   children,
 }: {
-  color: string
   label: string
   testId: string
   onClick: () => void
-  children: string
+  danger?: boolean
+  children: ReactNode
 }) {
   return (
     <button
@@ -24,17 +28,19 @@ function TrafficLight({
       data-tooltip={label}
       data-testid={testId}
       onClick={onClick}
-      className="app-no-drag group flex size-3 items-center justify-center rounded-full text-[9px] font-bold leading-none text-black/60 shadow-[inset_0_0_0_0.5px_rgba(0,0,0,0.2)]"
-      style={{ background: color }}
+      className={`app-no-drag flex h-full w-11 items-center justify-center text-muted transition-colors hover:text-text ${
+        danger ? 'hover:bg-[#e81123] hover:text-white' : 'hover:bg-text/10'
+      }`}
     >
-      <span className="opacity-0 transition-opacity group-hover:opacity-100">{children}</span>
+      {children}
     </button>
   )
 }
 
 /**
- * Thanh tiêu đề tự vẽ cho cửa sổ không viền (kiểu macOS): kéo để dời cửa sổ, bấm đúp để phóng to.
- * Trên macOS hệ thống đã vẽ nút đèn giao thông nên chỉ chừa chỗ bên trái.
+ * Thanh tiêu đề tự vẽ cho cửa sổ không viền (bố cục như CapCut): logo bên trái, tên dự án và các
+ * nút của trang ở giữa, nút cửa sổ kiểu Windows ở góc phải. Kéo để dời, bấm đúp để phóng to.
+ * Trên macOS hệ thống vẽ nút đèn giao thông nên chỉ chừa chỗ bên trái.
  */
 export function TitleBar() {
   const { t } = useTranslation()
@@ -62,42 +68,41 @@ export function TitleBar() {
   return (
     <div
       data-testid="title-bar"
-      className="app-drag glass flex h-9 shrink-0 items-center border-b px-3 text-[12px] text-muted select-none"
+      className="app-drag glass flex h-10 shrink-0 items-center border-b text-[12px] select-none"
       onDoubleClick={frameless ? toggle : undefined}
     >
-      {frameless ? (
-        <div className="flex items-center gap-2">
-          <TrafficLight
-            color="#ff5f57"
-            label={t('window.close')}
-            testId="window-close"
-            onClick={() => void lumora().closeWindow()}
-          >
-            ×
-          </TrafficLight>
-          <TrafficLight
-            color="#febc2e"
+      {!frameless && <div className="w-[72px] shrink-0" aria-hidden />}
+      <div className="flex shrink-0 items-center gap-2 px-3">
+        <span className="size-5 rounded-[5px] bg-gradient-to-br from-accent to-sky-400 shadow-[inset_0_1px_0_rgba(255,255,255,0.35)]" />
+        <span className="font-semibold tracking-tight">Lumora</span>
+      </div>
+      <div id={TITLE_BAR_SLOT} className="flex h-full min-w-0 flex-1 items-center gap-2" />
+      {frameless && (
+        <div className="flex h-full shrink-0 items-stretch" data-testid="window-controls">
+          <WindowButton
             label={t('window.minimize')}
             testId="window-minimize"
             onClick={() => void lumora().minimizeWindow()}
           >
-            –
-          </TrafficLight>
-          <TrafficLight
-            color="#28c840"
+            <Minus size={14} aria-hidden />
+          </WindowButton>
+          <WindowButton
             label={maximized ? t('window.restore') : t('window.maximize')}
             testId="window-maximize"
             onClick={toggle}
           >
-            {maximized ? '⌄' : '+'}
-          </TrafficLight>
+            {maximized ? <Copy size={12} aria-hidden /> : <Square size={12} aria-hidden />}
+          </WindowButton>
+          <WindowButton
+            label={t('window.close')}
+            testId="window-close"
+            onClick={() => void lumora().closeWindow()}
+            danger
+          >
+            <X size={15} aria-hidden />
+          </WindowButton>
         </div>
-      ) : (
-        // macOS: chừa chỗ cho nút đèn giao thông của hệ thống.
-        <div className="w-[68px]" aria-hidden />
       )}
-      <span className="flex-1 text-center font-medium tracking-tight">Lumora</span>
-      <div className="w-[68px]" aria-hidden />
     </div>
   )
 }

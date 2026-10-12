@@ -16,8 +16,8 @@ import { lumora } from '../../api'
 import { runJob, useJobs } from '../jobs'
 import { dragProps } from '../library-drag'
 import { useEditorStore } from '../store'
-import { ghostButton, primaryButton, Segmented } from '../ui'
-import { EmptyState, ErrorNote, formatDuration, useErrorText } from './common'
+import { ghostButton, primaryButton } from '../ui'
+import { EmptyState, ErrorNote, formatDuration, SubNav, useErrorText } from './common'
 import { OnlineGrid } from './OnlineGrid'
 
 /** Thư viện ảnh / GIF / video ngắn của riêng bạn (kéo thả để thêm), dùng làm lớp phủ. */
@@ -116,15 +116,25 @@ function MyLibrary() {
           <FolderPlus size={15} aria-hidden />
         </button>
       </div>
-      <Segmented
-        options={(['all', 'video', 'image'] as const).map((f) => ({
-          value: f,
-          label: t(`editor.library.filters.${f}`),
-        }))}
-        value={filter}
-        onChange={setFilter}
-        testIdPrefix="media-filter-"
-      />
+      <div className="flex flex-wrap gap-1" role="radiogroup">
+        {(['all', 'video', 'image'] as const).map((f) => (
+          <button
+            key={f}
+            type="button"
+            role="radio"
+            aria-checked={filter === f}
+            data-testid={`media-filter-${f}`}
+            onClick={() => setFilter(f)}
+            className={`rounded-md border px-2.5 py-0.5 text-[11px] ${
+              filter === f
+                ? 'border-accent bg-accent/15 text-accent'
+                : 'border-border text-muted hover:text-text'
+            }`}
+          >
+            {t(`editor.library.filters.${f}`)}
+          </button>
+        ))}
+      </div>
       <ErrorNote text={error} />
       {shown.length === 0 ? (
         <EmptyState
@@ -238,12 +248,12 @@ function ImportVideoButton() {
         disabled={busy}
         data-tooltip={t('editor.library.importVideoHint')}
         onClick={() => void run()}
-        className={`${primaryButton} w-full`}
+        className={`${primaryButton} w-full px-2 text-xs`}
       >
         {busy ? (
-          <Loader2 size={15} className="animate-spin" aria-hidden />
+          <Loader2 size={14} className="animate-spin" aria-hidden />
         ) : (
-          <Film size={15} aria-hidden />
+          <Film size={14} aria-hidden />
         )}
         {busy ? t('editor.library.importingVideo') : t('editor.library.importVideo')}
       </button>
@@ -291,7 +301,7 @@ function MergeProjectButton() {
         disabled={busy}
         aria-expanded={list !== null}
         onClick={() => void open()}
-        className={ghostButton}
+        className={`${ghostButton} w-full px-2`}
       >
         {busy ? (
           <Loader2 size={14} className="animate-spin" aria-hidden />
@@ -340,24 +350,29 @@ export function MediaTab() {
   const [source, setSource] = useState<MediaSource>('mine')
   return (
     <div className="flex min-h-full flex-col gap-3 p-3">
-      <div className="grid grid-cols-1 gap-2">
+      <div className="grid grid-cols-2 gap-2">
         <ImportVideoButton />
         <MergeProjectButton />
       </div>
-      <Segmented
-        options={(['mine', 'pixabayVideo', 'pixabayImage'] as const).map((s) => ({
-          value: s,
-          label: t(`editor.library.sources.${s}`),
-        }))}
-        value={source}
-        onChange={setSource}
-        testIdPrefix="media-source-"
-      />
-      {source === 'mine' ? (
-        <MyLibrary />
-      ) : (
-        <OnlineGrid key={source} source={source} onUse={addLibraryItem} />
-      )}
+      <div className="flex min-h-0 flex-1 gap-3">
+        <SubNav
+          items={(['mine', 'pixabayVideo', 'pixabayImage'] as const).map((s) => ({
+            value: s,
+            label: t(`editor.library.sources.${s}`),
+          }))}
+          value={source}
+          onChange={setSource}
+          testIdPrefix="media-source-"
+          label={t('editor.library.tabs.media')}
+        />
+        <div className="flex min-w-0 flex-1 flex-col">
+          {source === 'mine' ? (
+            <MyLibrary />
+          ) : (
+            <OnlineGrid key={source} source={source} onUse={addLibraryItem} />
+          )}
+        </div>
+      </div>
     </div>
   )
 }

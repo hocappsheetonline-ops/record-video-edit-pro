@@ -34,6 +34,49 @@ export function useErrorText() {
   }
 }
 
+/** Cột mục con bên trái của một mục thư viện (như CapCut: Nhập / Của tôi / Video / Ảnh…). */
+export function SubNav<T extends string>({
+  items,
+  value,
+  onChange,
+  testIdPrefix,
+  label,
+}: {
+  items: readonly { value: T; label: string }[]
+  value: T
+  onChange: (v: T) => void
+  testIdPrefix?: string
+  label?: string
+}) {
+  return (
+    <nav
+      role="tablist"
+      aria-orientation="vertical"
+      aria-label={label}
+      className="flex w-[88px] shrink-0 flex-col gap-0.5 self-start"
+    >
+      {items.map((item) => {
+        const active = item.value === value
+        return (
+          <button
+            key={item.value}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            data-testid={testIdPrefix ? `${testIdPrefix}${item.value}` : undefined}
+            onClick={() => onChange(item.value)}
+            className={`truncate rounded-md px-2.5 py-1.5 text-left text-xs transition-colors ${
+              active ? 'bg-surface-2 font-medium text-text' : 'text-muted hover:text-text'
+            }`}
+          >
+            {item.label}
+          </button>
+        )
+      })}
+    </nav>
+  )
+}
+
 export function ErrorNote({ text }: { text: string | null }) {
   if (!text) return null
   return (

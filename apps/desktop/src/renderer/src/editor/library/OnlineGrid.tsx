@@ -211,7 +211,7 @@ export function OnlineGrid({
               setQ(s)
               void search(s, null)
             }}
-            className={`rounded-full border px-2 py-0.5 text-[11px] ${
+            className={`rounded-md border px-2 py-0.5 text-[11px] ${
               q === s
                 ? 'border-accent bg-accent/15 text-accent'
                 : 'border-border text-muted hover:text-text'

@@ -11,7 +11,11 @@ import {
   timestampedTranscript,
   TRANSCRIPT_FILE,
   wordsToRanges,
+  normalizeAssistantCommands,
+  type AssistantCommand,
+  type AssistantContext,
   type CutSuggestion,
+  type LocalAiSettings,
   type Project,
   type Transcript,
   type TranscriptWord,
@@ -24,6 +28,8 @@ import { writeJsonFile } from '../json-file'
 import type { FetchLike } from '../key-validation'
 import {
   askJson,
+  ASSISTANT_SCHEMA,
+  assistantSystem,
   createClaude,
   CUTS_SCHEMA,
   CUTS_SYSTEM,
@@ -31,6 +37,7 @@ import {
   summarySystem,
   TRANSLATE_SCHEMA,
   translateSystem,
+  type AssistantResponse,
   type CutResponse,
   type SummaryResponse,
   type TranslateResponse,
@@ -43,6 +50,7 @@ import {
   type SpeechOptions,
   type Voice,
 } from './elevenlabs'
+import { askJsonOllama, listOllamaModels } from './ollama'
 
 export const AI_FILE = 'ai.json'
 
@@ -55,6 +63,8 @@ export class MissingKeyError extends Error {
 
 export interface AiDeps {
   getKey(key: 'elevenlabs' | 'anthropic'): Promise<string | undefined>
+  /** Cài đặt AI cục bộ (Ollama); không có thì luôn dùng Claude. */
+  getLocalAi?(): Promise<LocalAiSettings>
   run: FfmpegRunner
   fetchImpl?: FetchLike
   /** Thư mục lưu đệm giọng đọc AI (dùng chung mọi dự án, đọc lại câu cũ không tốn credit). */
@@ -157,6 +167,35 @@ export class AiService {
     return key
   }
 
+  /**
+   * Hỏi mô hình ngôn ngữ và nhận JSON đúng schema: AI cục bộ (Ollama) khi được bật, còn lại là
+   * Claude (cần key). Mọi tính năng văn bản (trợ lý, cắt từ thừa, tóm tắt, dịch) đi qua đây.
+   */
+  private async askJson<T>(options: {
+    system: string
+    user: string
+    schema: Record<string, unknown>
+    effort?: 'low' | 'medium' | 'high'
+  }): Promise<T> {
+    const local = await this.deps.getLocalAi?.()
+    if (local?.enabled)
+      return askJsonOllama<T>({
+        baseUrl: local.baseUrl,
+        model: local.model,
+        system: options.system,
+        user: options.user,
+        schema: options.schema,
+        fetchImpl: this.deps.fetchImpl,
+      })
+    const client = createClaude(await this.key('anthropic'), this.deps.fetchImpl)
+    return askJson<T>(client, options)
+  }
+
+  /** Model đã tải trong Ollama (để chọn trong Cài đặt). */
+  listLocalModels(baseUrl: string): Promise<string[]> {
+    return listOllamaModels(baseUrl, this.deps.fetchImpl)
+  }
+
   /** Nhận dạng giọng nói của cả bản quay; thời gian từng từ tính theo thời gian nguồn. */
   async transcribe(project: Project, dir: string, language?: string): Promise<Transcript> {
     const apiKey = await this.key('elevenlabs')
@@ -203,8 +242,7 @@ export class AiService {
   /** Gợi ý đoạn cần cắt: khoảng lặng dài (tự tính) + từ thừa, nói lặp (Claude). */
   async suggestCuts(dir: string): Promise<CutSuggestion[]> {
     const { words, language } = await this.requireTranscript(dir)
-    const client = createClaude(await this.key('anthropic'), this.deps.fetchImpl)
-    const answer = await askJson<CutResponse>(client, {
+    const answer = await this.askJson<CutResponse>({
       system: CUTS_SYSTEM,
       user: `Transcript (${words.length} words):\n${indexedTranscript(words)}`,
       schema: CUTS_SCHEMA,
@@ -258,8 +296,7 @@ export class AiService {
 
   async summarize(dir: string): Promise<AiSummary> {
     const { words, language } = await this.requireTranscript(dir)
-    const client = createClaude(await this.key('anthropic'), this.deps.fetchImpl)
-    const answer = await askJson<SummaryResponse>(client, {
+    const answer = await this.askJson<SummaryResponse>({
       system: summarySystem(language),
       user: timestampedTranscript(words),
       schema: SUMMARY_SCHEMA,
@@ -277,13 +314,25 @@ export class AiService {
     return summary
   }
 
+  /** Trợ lý AI: mô tả bằng lời → danh sách lệnh chỉnh sửa (Claude; kiểm tra lại bằng core). */
+  async plan(instruction: string, context: AssistantContext): Promise<AssistantCommand[]> {
+    const text = instruction.trim().slice(0, 2000)
+    if (!text) return []
+    const answer = await this.askJson<AssistantResponse>({
+      system: assistantSystem(context),
+      user: text,
+      schema: ASSISTANT_SCHEMA,
+      effort: 'low',
+    })
+    return normalizeAssistantCommands(answer.commands)
+  }
+
   async translate(
     lines: { id: string; text: string }[],
     target: string,
   ): Promise<{ id: string; text: string }[]> {
     if (lines.length === 0) return []
-    const client = createClaude(await this.key('anthropic'), this.deps.fetchImpl)
-    const answer = await askJson<TranslateResponse>(client, {
+    const answer = await this.askJson<TranslateResponse>({
       system: translateSystem(target),
       user: JSON.stringify({ lines }),
       schema: TRANSLATE_SCHEMA,

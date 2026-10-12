@@ -12,6 +12,8 @@ import {
   Captions,
   Flag,
   Magnet,
+  Mic,
+  Plus,
   Layers,
   Music2,
   Redo2,
@@ -19,7 +21,7 @@ import {
   Rewind,
   Scissors,
   Snowflake,
-  Sparkles,
+  Sparkle,
   TrendingUp,
   Trash2,
   Undo2,
@@ -125,6 +127,13 @@ function TimelineToolbar({ zoom, setZoom }: { zoom: number; setZoom: (z: number)
   return (
     <div className="flex h-10 shrink-0 items-center gap-0.5 border-b border-border px-2">
       <ToolButton
+        icon={Plus}
+        label={t('editor.timeline.add')}
+        onClick={() => useEditorStore.getState().requestTab('media')}
+        testId="toolbar-add"
+      />
+      <span className="mx-1 h-5 w-px bg-border" />
+      <ToolButton
         icon={Undo2}
         label={undoLabels.undo ? `${t('editor.undo')}: ${undoLabels.undo}` : t('editor.undo')}
         shortcut="Ctrl+Z"
@@ -203,6 +212,13 @@ function TimelineToolbar({ zoom, setZoom }: { zoom: number; setZoom: (z: number)
         {t('editor.shortcuts')}
       </span>
       <div className="ml-3 flex items-center gap-1.5">
+        <ToolButton
+          icon={Mic}
+          label={t('editor.timeline.voiceover')}
+          onClick={() => useEditorStore.getState().requestTab('audio', 'voice')}
+          testId="toolbar-voiceover"
+        />
+        <span className="mx-1 h-5 w-px bg-border" />
         <ToolButton
           icon={ZoomOut}
           label={t('editor.timeline.zoomOut')}
@@ -529,7 +545,7 @@ export function Timeline() {
         <div className="shrink-0 border-r border-border bg-surface" style={{ width: HEADER_W }}>
           <div className="h-7 border-b border-border" />
           <TrackHeader
-            icon={Sparkles}
+            icon={Sparkle}
             label={t('editor.tracks.effects')}
             height={heights.effects}
             row="effects"

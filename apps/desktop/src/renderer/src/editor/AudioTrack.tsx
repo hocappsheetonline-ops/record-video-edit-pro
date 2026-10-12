@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { Mic, Music2, Sparkles, type LucideIcon } from 'lucide-react'
+import { Mic, Music2, Sparkle, type LucideIcon } from 'lucide-react'
 import {
   audioClipBars,
   clipBeats,
@@ -24,7 +24,7 @@ type Drag = { id: string; mode: 'move' | 'start' | 'end'; originX: number; origi
  */
 const KIND: Record<AudioClip['kind'], { className: string; icon: LucideIcon }> = {
   music: { className: 'bg-emerald-700/90 text-white/70', icon: Music2 },
-  sfx: { className: 'bg-sky-700/90 text-white/70', icon: Sparkles },
+  sfx: { className: 'bg-sky-700/90 text-white/70', icon: Sparkle },
   voice: { className: 'bg-orange-700/90 text-white/70', icon: Mic },
 }
 

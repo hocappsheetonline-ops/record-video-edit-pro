@@ -108,6 +108,15 @@ function fakeApis() {
       const system = String(body.system)
       if (system.includes('cleaning up'))
         return message({ cuts: [{ from: 1, to: 2, kind: 'repeat', reason: 'Nói lặp' }] })
+      if (system.includes('editing assistant'))
+        return message({
+          commands: [
+            { kind: 'cutSilences' },
+            { kind: 'speed', factor: 1.5 },
+            { kind: 'filter', preset: 'bogus' },
+            { kind: 'aspect', aspect: '9:16' },
+          ],
+        })
       if (system.includes('metadata')) {
         return message({
           titles: ['A', 'B', 'C'],
@@ -290,5 +299,115 @@ describe('giọng đọc AI (meme sound)', () => {
     await expect(ai.speak(dir, 'hi', '../x')).rejects.toThrow('voice_invalid')
     const noKey = new AiService({ getKey: async () => undefined, run: runFfmpeg })
     await expect(noKey.speak(dir, 'hi', 'voice-anna')).rejects.toBeInstanceOf(MissingKeyError)
+  })
+})
+
+describe('AiService.plan (trợ lý AI)', () => {
+  it('gửi yêu cầu cho Claude kèm ngữ cảnh, lọc lệnh sai; yêu cầu rỗng không gọi mạng', async () => {
+    const { calls, fetchImpl } = fakeApis()
+    const ai = service(fetchImpl)
+    const ctx = { language: 'vi', durationMs: 60_000, hasTranscript: true }
+    expect(await ai.plan('   ', ctx)).toEqual([])
+    expect(calls).toHaveLength(0)
+    expect(await ai.plan('cắt im lặng, nhanh 1.5x, dọc', ctx)).toEqual([
+      { kind: 'cutSilences' },
+      { kind: 'speed', factor: 1.5 },
+      { kind: 'aspect', aspect: '9:16' },
+    ])
+    const body = calls[0]!.body as { system: string; messages: { content: string }[] }
+    expect(body.system).toContain('duration 60 s')
+    expect(body.messages[0]!.content).toBe('cắt im lặng, nhanh 1.5x, dọc')
+    await expect(service(fetchImpl, {}).plan('x', ctx)).rejects.toThrow()
+  })
+})
+
+describe('AI cục bộ (Ollama)', () => {
+  function ollamaFetch(models: string[] = ['qwen2.5:7b', 'llama3.2']) {
+    const calls: { url: string; body?: unknown }[] = []
+    const fetchImpl: FetchLike = async (input, init) => {
+      const url = String(input)
+      calls.push({ url, body: init?.body ? JSON.parse(String(init.body)) : undefined })
+      if (url.endsWith('/api/tags'))
+        return new Response(JSON.stringify({ models: models.map((name) => ({ name })) }), {
+          status: 200,
+        })
+      if (url.endsWith('/api/chat')) {
+        const body = JSON.parse(String(init!.body)) as {
+          model: string
+          messages: { content: string }[]
+        }
+        if (!models.includes(body.model))
+          return new Response(
+            JSON.stringify({ error: `model '${body.model}' not found, try pulling it first` }),
+            { status: 404 },
+          )
+        return new Response(
+          JSON.stringify({
+            message: {
+              role: 'assistant',
+              content: JSON.stringify({ commands: [{ kind: 'captions' }] }),
+            },
+          }),
+          { status: 200 },
+        )
+      }
+      return new Response('not found', { status: 404 })
+    }
+    return { calls, fetchImpl }
+  }
+  const local = (model = 'qwen2.5:7b', enabled = true) => ({
+    enabled,
+    baseUrl: 'http://127.0.0.1:11434',
+    model,
+  })
+
+  it('bật AI cục bộ: trợ lý đi qua Ollama với schema, không cần key Claude', async () => {
+    const { calls, fetchImpl } = ollamaFetch()
+    const ai = new AiService({
+      getKey: async () => undefined,
+      getLocalAi: async () => local(),
+      run: runFfmpeg,
+      fetchImpl,
+    })
+    const ctx = { language: 'vi', durationMs: 1000, hasTranscript: false }
+    expect(await ai.plan('thêm phụ đề', ctx)).toEqual([{ kind: 'captions' }])
+    const body = calls[0]!.body as { model: string; format: unknown; messages: { role: string }[] }
+    expect(calls[0]!.url).toBe('http://127.0.0.1:11434/api/chat')
+    expect(body.model).toBe('qwen2.5:7b')
+    expect(body.format).toMatchObject({ type: 'object' })
+    expect(body.messages.map((m) => m.role)).toEqual(['system', 'user'])
+    expect(await ai.listLocalModels('http://127.0.0.1:11434')).toEqual(['llama3.2', 'qwen2.5:7b'])
+  })
+
+  it('model chưa tải hoặc Ollama không chạy: báo mã lỗi rõ; tắt AI cục bộ thì về Claude', async () => {
+    const { fetchImpl } = ollamaFetch()
+    const ctx = { language: 'vi', durationMs: 1000, hasTranscript: false }
+    await expect(
+      new AiService({
+        getKey: async () => undefined,
+        getLocalAi: async () => local('gemma'),
+        run: runFfmpeg,
+        fetchImpl,
+      }).plan('x', ctx),
+    ).rejects.toThrow('ollama_model')
+    const offline: FetchLike = async () => {
+      throw new TypeError('fetch failed')
+    }
+    await expect(
+      new AiService({
+        getKey: async () => undefined,
+        getLocalAi: async () => local(),
+        run: runFfmpeg,
+        fetchImpl: offline,
+      }).plan('x', ctx),
+    ).rejects.toThrow('ollama_offline')
+    await expect(
+      new AiService({
+        getKey: async () => undefined,
+        getLocalAi: async () => local('q', false),
+        run: runFfmpeg,
+        fetchImpl,
+      }).plan('x', ctx),
+    ).rejects.toThrow('missing_key:anthropic')
   })
 })

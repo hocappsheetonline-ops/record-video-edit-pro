@@ -19,8 +19,8 @@ import { useAppStore } from '../../store/app'
 import { runJob } from '../jobs'
 import { dragProps } from '../library-drag'
 import { useEditorStore } from '../store'
-import { primaryButton, Segmented, SliderRow, Toggle } from '../ui'
-import { ErrorNote, Heading, useErrorText } from './common'
+import { primaryButton, SliderRow, Toggle } from '../ui'
+import { ErrorNote, Heading, SubNav, useErrorText } from './common'
 import { YouTubeMusic } from './YouTubeMusic'
 
 /** Hiệu ứng âm thanh meme (phần cuối danh sách); phần đầu là hiệu ứng cơ bản. */
@@ -129,7 +129,7 @@ function SpeechMaker({
             data-testid={`speech-line-${i}`}
             disabled={busy !== null || !voice}
             onClick={() => speak(line)}
-            className="flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[11px] text-muted hover:border-accent hover:text-text disabled:opacity-50"
+            className="flex items-center gap-1 rounded-md border border-border px-2 py-0.5 text-[11px] text-muted hover:border-accent hover:text-text disabled:opacity-50"
           >
             {busy === `speech:${line}` && (
               <Loader2 size={10} className="animate-spin" aria-hidden />
@@ -519,11 +519,20 @@ function VoiceOver({ onError }: { onError: (e: unknown) => void }) {
 }
 
 /** Mục Âm thanh: nhạc từ máy, hiệu ứng âm thanh, âm thanh meme, lồng tiếng và kịch bản giọng AI. */
+const AUDIO_SECTIONS = ['sfx', 'meme', 'music', 'youtube', 'voice', 'script'] as const
+type AudioSection = (typeof AUDIO_SECTIONS)[number]
+
 export function AudioTab() {
   const { t } = useTranslation()
-  const [section, setSection] = useState<'sfx' | 'meme' | 'music' | 'youtube' | 'voice' | 'script'>(
-    'sfx',
-  )
+  const [section, setSection] = useState<AudioSection>('sfx')
+  // Timeline (nút micro) có thể yêu cầu mở thẳng mục Lồng tiếng.
+  const tabRequest = useEditorStore((s) => s.tabRequest)
+  const [seenRequest, setSeenRequest] = useState(tabRequest.n)
+  if (tabRequest.n !== seenRequest) {
+    setSeenRequest(tabRequest.n)
+    if (tabRequest.tab === 'audio' && AUDIO_SECTIONS.includes(tabRequest.section as AudioSection))
+      setSection(tabRequest.section as AudioSection)
+  }
   const [busy, setBusy] = useState<Busy>(null)
   const [error, setError] = useState<string | null>(null)
   const errorText = useErrorText()
@@ -536,58 +545,47 @@ export function AudioTab() {
       .finally(() => setBusy(null))
   }
   return (
-    <div className="flex flex-col gap-3 p-3">
-      <Segmented
-        options={[
-          { value: 'sfx', label: t('editor.library.audioSections.sfx') },
-          { value: 'meme', label: t('editor.library.audioSections.meme') },
-          { value: 'music', label: t('editor.library.audioSections.music') },
-          { value: 'youtube', label: t('editor.library.audioSections.youtube') },
-          { value: 'voice', label: t('editor.library.audioSections.voice') },
-          { value: 'script', label: t('editor.library.audioSections.script') },
-        ]}
+    <div className="flex min-h-full gap-3 p-3">
+      <SubNav
+        items={AUDIO_SECTIONS.map((s) => ({
+          value: s,
+          label: t(`editor.library.audioSections.${s}`),
+        }))}
         value={section}
         onChange={setSection}
         testIdPrefix="audio-section-"
-        columns={3}
+        label={t('editor.library.tabs.audio')}
       />
-      <ErrorNote text={error} />
-      {section === 'music' && (
-        <>
-          <button
-            type="button"
-            data-testid="add-music"
-            disabled={busy !== null}
-            onClick={() => run('music', addMusic)}
-            className={primaryButton}
-          >
-            {busy === 'music' ? (
-              <Loader2 size={15} className="animate-spin" aria-hidden />
-            ) : (
-              <Upload size={15} aria-hidden />
-            )}
-            {busy === 'music' ? t('editor.music.adding') : t('editor.music.add')}
-          </button>
-          <div className="flex items-start gap-2 rounded-lg bg-surface-2 p-3 text-[11px] text-muted">
-            <Music2 size={16} aria-hidden className="mt-0.5 shrink-0" />
-            <p>{t('editor.music.hint')}</p>
-          </div>
-        </>
-      )}
-      {section === 'youtube' && <YouTubeMusic />}
-      {section === 'voice' && <VoiceOver onError={(e) => setError(errorText(e))} />}
-      {section === 'script' && <NarrationScript onError={(e) => setError(errorText(e))} />}
-      {section === 'sfx' && (
-        <div className="flex flex-col">
-          {BASIC_SFX.map((id) => (
-            <SfxRow key={id} id={id} busy={busy} onAdd={() => run(id, () => addSoundEffect(id))} />
-          ))}
-        </div>
-      )}
-      {section === 'meme' && (
-        <>
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <ErrorNote text={error} />
+        {section === 'music' && (
+          <>
+            <button
+              type="button"
+              data-testid="add-music"
+              disabled={busy !== null}
+              onClick={() => run('music', addMusic)}
+              className={primaryButton}
+            >
+              {busy === 'music' ? (
+                <Loader2 size={15} className="animate-spin" aria-hidden />
+              ) : (
+                <Upload size={15} aria-hidden />
+              )}
+              {busy === 'music' ? t('editor.music.adding') : t('editor.music.add')}
+            </button>
+            <div className="flex items-start gap-2 rounded-lg bg-surface-2 p-3 text-[11px] text-muted">
+              <Music2 size={16} aria-hidden className="mt-0.5 shrink-0" />
+              <p>{t('editor.music.hint')}</p>
+            </div>
+          </>
+        )}
+        {section === 'youtube' && <YouTubeMusic />}
+        {section === 'voice' && <VoiceOver onError={(e) => setError(errorText(e))} />}
+        {section === 'script' && <NarrationScript onError={(e) => setError(errorText(e))} />}
+        {section === 'sfx' && (
           <div className="flex flex-col">
-            {MEME_SFX.map((id) => (
+            {BASIC_SFX.map((id) => (
               <SfxRow
                 key={id}
                 id={id}
@@ -596,13 +594,27 @@ export function AudioTab() {
               />
             ))}
           </div>
-          <div className="mt-1 flex items-center gap-2">
-            <MessageSquareQuote size={14} aria-hidden className="text-muted" />
-            <Heading>{t('editor.library.speechTitle')}</Heading>
-          </div>
-          <SpeechMaker busy={busy} run={run} />
-        </>
-      )}
+        )}
+        {section === 'meme' && (
+          <>
+            <div className="flex flex-col">
+              {MEME_SFX.map((id) => (
+                <SfxRow
+                  key={id}
+                  id={id}
+                  busy={busy}
+                  onAdd={() => run(id, () => addSoundEffect(id))}
+                />
+              ))}
+            </div>
+            <div className="mt-1 flex items-center gap-2">
+              <MessageSquareQuote size={14} aria-hidden className="text-muted" />
+              <Heading>{t('editor.library.speechTitle')}</Heading>
+            </div>
+            <SpeechMaker busy={busy} run={run} />
+          </>
+        )}
+      </div>
     </div>
   )
 }

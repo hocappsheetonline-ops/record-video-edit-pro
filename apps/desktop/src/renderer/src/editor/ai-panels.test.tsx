@@ -118,6 +118,100 @@ describe('CaptionsPanel', () => {
 })
 
 describe('AiPanel', () => {
+  it('trợ lý AI: không có key thì hiểu theo từ khóa; làm nhiều việc trong một bước hoàn tác', async () => {
+    const api = await setup()
+    render(<AiPanel />)
+    await userEvent.type(
+      screen.getByTestId('assistant-input'),
+      'Cắt khoảng lặng, thêm phụ đề, bộ lọc cổ điển, tốc độ 2x, làm video dọc 9:16, tiêu đề "Xin chào"',
+    )
+    await userEvent.click(screen.getByTestId('assistant-run'))
+    const chips = await screen.findAllByTestId('assistant-command')
+    expect(chips.map((c) => c.getAttribute('data-kind'))).toEqual([
+      'cutSilences',
+      'captions',
+      'title',
+      'filter',
+      'speed',
+      'aspect',
+    ])
+    expect(api.planEdits).toHaveBeenCalledWith(
+      expect.stringContaining('Cắt khoảng lặng'),
+      expect.objectContaining({ durationMs: 7000, hasTranscript: false }),
+    )
+    const s = useEditorStore.getState()
+    expect(s.edit!.look.filter).toBe('vintage')
+    expect(s.edit!.frame).toMatchObject({ aspect: '9:16', fill: true })
+    expect(s.edit!.clips.every((c) => c.speed === 2)).toBe(true)
+    expect(s.edit!.captions.enabled).toBe(true)
+    expect(s.edit!.overlays[0]).toMatchObject({ kind: 'text', text: 'Xin chào', start: 0 })
+    expect(outputDuration(s.edit!.clips)).toBeLessThan(7000)
+    expect(s.past).toHaveLength(1)
+    s.undo()
+    expect(useEditorStore.getState().edit!.look.filter).toBe('none')
+    expect(outputDuration(useEditorStore.getState().edit!.clips)).toBe(7000)
+  })
+
+  it('trợ lý AI: Claude trả lệnh thì dùng lệnh của Claude; không hiểu thì báo', async () => {
+    const api = await setup()
+    api.planEdits.mockResolvedValueOnce([{ kind: 'trimStart', ms: 2000 }])
+    render(<AiPanel />)
+    await userEvent.type(screen.getByTestId('assistant-input'), 'bỏ 2 giây đầu{Enter}')
+    await waitFor(() => expect(outputDuration(useEditorStore.getState().edit!.clips)).toBe(5000))
+    expect(screen.getByTestId('assistant-command')).toHaveAttribute('data-kind', 'trimStart')
+    await userEvent.clear(screen.getByTestId('assistant-input'))
+    await userEvent.type(screen.getByTestId('assistant-input'), 'xin chào{Enter}')
+    expect(await screen.findByTestId('assistant-none')).toBeInTheDocument()
+  })
+
+  it('chia video thành video ngắn: mỗi đoạn một dự án sao chép chỉ giữ đoạn đó, khung dọc', async () => {
+    const api = await setup()
+    let n = 0
+    api.duplicateProject.mockImplementation(async () => `short-${++n}.lumora`)
+    render(<AiPanel />)
+    // Video 7 giây, mỗi đoạn ≥ 5 giây: không chia được → báo quá ngắn, không tạo dự án.
+    await userEvent.click(screen.getByTestId('shorts-mode-60'))
+    await userEvent.click(screen.getByTestId('shorts-run'))
+    await screen.findByText('Video quá ngắn để chia (mỗi đoạn tối thiểu 5 giây).')
+    expect(api.duplicateProject).not.toHaveBeenCalled()
+
+    // Mỗi 3 giây (đoạn tối thiểu 1 giây): 0–3, 3–6, 6–7 → ba dự án sao chép, khung dọc.
+    const count = await useEditorStore
+      .getState()
+      .splitIntoShorts({ mode: 'fixed', seconds: 3, vertical: true, minMs: 1000 })
+    expect(count).toBe(3)
+    expect(api.duplicateProject.mock.calls.map((c) => c[1])).toEqual([
+      '(short 1)',
+      '(short 2)',
+      '(short 3)',
+    ])
+    const saved = api.saveEdit.mock.calls.map((c) => c[1])
+    expect(api.saveEdit.mock.calls.map((c) => c[0])).toEqual([
+      'short-1.lumora',
+      'short-2.lumora',
+      'short-3.lumora',
+    ])
+    expect(saved.map((e) => outputDuration(e.clips))).toEqual([3000, 3000, 1000])
+    expect(saved[0]!.frame).toMatchObject({ aspect: '9:16', fill: true })
+    expect(saved[0]!.markers).toEqual([])
+    // Dự án gốc không đổi.
+    expect(outputDuration(useEditorStore.getState().edit!.clips)).toBe(7000)
+
+    // Theo chương AI: chương tại giây 0 và 5.5 (nguồn) → hai đoạn.
+    api.summarize.mockResolvedValue({
+      titles: ['A'],
+      description: '',
+      hashtags: [],
+      chapters: [
+        { start: 0, title: 'Mở đầu' },
+        { start: 5500, title: 'Phần 2' },
+      ],
+    })
+    expect(await useEditorStore.getState().splitIntoShorts({ mode: 'chapters', minMs: 1000 })).toBe(
+      2,
+    )
+  })
+
   it('AI tự biên tập: cắt, phụ đề, âm thanh, tiêu đề trong một bước hoàn tác; báo bước bị bỏ qua', async () => {
     const api = await setup()
     render(<AiPanel />)

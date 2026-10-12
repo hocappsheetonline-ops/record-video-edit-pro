@@ -276,7 +276,7 @@ export function Segmented<T extends string | number>({
             aria-label={o.title}
             data-testid={testIdPrefix ? `${testIdPrefix}${o.value}` : undefined}
             onClick={() => onChange(o.value)}
-            className={`flex min-w-0 items-center justify-center gap-1 truncate rounded-[7px] px-2 py-1 font-medium transition-colors ${
+            className={`flex min-w-0 items-center justify-center gap-1 truncate rounded-[5px] px-2 py-1 font-medium transition-colors ${
               value === o.value
                 ? 'bg-surface text-text shadow-[0_1px_3px_rgba(0,0,0,0.25),0_0_0_0.5px_rgba(0,0,0,0.08)]'
                 : 'text-muted hover:text-text'

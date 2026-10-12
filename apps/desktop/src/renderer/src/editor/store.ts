@@ -75,6 +75,9 @@ import {
   canReverse,
   type SpeedCurve,
   buildCaptionLines,
+  parseAssistantRequest,
+  sourceToOutput,
+  type AssistantCommand,
   findFillerWords,
   findQuietRanges,
   findSilences,
@@ -114,7 +117,7 @@ interface EditorStore {
   /** Ảnh thu nhỏ cho dải phim trên timeline (tải sau). */
   filmstrip: Filmstrip | null
   /** Yêu cầu mở một tab của bảng bên phải (n tăng mỗi lần yêu cầu, kể cả cùng tab). */
-  tabRequest: { tab: string; n: number }
+  tabRequest: { tab: string; section?: string; n: number }
   /**
    * File âm thanh đã lọc tạp âm / hiệu ứng (theo `fxKeyOf`): tên file khi xong, 'pending' khi đang
    * xử lý, 'error' khi lỗi. Xem trước dùng file đã xử lý khi có.
@@ -258,7 +261,8 @@ interface EditorStore {
   addVoiceover(data: ArrayBuffer, at: number, name: string): Promise<void>
   /** Tách tiếng của video meme ra thành đoạn âm thanh riêng trên hàng Âm thanh. */
   detachOverlayAudio(id: string): void
-  requestTab(tab: string): void
+  /** Mở một mục thư viện (và mục con, ví dụ Âm thanh → Lồng tiếng). */
+  requestTab(tab: string, section?: string): void
   /** Thêm hiệu ứng hình tại đầu phát (mặc định 2 giây) và chọn nó. */
   addEffect(kind: EffectKind): void
   updateEffect(id: string, patch: Partial<EffectRegion>, coalesce?: string): void
@@ -294,7 +298,32 @@ interface EditorStore {
     options: AutoEditOptions,
     onProgress?: (done: number, total: number, step: AutoEditStep) => void,
   ): Promise<AutoEditReport[]>
+  /**
+   * Trợ lý AI (kiểu EditPilot): mô tả bằng lời → Claude ra lệnh (không có key thì hiểu theo từ
+   * khóa) → thực hiện tất cả trong một bước hoàn tác. Trả về lệnh đã hiểu và kết quả từng bước AI.
+   */
+  runAssistant(
+    instruction: string,
+    onProgress?: (done: number, total: number, step: AutoEditStep) => void,
+  ): Promise<{ commands: AssistantCommand[]; report: AutoEditReport[] }>
+  /**
+   * Chia video thành nhiều video ngắn: mỗi đoạn (theo chương AI hoặc mỗi N giây) thành một dự án
+   * riêng (bản sao) chỉ giữ phần đó, tuỳ chọn khung dọc 9:16. Trả về số dự án đã tạo.
+   */
+  splitIntoShorts(
+    options: {
+      mode: 'chapters' | 'fixed'
+      seconds?: number
+      vertical?: boolean
+      /** Đoạn ngắn nhất (ms, mặc định 5 giây); đoạn cuối ngắn hơn thì gộp vào đoạn trước. */
+      minMs?: number
+    },
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<number>
 }
+
+/** Đoạn ngắn nhất khi chia video (ms); đoạn cuối ngắn hơn thì gộp vào đoạn trước. */
+const MIN_SHORT_MS = 5000
 
 export interface AutoEditOptions {
   silences: boolean
@@ -322,6 +351,26 @@ export interface AutoEditReport {
 
 /** Thời lượng tiêu đề mở đầu do AI thêm (ms). */
 const AUTO_TITLE_MS = 3500
+
+/** Thêm tiêu đề mở đầu (mẫu chữ "Tiêu đề") trong vài giây đầu video. */
+function addTitleOverlay(text: string) {
+  const s = useEditorStore.getState()
+  const style = templateStyle('title')
+  s.addOverlay({ kind: 'text', text, style: 'title', color: style.color, textStyle: style })
+  // addOverlay đặt tại đầu phát: dời về đầu video.
+  s.change((e) => {
+    const last = e.overlays[e.overlays.length - 1]
+    if (!last) return e
+    const total = outputDuration(e.clips)
+    return {
+      ...e,
+      overlays: e.overlays.map((o) =>
+        o === last ? { ...o, start: 0, end: Math.min(total, AUTO_TITLE_MS) } : o,
+      ),
+    }
+  })
+  s.select(null)
+}
 
 /** Mã lỗi ngắn từ lỗi IPC ("missing_key:elevenlabs" → "missing_key"). */
 function errorCode(e: unknown): string {
@@ -1230,8 +1279,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     })
   },
 
-  requestTab(tab) {
-    set({ tabRequest: { tab, n: get().tabRequest.n + 1 } })
+  requestTab(tab, section) {
+    set({ tabRequest: { tab, section, n: get().tabRequest.n + 1 } })
   },
 
   loadAssetPeaks(file) {
@@ -1367,6 +1416,137 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }))
   },
 
+  async runAssistant(instruction, onProgress) {
+    const { folder, edit: before, project, transcript } = get()
+    if (!folder || !before || !project) return { commands: [], report: [] }
+    const text = instruction.trim()
+    if (!text) return { commands: [], report: [] }
+    let commands: AssistantCommand[] = []
+    try {
+      commands = await lumora().planEdits(text, {
+        language: before.captions.language || transcript?.language || '',
+        durationMs: outputDuration(before.clips),
+        hasTranscript: transcript !== null,
+      })
+    } catch {
+      // Không có key Claude / mất mạng: hiểu theo từ khóa.
+    }
+    if (commands.length === 0) commands = parseAssistantRequest(text)
+    if (commands.length === 0 || get().folder !== folder) return { commands, report: [] }
+    const pastBefore = get().past
+    const has = (kind: AssistantCommand['kind']) => commands.some((c) => c.kind === kind)
+    const report = await get().autoEdit(
+      {
+        silences: has('cutSilences'),
+        fillers: has('removeFillers'),
+        zooms: has('autoZoom'),
+        captions: has('captions'),
+        audio: has('cleanAudio'),
+        title: false,
+      },
+      onProgress,
+    )
+    if (get().folder !== folder) return { commands, report }
+    for (const c of commands) {
+      switch (c.kind) {
+        case 'title':
+          addTitleOverlay(c.text)
+          break
+        case 'filter':
+          get().change((e) => ({
+            ...e,
+            look: { ...e.look, filter: c.preset, intensity: c.intensity },
+          }))
+          break
+        case 'speed':
+          get().change((e) => ({
+            ...e,
+            clips: e.clips.reduce<Clip[]>(
+              (acc, clip) => setClipSpeed(acc, clip.id, c.factor),
+              e.clips,
+            ),
+          }))
+          break
+        case 'aspect':
+          get().change((e) => ({
+            ...e,
+            frame: { ...e.frame, aspect: c.aspect, fill: c.aspect === '9:16' },
+          }))
+          break
+        case 'trimStart':
+        case 'trimEnd': {
+          const total = sourceDuration(project.segments)
+          const range =
+            c.kind === 'trimStart'
+              ? { start: 0, end: Math.min(c.ms, total - 1000) }
+              : { start: Math.max(1000, total - c.ms), end: total }
+          if (range.end > range.start)
+            get().change((e) => ({ ...e, clips: removeSourceRanges(e.clips, [range]) }))
+          break
+        }
+        default:
+          break
+      }
+    }
+    const after = get().edit
+    if (after && after !== before)
+      set({ past: [...pastBefore, before].slice(-HISTORY_LIMIT), future: [] })
+    return { commands, report }
+  },
+
+  async splitIntoShorts(options, onProgress) {
+    const { folder, edit, project } = get()
+    if (!folder || !edit || !project) return 0
+    const total = outputDuration(edit.clips)
+    const minMs = options.minMs ?? MIN_SHORT_MS
+    let bounds: number[]
+    if (options.mode === 'chapters') {
+      const summary = await lumora().summarize(folder)
+      bounds = summary.chapters
+        .map((c) => sourceToOutput(edit.clips, c.start))
+        .filter((t): t is number => t !== null && t > 0)
+    } else {
+      const step = Math.max(minMs, Math.round((options.seconds ?? 60) * 1000))
+      bounds = []
+      for (let t = step; t < total; t += step) bounds.push(t)
+    }
+    // Mốc chia tăng dần, bỏ mốc tạo ra đoạn quá ngắn.
+    const cuts: number[] = []
+    let last = 0
+    for (const b of [...bounds].sort((x, y) => x - y)) {
+      if (b - last < minMs || total - b < minMs) continue
+      cuts.push(b)
+      last = b
+    }
+    const ranges = [0, ...cuts].map((start, i, arr) => ({ start, end: arr[i + 1] ?? total }))
+    if (ranges.length < 2) return 0
+    const sourceTotal = sourceDuration(project.segments)
+    for (const [i, range] of ranges.entries()) {
+      const a = outputToSource(edit.clips, range.start)?.source ?? 0
+      const b =
+        outputToSource(edit.clips, Math.max(range.start, range.end - 1))?.source ?? sourceTotal
+      const clips = removeSourceRanges(edit.clips, [
+        { start: 0, end: a },
+        { start: Math.max(a, b + 1), end: sourceTotal },
+      ])
+      const short: EditState = {
+        ...edit,
+        clips,
+        // Các mục tính theo thời gian video xuất không còn đúng chỗ: bỏ.
+        overlays: [],
+        effects: [],
+        audioClips: [],
+        markers: [],
+        transitions: [],
+        frame: options.vertical ? { ...edit.frame, aspect: '9:16', fill: true } : edit.frame,
+      }
+      const copy = await lumora().duplicateProject(folder, `(short ${i + 1})`)
+      await lumora().saveEdit(copy, short)
+      onProgress?.(i + 1, ranges.length)
+    }
+    return ranges.length
+  },
+
   async autoEdit(options, onProgress) {
     const { folder, edit: before, project, waveform, cursor, events } = get()
     if (!folder || !before || !project) return []
@@ -1474,27 +1654,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           const title = summary.titles[0]?.trim()
           if (get().folder !== folder) return report
           if (title) {
-            const style = templateStyle('title')
-            get().addOverlay({
-              kind: 'text',
-              text: title,
-              style: 'title',
-              color: style.color,
-              textStyle: style,
-            })
-            // Đặt tiêu đề ở đầu video (addOverlay đặt tại đầu phát).
-            get().change((e) => {
-              const last = e.overlays[e.overlays.length - 1]
-              if (!last) return e
-              const total = outputDuration(e.clips)
-              return {
-                ...e,
-                overlays: e.overlays.map((o) =>
-                  o === last ? { ...o, start: 0, end: Math.min(total, AUTO_TITLE_MS) } : o,
-                ),
-              }
-            })
-            get().select(null)
+            addTitleOverlay(title)
             report.push({ step: 'title', status: 'done', detail: 1 })
           } else report.push({ step: 'title', status: 'skipped', detail: 'no_title' })
         } catch (e) {

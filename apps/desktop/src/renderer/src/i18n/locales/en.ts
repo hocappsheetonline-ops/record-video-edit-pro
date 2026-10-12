@@ -296,6 +296,8 @@ export const en: Messages = {
       animation: 'Animation',
     },
     timeline: {
+      add: 'Add media (open Library)',
+      voiceover: 'Record voice-over',
       zoom: 'Timeline zoom',
       zoomIn: 'Zoom timeline in',
       zoomOut: 'Zoom timeline out',
@@ -961,6 +963,8 @@ export const en: Messages = {
       format: 'Format',
       resolution: 'Resolution',
       fps: 'Frame rate',
+      enhance: 'Enhance quality (HD)',
+      enhanceHint: 'Denoise and sharpen on export; takes a little longer.',
       start: 'Export video',
       rendering: 'Rendering… {{percent}}%',
       muxing: 'Adding audio…',
@@ -1031,6 +1035,47 @@ export const en: Messages = {
   },
   ai: {
     working: 'Working…',
+    assistant: {
+      title: 'AI assistant',
+      intro:
+        'Describe what you want changed; the AI turns it into steps and does them right away (Claude; without a key it goes by keywords). Undo once to go back.',
+      placeholder: 'e.g. trim silences, add captions, cinematic filter, make it vertical 9:16…',
+      run: 'Do it',
+      job: 'AI assistant',
+      done: 'The AI assistant is done. Undo (Ctrl+Z) to go back.',
+      none: 'The AI did not understand that. Try something like "trim silences and add captions".',
+      examples: {
+        silences: 'Trim silences and remove filler words',
+        captions: 'Add captions and clean up audio',
+        vertical: 'Make it vertical 9:16 for TikTok',
+        cinematic: 'Cinematic filter, 1.5x speed',
+      },
+      kinds: {
+        cutSilences: 'Trim silences',
+        removeFillers: 'Remove fillers',
+        autoZoom: 'Auto zoom',
+        captions: 'Captions',
+        cleanAudio: 'Clean up audio',
+        title: 'Title',
+        filter: 'Filter',
+        speed: 'Speed',
+        aspect: 'Aspect',
+        trimStart: 'Trim start',
+        trimEnd: 'Trim end',
+      },
+    },
+    shorts: {
+      title: 'Split into short videos',
+      intro:
+        'Each segment becomes its own project (a copy keeping only that part) to export as a short. Split by AI chapters (needs captions and a Claude key) or every N seconds.',
+      byChapters: 'By chapters (AI)',
+      every: 'Every {{s}} s',
+      vertical: 'Vertical 9:16 (TikTok, Shorts, Reels)',
+      run: 'Split into shorts',
+      job: 'Splitting video',
+      done: 'Created {{count}} short-video projects. See the Projects page.',
+      tooShort: 'The video is too short to split (segments are at least 5 seconds).',
+    },
     auto: {
       title: 'AI auto edit',
       intro:
@@ -1081,7 +1126,14 @@ export const en: Messages = {
       save: 'Save as .txt',
     },
     errors: {
-      missingKey: 'No {{name}} API key yet. Add it in Settings.',
+      missingKey:
+        'No {{name}} API key yet. Enter it in Settings (for Claude you can enable local AI with Ollama instead).',
+      ollama_offline:
+        'Could not reach Ollama (local AI). Start Ollama or turn local AI off in Settings.',
+      ollama_model:
+        'The local AI model is not pulled. Run "ollama pull <model>" or pick another model in Settings.',
+      ollama_bad_json:
+        'The local model answered in the wrong format. Try a larger model (e.g. qwen2.5:7b).',
       noAudio: 'This recording has no microphone or computer audio to transcribe.',
       noTranscript: 'Create captions first (Captions tab).',
       generic: 'Error: {{message}}',
@@ -1211,6 +1263,21 @@ export const en: Messages = {
     },
     onboardingHint: 'Show the quick tour again next time the editor opens.',
     onboardingReplay: 'Replay tour',
+    localAi: {
+      title: 'Local AI (Ollama)',
+      enable: 'Use AI running on this computer instead of Claude',
+      hint: 'The AI assistant, filler removal, summaries and translation run on an open model on your machine: free and nothing leaves your computer. Install Ollama and pull a model (e.g. ollama pull qwen2.5:7b).',
+      url: 'Ollama address',
+      model: 'Model',
+      check: 'Test connection',
+      checking: 'Checking…',
+      connected: 'Connected, {{count}} models ready',
+      noModels: 'Ollama is running but has no models. Run: ollama pull qwen2.5:7b',
+      offline: 'Could not reach Ollama. Start Ollama and try again.',
+      install: 'Get Ollama',
+      models:
+        'Suggested: qwen2.5:7b (good Vietnamese, ~8 GB RAM), llama3.2 (light, ~3 GB), gemma3. Captions still need an ElevenLabs key.',
+    },
     reduceTransparency: 'Reduce transparency',
     reduceTransparencyHint:
       'Toolbars, menus and dialogs use solid colours instead of frosted glass (lighter on slow machines).',

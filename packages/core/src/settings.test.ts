@@ -27,7 +27,20 @@ describe('normalizeSettings', () => {
       previewQuality: 'low',
       projectTemplate: 'tiktok',
       reduceTransparency: false,
+      localAi: { enabled: false, baseUrl: 'http://127.0.0.1:11434', model: 'qwen2.5:7b' },
     })
+  })
+
+  it('AI cục bộ: nhận địa chỉ http(s) hợp lệ và tên model, bỏ giá trị sai', () => {
+    expect(
+      normalizeSettings({
+        localAi: { enabled: true, baseUrl: 'http://192.168.1.5:11434/', model: 'llama3.2:3b' },
+      }).localAi,
+    ).toEqual({ enabled: true, baseUrl: 'http://192.168.1.5:11434', model: 'llama3.2:3b' })
+    expect(
+      normalizeSettings({ localAi: { baseUrl: 'ftp://x', model: 'bad model!' } }).localAi,
+    ).toEqual(DEFAULT_SETTINGS.localAi)
+    expect(normalizeSettings({ localAi: 'nope' }).localAi).toEqual(DEFAULT_SETTINGS.localAi)
   })
 
   it('thay giá trị sai bằng mặc định và bỏ trường lạ', () => {
@@ -54,10 +67,10 @@ describe('mergeSettings', () => {
 
 describe('màu nhấn', () => {
   it('mặc định là xanh dương; nhận mã hex hợp lệ, bỏ giá trị sai', () => {
-    expect(DEFAULT_SETTINGS.accent).toBe('#0a84ff')
+    expect(DEFAULT_SETTINGS.accent).toBe('#1ed6d6')
     expect(normalizeSettings({ accent: ' #1A73E8 ' }).accent).toBe('#1a73e8')
-    expect(normalizeSettings({ accent: 'blue' }).accent).toBe('#0a84ff')
-    expect(normalizeSettings({ accent: '#12345' }).accent).toBe('#0a84ff')
+    expect(normalizeSettings({ accent: 'blue' }).accent).toBe('#1ed6d6')
+    expect(normalizeSettings({ accent: '#12345' }).accent).toBe('#1ed6d6')
     expect(normalizeSettings({ reduceTransparency: true }).reduceTransparency).toBe(true)
     expect(normalizeSettings({ reduceTransparency: 'yes' }).reduceTransparency).toBe(false)
   })

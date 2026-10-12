@@ -412,7 +412,7 @@ export function RecordPage() {
             onClick={() => void start()}
             disabled={starting || !caps || !sources}
             data-testid="start-recording"
-            className="flex items-center gap-2 rounded-full bg-accent px-6 py-3 font-semibold text-accent-fg shadow-lg shadow-accent/25 transition-[filter,transform] hover:brightness-110 active:scale-[0.98] disabled:opacity-50 disabled:shadow-none"
+            className="flex items-center gap-2 rounded-lg bg-accent px-6 py-3 font-semibold text-accent-fg shadow-lg shadow-accent/25 transition-[filter,transform] hover:brightness-110 active:scale-[0.98] disabled:opacity-50 disabled:shadow-none"
           >
             <Video size={18} aria-hidden />
             {starting ? t('record.starting') : t('record.start')}

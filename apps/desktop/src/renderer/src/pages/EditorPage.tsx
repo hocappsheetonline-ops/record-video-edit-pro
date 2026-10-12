@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import {
   ChevronLeft,
@@ -17,6 +18,7 @@ import {
 import { ASPECTS, outputDuration, type Aspect } from '@lumora/core'
 import { lumora } from '../api'
 import { PageHeader } from '../components/PageHeader'
+import { TITLE_BAR_SLOT } from '../components/TitleBar'
 import { ExportPanel } from '../editor/ExportPanel'
 import { MediaBrowser } from '../editor/MediaBrowser'
 import { PreviewCanvas } from '../editor/PreviewCanvas'
@@ -298,6 +300,28 @@ function PlayerBar({ onFullscreen }: { onFullscreen: () => void }) {
   )
 }
 
+/**
+ * Tên dự án, nút Việc đang làm, phím tắt và Xuất nằm trên thanh tiêu đề cửa sổ (như CapCut).
+ * Không có thanh tiêu đề (khi test từng trang) thì hiện thành một thanh riêng phía trên.
+ */
+function InTitleBar({ children }: { children: ReactNode }) {
+  const [slot, setSlot] = useState<HTMLElement | null>(() =>
+    document.getElementById(TITLE_BAR_SLOT),
+  )
+  useEffect(() => {
+    // Thanh tiêu đề gắn vào DOM cùng lượt với trang: tìm lại sau khi mọi thứ đã gắn.
+    const found = document.getElementById(TITLE_BAR_SLOT)
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- chỉ chạy một lần sau khi gắn
+    if (found) setSlot(found)
+  }, [])
+  if (slot) return createPortal(children, slot)
+  return (
+    <header className="flex h-12 shrink-0 items-center gap-3 border-b border-border bg-surface px-3">
+      {children}
+    </header>
+  )
+}
+
 /** Hộp thoại xuất video. Luôn được giữ trong trang (chỉ ẩn đi) để đóng lại vẫn không mất tiến độ. */
 function ExportDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useTranslation()
@@ -424,54 +448,61 @@ export function EditorPage() {
       <ToastLayer />
       <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       <Onboarding />
-      <header className="glass flex h-12 shrink-0 items-center gap-3 border-b px-3">
+      <InTitleBar>
         <button
           type="button"
-          className="flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-muted transition-colors hover:bg-text/8 hover:text-text"
+          className="app-no-drag flex items-center gap-1 rounded-lg px-2 py-1 text-xs text-muted transition-colors hover:bg-text/8 hover:text-text"
           onClick={() => setPage('projects')}
           data-testid="editor-back"
         >
-          <ChevronLeft size={16} aria-hidden />
+          <ChevronLeft size={15} aria-hidden />
           {t('nav.projects')}
         </button>
-        <span className="h-5 w-px bg-border" />
-        <h1 className="min-w-0 flex-1 truncate text-sm font-medium" data-testid="editor-title">
+        <h1
+          className="min-w-0 flex-1 truncate text-center text-[13px] font-medium"
+          data-testid="editor-title"
+        >
           {project.name}
         </h1>
-        <span className="hidden text-xs text-muted md:block" data-testid="autosave">
+        <span className="hidden text-[11px] text-muted lg:block" data-testid="autosave">
           {t('editor.autosave')}
         </span>
-        <JobsButton />
-        <button
-          type="button"
-          data-testid="shortcuts-open"
-          aria-label={t('editor.help.shortcuts')}
-          data-tooltip={t('editor.help.shortcuts')}
-          data-shortcut="?"
-          onClick={() => setShortcutsOpen(true)}
-          className={iconButton}
-        >
-          <Keyboard size={16} aria-hidden />
-        </button>
-        <button
-          type="button"
-          data-testid="export-open"
-          onClick={() => {
-            useEditorStore.getState().setPlaying(false)
-            setExporting(true)
-          }}
-          className="flex items-center gap-2 rounded-full bg-accent px-4 py-1.5 text-sm font-semibold text-accent-fg shadow-sm transition-[filter,transform] hover:brightness-110 active:scale-[0.98]"
-        >
-          <Download size={16} aria-hidden />
-          {t('editor.export.open')}
-        </button>
-      </header>
+        <span className="app-no-drag flex items-center gap-1">
+          <JobsButton />
+          <button
+            type="button"
+            data-testid="shortcuts-open"
+            aria-label={t('editor.help.shortcuts')}
+            data-tooltip={t('editor.help.shortcuts')}
+            data-shortcut="?"
+            onClick={() => setShortcutsOpen(true)}
+            className={iconButton}
+          >
+            <Keyboard size={16} aria-hidden />
+          </button>
+          <button
+            type="button"
+            data-testid="export-open"
+            onClick={() => {
+              useEditorStore.getState().setPlaying(false)
+              setExporting(true)
+            }}
+            className="mr-2 flex items-center gap-1.5 rounded-md bg-accent px-3.5 py-1 text-[13px] font-semibold text-accent-fg shadow-sm transition-[filter,transform] hover:brightness-110 active:scale-[0.98]"
+          >
+            <Download size={15} aria-hidden />
+            {t('editor.export.open')}
+          </button>
+        </span>
+      </InTitleBar>
 
       <div className="flex min-h-0 flex-1">
-        <aside className="w-[300px] shrink-0 border-r border-border bg-surface xl:w-[360px]">
+        <aside className="w-[330px] shrink-0 border-r border-border bg-surface xl:w-[420px]">
           <MediaBrowser />
         </aside>
         <section className="flex min-w-0 flex-1 flex-col" aria-label={t('editor.player.title')}>
+          <div className="flex h-9 shrink-0 items-center border-b border-border bg-surface px-3 text-xs font-medium text-muted">
+            {t('editor.player.title')}
+          </div>
           <div
             ref={playerRef}
             data-testid="player-area"

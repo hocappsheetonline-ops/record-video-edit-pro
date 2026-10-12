@@ -19,13 +19,13 @@
     -apple-system, 'SF Pro Text', 'SF Pro Display', 'Inter', 'Segoe UI Variable', 'Segoe UI',
     system-ui, sans-serif;
   --font-mono: 'SF Mono', 'Roboto Mono', ui-monospace, Menlo, Consolas, monospace;
-  /* Bo góc đồng tâm kiểu Apple: mọi lớp `rounded-*` hiện có bo tròn hơn. */
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
-  --radius-2xl: 22px;
-  --radius-3xl: 28px;
+  /* Bo góc vừa phải (như CapCut): toàn bộ thang `rounded-*` dùng giá trị này. */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 10px;
+  --radius-2xl: 14px;
+  --radius-3xl: 18px;
   /* Bóng mềm, lan rộng (không gắt). */
   --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.12);
   --shadow: 0 1px 3px rgb(0 0 0 / 0.14), 0 1px 2px rgb(0 0 0 / 0.1);
@@ -36,19 +36,20 @@
 :root,
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --lm-bg: #1c1c1e;
-  --lm-surface: #232325;
-  --lm-surface-2: #2c2c2e;
-  --lm-border: rgb(255 255 255 / 0.1);
-  --lm-text: #f5f5f7;
-  --lm-muted: #98989d;
-  --lm-accent: #0a84ff;
+  /* Xám than kiểu CapCut: nền tối, bảng #1f1f1f, viền hairline. */
+  --lm-bg: #161616;
+  --lm-surface: #1f1f1f;
+  --lm-surface-2: #2a2a2a;
+  --lm-border: rgb(255 255 255 / 0.09);
+  --lm-text: #ededed;
+  --lm-muted: #8f8f8f;
+  --lm-accent: #1ed6d6;
   --lm-accent-fg: #ffffff;
   --lm-success: #30d158;
   --lm-danger: #ff453a;
   /* Kính mờ: nền bán trong suốt + làm nhòe phía sau. */
-  --lm-glass: rgb(36 36 38 / 0.72);
-  --lm-glass-strong: rgb(30 30 32 / 0.86);
+  --lm-glass: rgb(31 31 31 / 0.74);
+  --lm-glass-strong: rgb(26 26 26 / 0.88);
   --lm-glass-border: rgb(255 255 255 / 0.12);
   --lm-scrollbar: rgb(255 255 255 / 0.22);
 }
@@ -61,7 +62,7 @@
   --lm-border: rgb(0 0 0 / 0.09);
   --lm-text: #1d1d1f;
   --lm-muted: #6e6e73;
-  --lm-accent: #007aff;
+  --lm-accent: #0bb5b5;
   --lm-accent-fg: #ffffff;
   --lm-success: #34c759;
   --lm-danger: #ff3b30;
@@ -222,7 +223,7 @@ kbd {
   box-shadow:
     0 0 0 1px var(--lm-bg),
     0 0 0 4px color-mix(in srgb, var(--lm-accent) 55%, transparent);
-  border-radius: 6px;
+  border-radius: 4px;
 }
 
 @media (prefers-reduced-motion: reduce) {

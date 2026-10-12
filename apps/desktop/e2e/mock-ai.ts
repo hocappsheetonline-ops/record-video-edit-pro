@@ -118,6 +118,9 @@ export async function startMockAi(): Promise<{
             anthropicMessage({ cuts: [{ from: 2, to: 2, kind: 'filler', reason: 'Từ đệm' }] }),
           )
         }
+        if (system.includes('editing assistant')) {
+          return json(200, anthropicMessage({ commands: [{ kind: 'cutSilences' }] }))
+        }
         if (system.includes('metadata')) {
           return json(
             200,

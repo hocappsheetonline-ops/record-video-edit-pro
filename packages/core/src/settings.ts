@@ -5,10 +5,11 @@ export const THEMES = ['system', 'dark', 'light'] as const
 export type Theme = (typeof THEMES)[number]
 
 /**
- * Màu nhấn có sẵn (bộ màu hệ thống của macOS: xanh dương, tím, hồng, đỏ, cam, vàng, xanh lá,
- * than chì); người dùng cũng có thể chọn màu bất kỳ (mã hex).
+ * Màu nhấn có sẵn: xanh ngọc kiểu CapCut (mặc định) và bộ màu hệ thống của macOS (xanh dương,
+ * tím, hồng, đỏ, cam, vàng, xanh lá, than chì); người dùng cũng có thể chọn màu bất kỳ (mã hex).
  */
 export const ACCENT_PRESETS = [
+  '#1ed6d6',
   '#0a84ff',
   '#bf5af2',
   '#ff375f',
@@ -34,6 +35,37 @@ export interface AppSettings {
   projectTemplate: ProjectTemplate
   /** Giảm trong suốt: bề mặt kính mờ thành màu đặc (máy yếu hoặc muốn tương phản cao). */
   reduceTransparency: boolean
+  /** AI cục bộ (Ollama) thay cho Claude: trợ lý, cắt từ thừa, tóm tắt, dịch chạy trên máy. */
+  localAi: LocalAiSettings
+}
+
+export interface LocalAiSettings {
+  enabled: boolean
+  /** Địa chỉ máy chủ Ollama (mặc định http://127.0.0.1:11434). */
+  baseUrl: string
+  /** Tên model đã tải trong Ollama (ví dụ qwen2.5:7b, llama3.2). */
+  model: string
+}
+
+export const DEFAULT_LOCAL_AI: LocalAiSettings = {
+  enabled: false,
+  baseUrl: 'http://127.0.0.1:11434',
+  model: 'qwen2.5:7b',
+}
+
+/** Chuẩn hóa cài đặt AI cục bộ: chỉ nhận http(s), bỏ dấu / cuối, tên model ngắn gọn. */
+export function normalizeLocalAi(input: unknown): LocalAiSettings {
+  const raw = (typeof input === 'object' && input !== null ? input : {}) as Record<string, unknown>
+  const url = typeof raw.baseUrl === 'string' ? raw.baseUrl.trim().replace(/\/+$/, '') : ''
+  const model = typeof raw.model === 'string' ? raw.model.trim().slice(0, 80) : ''
+  return {
+    enabled: raw.enabled === true,
+    baseUrl:
+      /^https?:\/\/[^\s/]+(?:\/[^\s]*)?$/.test(url) && url.length <= 200
+        ? url
+        : DEFAULT_LOCAL_AI.baseUrl,
+    model: /^[\w.:/-]+$/.test(model) ? model : DEFAULT_LOCAL_AI.model,
+  }
 }
 
 export const PREVIEW_QUALITIES = ['auto', 'high', 'low'] as const
@@ -51,6 +83,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   previewQuality: 'auto',
   projectTemplate: 'tutorial',
   reduceTransparency: false,
+  localAi: { ...DEFAULT_LOCAL_AI },
 }
 
 function pick<T extends string>(allowed: readonly T[], value: unknown, fallback: T): T {
@@ -76,6 +109,7 @@ export function normalizeSettings(input: unknown): AppSettings {
     previewQuality: pick(PREVIEW_QUALITIES, raw.previewQuality, DEFAULT_SETTINGS.previewQuality),
     projectTemplate: pick(PROJECT_TEMPLATES, raw.projectTemplate, DEFAULT_SETTINGS.projectTemplate),
     reduceTransparency: raw.reduceTransparency === true,
+    localAi: normalizeLocalAi(raw.localAi),
   }
 }
 

@@ -7,7 +7,7 @@ import {
   Music2,
   Palette,
   Smile,
-  Sparkles,
+  Sparkle,
   Type,
   WandSparkles,
   type LucideIcon,
@@ -39,7 +39,7 @@ const TAB_ICONS: Record<LibraryTab, LucideIcon> = {
   audio: Music2,
   text: Type,
   stickers: Smile,
-  effects: Sparkles,
+  effects: Sparkle,
   filters: Palette,
   transitions: ArrowLeftRight,
   captions: Captions,
@@ -62,11 +62,12 @@ export function MediaBrowser() {
       setTab(tabRequest.tab as LibraryTab)
   }
   return (
-    <div className="flex h-full" data-testid="library">
+    <div className="flex h-full flex-col" data-testid="library">
+      {/* Hàng mục ngang như CapCut: biểu tượng trên, nhãn dưới; cuộn ngang khi hẹp. */}
       <div
-        className="flex w-16 shrink-0 flex-col items-center gap-0.5 overflow-y-auto border-r border-border bg-bg py-1.5"
+        className="flex shrink-0 gap-0.5 overflow-x-auto border-b border-border bg-bg px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         role="tablist"
-        aria-orientation="vertical"
+        aria-orientation="horizontal"
         aria-label={t('editor.library.title')}
       >
         {LIBRARY_TABS.map((name) => {
@@ -82,22 +83,17 @@ export function MediaBrowser() {
               data-tooltip={t(`editor.library.tabs.${name}`)}
               data-testid={`lib-${name}`}
               onClick={() => setTab(name)}
-              className={`flex min-h-[46px] w-[58px] flex-col items-center gap-1 rounded-lg px-0.5 py-1.5 text-[9.5px] leading-[1.15] transition-colors ${
-                active ? 'bg-surface-2 text-text' : 'text-muted hover:text-text'
+              className={`flex min-w-[58px] shrink-0 flex-col items-center gap-1 rounded-md px-1.5 py-1.5 text-[10px] leading-none transition-colors ${
+                active ? 'text-accent' : 'text-muted hover:text-text'
               }`}
             >
-              <Icon size={18} strokeWidth={active ? 2 : 1.75} aria-hidden />
-              <span className="line-clamp-2 w-full break-words text-center">
-                {t(`editor.library.tabs.${name}`)}
-              </span>
+              <Icon size={20} strokeWidth={active ? 2 : 1.6} aria-hidden />
+              <span className="whitespace-nowrap">{t(`editor.library.tabs.${name}`)}</span>
             </button>
           )
         })}
       </div>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <h2 className="flex h-10 shrink-0 items-center border-b border-border px-3 text-sm font-semibold">
-          {t(`editor.library.tabs.${tab}`)}
-        </h2>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {tab === 'media' && <MediaTab />}
           {tab === 'audio' && <AudioTab />}

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ACCENT_PRESETS,
@@ -16,6 +17,7 @@ import { ApiKeyCard } from '../components/ApiKeyCard'
 import { CacheCard } from '../components/CacheCard'
 import { PageHeader } from '../components/PageHeader'
 import { Toggle } from '../editor/ui'
+import { lumora } from '../api'
 import { useAppStore } from '../store/app'
 
 const LANGUAGE_NAMES: Record<Language, string> = { vi: 'Tiếng Việt', en: 'English' }
@@ -26,6 +28,119 @@ const selectClass =
 const groupTitle = 'mb-2 text-[13px] font-semibold text-text'
 /** Khối nhóm: thẻ bo góc lớn, viền hairline. */
 const group = 'mb-8 grid gap-4 rounded-2xl border border-border bg-surface p-5 sm:grid-cols-2'
+
+/**
+ * AI cục bộ (Ollama): bật để trợ lý AI, cắt từ thừa, tóm tắt và dịch chạy trên máy bằng model mở,
+ * miễn phí và không gửi dữ liệu đi đâu. Người dùng cài Ollama rồi tải một model (ollama pull).
+ */
+function LocalAiCard() {
+  const { t } = useTranslation()
+  const settings = useAppStore((s) => s.settings)
+  const updateSettings = useAppStore((s) => s.updateSettings)
+  const [models, setModels] = useState<string[] | null>(null)
+  const [status, setStatus] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  if (!settings) return null
+  const local = settings.localAi
+  const patch = (p: Partial<typeof local>) => void updateSettings({ localAi: { ...local, ...p } })
+  const check = async () => {
+    setBusy(true)
+    setStatus(null)
+    try {
+      const list = await lumora().listLocalModels(local.baseUrl)
+      setModels(list)
+      if (list.length === 0) setStatus({ tone: 'error', text: t('settings.localAi.noModels') })
+      else {
+        setStatus({ tone: 'ok', text: t('settings.localAi.connected', { count: list.length }) })
+        if (!list.includes(local.model)) patch({ model: list[0]! })
+      }
+    } catch {
+      setModels(null)
+      setStatus({ tone: 'error', text: t('settings.localAi.offline') })
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className={group} data-testid="local-ai-card">
+      <div className="sm:col-span-2">
+        <Toggle
+          label={t('settings.localAi.enable')}
+          hint={t('settings.localAi.hint')}
+          checked={local.enabled}
+          testId="local-ai-enabled"
+          onChange={(enabled) => patch({ enabled })}
+        />
+      </div>
+      <label className="flex flex-col gap-1.5 text-sm">
+        {t('settings.localAi.url')}
+        <input
+          type="text"
+          data-testid="local-ai-url"
+          value={local.baseUrl}
+          spellCheck={false}
+          onChange={(e) => patch({ baseUrl: e.target.value })}
+          className="rounded-lg border border-border bg-surface-2 px-3 py-2 font-mono text-sm outline-none focus:border-accent"
+        />
+      </label>
+      <label className="flex flex-col gap-1.5 text-sm">
+        {t('settings.localAi.model')}
+        {models && models.length > 0 ? (
+          <select
+            className={selectClass}
+            data-testid="local-ai-model"
+            value={models.includes(local.model) ? local.model : models[0]}
+            onChange={(e) => patch({ model: e.target.value })}
+          >
+            {models.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            type="text"
+            data-testid="local-ai-model"
+            value={local.model}
+            spellCheck={false}
+            onChange={(e) => patch({ model: e.target.value })}
+            className="rounded-lg border border-border bg-surface-2 px-3 py-2 font-mono text-sm outline-none focus:border-accent"
+          />
+        )}
+      </label>
+      <div className="flex flex-wrap items-center gap-3 sm:col-span-2">
+        <button
+          type="button"
+          data-testid="local-ai-check"
+          disabled={busy}
+          onClick={() => void check()}
+          className="rounded-lg border border-border bg-surface-2/70 px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-surface-2 disabled:opacity-50"
+        >
+          {busy ? t('settings.localAi.checking') : t('settings.localAi.check')}
+        </button>
+        {status && (
+          <span
+            role="status"
+            data-testid="local-ai-status"
+            className={`text-sm ${status.tone === 'ok' ? 'text-success' : 'text-danger'}`}
+          >
+            {status.text}
+          </span>
+        )}
+        <a
+          href="https://ollama.com/download"
+          target="_blank"
+          rel="noreferrer"
+          className="text-sm text-accent hover:underline"
+        >
+          {t('settings.localAi.install')}
+        </a>
+      </div>
+      <p className="text-xs text-muted sm:col-span-2">{t('settings.localAi.models')}</p>
+    </div>
+  )
+}
 
 export function SettingsPage() {
   const { t } = useTranslation()
@@ -160,6 +275,9 @@ export function SettingsPage() {
           </button>
         </div>
       </div>
+
+      <h2 className={groupTitle}>{t('settings.localAi.title')}</h2>
+      <LocalAiCard />
 
       <h2 className={groupTitle.replace('mb-2', 'mb-1')}>{t('settings.apiKeys')}</h2>
       <p className="mb-3 text-sm text-muted">{t('settings.apiKeysHint')}</p>
