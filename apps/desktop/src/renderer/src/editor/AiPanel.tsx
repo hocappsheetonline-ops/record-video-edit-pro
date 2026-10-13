@@ -1,6 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Brain, Clapperboard, Scissors, Send, Sparkle, Trash2 } from 'lucide-react'
+import {
+  AlertTriangle,
+  Brain,
+  Captions,
+  CheckCircle2,
+  ChevronDown,
+  Clapperboard,
+  FileText,
+  Loader2,
+  Scissors,
+  Send,
+  Sparkle,
+  Trash2,
+  WandSparkles,
+} from 'lucide-react'
 import {
   removeSourceRanges,
   sourceToOutput,
@@ -10,6 +24,7 @@ import {
   type DirectorPlan,
 } from '@lumora/core'
 import { useAppStore } from '../store/app'
+import { runningAiJob, useAiStatus, watchAiStatus } from '../ai/status'
 import type { AiSummary } from '@shared/ipc'
 import { lumora } from '../api'
 import { aiErrorText } from './ai-errors'
@@ -110,12 +125,15 @@ function Director() {
     setError(null)
     setReport(null)
     try {
-      const result = await runJob(t('ai.assistant.job'), (progress) =>
-        useEditorStore
-          .getState()
-          .askDirector(goal, (done, total, step) =>
-            progress(done / total, t(`ai.auto.steps.${step}`, { defaultValue: step })),
-          ),
+      const result = await runJob(
+        t('ai.assistant.job'),
+        (progress) =>
+          useEditorStore
+            .getState()
+            .askDirector(goal, (done, total, step) =>
+              progress(done / total, t(`ai.auto.steps.${step}`, { defaultValue: step })),
+            ),
+        { kind: 'ai' },
       )
       finish(result.applied, result.report, result.plan)
     } catch (e) {
@@ -128,12 +146,15 @@ function Director() {
     setError(null)
     try {
       const pending = plan
-      const result = await runJob(t('ai.assistant.job'), (progress) =>
-        useEditorStore
-          .getState()
-          .applyDirectorPlan((done, total, step) =>
-            progress(done / total, t(`ai.auto.steps.${step}`, { defaultValue: step })),
-          ),
+      const result = await runJob(
+        t('ai.assistant.job'),
+        (progress) =>
+          useEditorStore
+            .getState()
+            .applyDirectorPlan((done, total, step) =>
+              progress(done / total, t(`ai.auto.steps.${step}`, { defaultValue: step })),
+            ),
+        { kind: 'ai' },
       )
       finish(true, result, pending)
     } catch (e) {
@@ -426,10 +447,13 @@ function Shorts() {
     setError(null)
     setCount(null)
     try {
-      const n = await runJob(t('ai.shorts.job'), (progress) =>
-        useEditorStore
-          .getState()
-          .splitIntoShorts({ mode, seconds, vertical }, (done, total) => progress(done / total)),
+      const n = await runJob(
+        t('ai.shorts.job'),
+        (progress) =>
+          useEditorStore
+            .getState()
+            .splitIntoShorts({ mode, seconds, vertical }, (done, total) => progress(done / total)),
+        { kind: 'ai' },
       )
       setCount(n)
       if (n > 0)
@@ -526,12 +550,15 @@ function AutoEdit() {
     setError(null)
     setReport(null)
     try {
-      const result = await runJob(t('ai.auto.job'), (progress) =>
-        useEditorStore
-          .getState()
-          .autoEdit(options, (done, total, step) =>
-            progress(done / total, t(`ai.auto.steps.${step}`)),
-          ),
+      const result = await runJob(
+        t('ai.auto.job'),
+        (progress) =>
+          useEditorStore
+            .getState()
+            .autoEdit(options, (done, total, step) =>
+              progress(done / total, t(`ai.auto.steps.${step}`)),
+            ),
+        { kind: 'ai' },
       )
       setReport(result)
       if (result.some((r) => r.status === 'done'))
@@ -610,6 +637,340 @@ function AutoEdit() {
   )
 }
 
+/** Giây đã trôi từ lúc việc bắt đầu, cập nhật mỗi giây; việc mới bắt đầu thì về 0. */
+function useElapsed(startedAt: number | null): number {
+  const [state, setState] = useState<{ startedAt: number | null; elapsed: number }>({
+    startedAt: null,
+    elapsed: 0,
+  })
+  useEffect(() => {
+    if (startedAt === null) return
+    const update = () =>
+      setState({ startedAt, elapsed: Math.max(0, Math.round((Date.now() - startedAt) / 1000)) })
+    const id = window.setInterval(update, 1000)
+    return () => window.clearInterval(id)
+  }, [startedAt])
+  return startedAt !== null && state.startedAt === startedAt ? state.elapsed : 0
+}
+
+/**
+ * Thanh trạng thái AI ở đầu bảng: đang dùng engine nào (Ollama / Claude / whisper.cpp + Piper /
+ * ElevenLabs), sẵn sàng chưa, và việc AI nào đang chạy được bao lâu. Chưa sẵn sàng thì có nút
+ * Thiết lập mở đúng mục trong Cài đặt.
+ */
+function AiStatusBar() {
+  const { t } = useTranslation()
+  const text = useAiStatus((s) => s.text)
+  const speech = useAiStatus((s) => s.speech)
+  const checking = useAiStatus((s) => s.checking)
+  const jobs = useJobs((s) => s.jobs)
+  const running = runningAiJob(jobs)
+  const elapsed = useElapsed(running?.startedAt ?? null)
+  useEffect(() => {
+    watchAiStatus()
+    void useAiStatus.getState().refresh()
+  }, [])
+  const openSetup = () => useAppStore.getState().openSettings('ai')
+  const engineName = (kind: string) => t(`ai.status.engines.${kind}`, { defaultValue: kind })
+  const textName =
+    text.engine === 'none'
+      ? engineName('keywords')
+      : `${engineName(text.engine)}${text.engine === 'ollama' ? ` ${text.detail}` : ''}`
+  const speechName = engineName(speech.engine)
+  const problems: string[] = []
+  if (!text.ready)
+    problems.push(
+      t(`ai.status.problems.${text.problem ?? 'no_key'}`, {
+        name: text.detail,
+        defaultValue: '',
+      }),
+    )
+  if (!speech.ready)
+    problems.push(
+      speech.problem === 'missing_tools'
+        ? `${t('ai.status.problems.missing_tools')}: ${speech.missing
+            .map((m) => t(`ai.status.missing.${m}`, { defaultValue: m }))
+            .join(', ')}`
+        : t('ai.status.problems.speech_no_key', {
+            defaultValue:
+              'Chưa có key ElevenLabs và chưa bật giọng nói trên máy – bấm để thiết lập',
+          }),
+    )
+  const state = running
+    ? 'running'
+    : text.ready && speech.ready
+      ? 'ready'
+      : text.ready || speech.ready
+        ? 'partial'
+        : 'off'
+  return (
+    <section
+      className={`flex flex-col gap-1.5 rounded-xl border p-3 text-xs ${
+        state === 'ready' || state === 'running'
+          ? 'border-success/30 bg-success/5'
+          : 'border-warning/40 bg-warning/5'
+      }`}
+      data-testid="ai-status-bar"
+      data-state={state}
+      aria-live="polite"
+    >
+      {running ? (
+        <div className="flex flex-col gap-1.5" data-testid="ai-status-running">
+          <div className="flex items-center gap-2">
+            <Loader2 size={14} className="shrink-0 animate-spin text-accent" aria-hidden />
+            <span className="min-w-0 flex-1 truncate font-medium">{running.label}</span>
+            <span className="shrink-0 tabular-nums text-muted" data-testid="ai-status-elapsed">
+              {t('ai.status.elapsed', { s: elapsed })}
+            </span>
+            {running.cancel && (
+              <button
+                type="button"
+                onClick={running.cancel}
+                className="shrink-0 rounded border border-border px-1.5 py-0.5 text-[11px] text-muted hover:text-danger"
+              >
+                {t('common.cancel', { defaultValue: 'Hủy' })}
+              </button>
+            )}
+          </div>
+          <div className="h-1 overflow-hidden rounded-full bg-surface-2">
+            <div
+              className={`h-full bg-accent ${running.progress === null ? 'w-1/3 animate-pulse' : ''}`}
+              style={
+                running.progress === null
+                  ? undefined
+                  : { width: `${Math.round(running.progress * 100)}%` }
+              }
+            />
+          </div>
+          <p className="text-[11px] text-muted">
+            {t('ai.status.runningWith', { text: textName, speech: speechName })}
+          </p>
+        </div>
+      ) : (
+        <div className="flex items-start gap-2">
+          {state === 'ready' ? (
+            <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-success" aria-hidden />
+          ) : checking ? (
+            <Loader2 size={14} className="mt-0.5 shrink-0 animate-spin text-muted" aria-hidden />
+          ) : (
+            <AlertTriangle size={14} className="mt-0.5 shrink-0 text-warning" aria-hidden />
+          )}
+          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <p className="font-medium">
+              {state === 'ready'
+                ? t('ai.status.ready')
+                : state === 'partial'
+                  ? t('ai.status.partial')
+                  : t('ai.status.notReady')}
+            </p>
+            <p className="text-muted" data-testid="ai-status-engines">
+              {t('ai.status.engineText', { name: textName })} ·{' '}
+              {t('ai.status.engineSpeech', { name: speechName })}
+            </p>
+            {problems.filter(Boolean).map((p, i) => (
+              <p key={i} className="text-warning" data-testid="ai-status-problem">
+                {p}
+              </p>
+            ))}
+          </div>
+          {state !== 'ready' && (
+            <button
+              type="button"
+              data-testid="ai-status-setup"
+              onClick={openSetup}
+              className="shrink-0 rounded-lg bg-accent px-2.5 py-1 text-[11px] font-semibold text-accent-fg hover:brightness-110"
+            >
+              {t('ai.status.setup')}
+            </button>
+          )}
+        </div>
+      )}
+    </section>
+  )
+}
+
+/**
+ * Bốn việc hay làm nhất, mỗi việc một nút: tự biên tập, phụ đề, cắt lặng + từ thừa, tiêu đề & mô
+ * tả. Không cần chọn gì thêm; kết quả hiện ở thanh trạng thái và thẻ bên dưới.
+ */
+function QuickActions({ onSummary }: { onSummary: () => Promise<void> }) {
+  const { t } = useTranslation()
+  const [report, setReport] = useState<AutoEditReport[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const jobs = useJobs((s) => s.jobs)
+  const busy = runningAiJob(jobs) !== undefined
+  const act = async (key: 'autoEdit' | 'captions' | 'cleanup') => {
+    setError(null)
+    setReport(null)
+    try {
+      const result = await runJob(
+        t(`ai.quick.${key}`),
+        (progress) => {
+          const s = useEditorStore.getState()
+          const tick = (done: number, total: number, step: string) =>
+            progress(done / total, t(`ai.auto.steps.${step}`, { defaultValue: step }))
+          if (key === 'autoEdit') return s.autoEdit(DEFAULT_AUTO, tick)
+          if (key === 'captions') return s.applyAssistantCommands([{ kind: 'captions' }], tick)
+          return s.applyAssistantCommands(
+            [{ kind: 'cutSilences' }, { kind: 'removeFillers' }],
+            tick,
+          )
+        },
+        { kind: 'ai' },
+      )
+      setReport(result)
+      if (result.some((r) => r.status === 'done'))
+        useJobs.getState().toast({ kind: 'success', text: t('ai.auto.done') })
+    } catch (e) {
+      setError(aiErrorText(t, e))
+    }
+  }
+  const tiles: { key: 'autoEdit' | 'captions' | 'cleanup' | 'summary'; icon: typeof Sparkle }[] = [
+    { key: 'autoEdit', icon: WandSparkles },
+    { key: 'captions', icon: Captions },
+    { key: 'cleanup', icon: Scissors },
+    { key: 'summary', icon: FileText },
+  ]
+  const detailText = (r: AutoEditReport) =>
+    r.status === 'done'
+      ? t('ai.auto.status.done', { n: r.detail })
+      : r.status === 'skipped'
+        ? t('ai.auto.status.skipped', {
+            reason: t(`ai.auto.reasons.${r.detail}`, { defaultValue: String(r.detail) }),
+          })
+        : t('ai.auto.status.error', { message: String(r.detail) })
+  return (
+    <section className="flex flex-col gap-2" data-testid="ai-quick">
+      <div className="grid grid-cols-2 gap-2">
+        {tiles.map(({ key, icon: Icon }) => (
+          <button
+            key={key}
+            type="button"
+            data-testid={`ai-quick-${key}`}
+            disabled={busy}
+            onClick={() => (key === 'summary' ? void onSummary() : void act(key))}
+            className="flex items-center gap-2 rounded-xl border border-border bg-surface-2/60 px-3 py-2.5 text-left text-sm font-medium shadow-sm hover:border-accent/60 hover:bg-surface-2 disabled:opacity-50"
+          >
+            <Icon size={16} className="shrink-0 text-accent" aria-hidden />
+            <span className="min-w-0">
+              <span className="block truncate">{t(`ai.quick.${key}`)}</span>
+              <span className="block truncate text-[11px] font-normal text-muted">
+                {t(`ai.quick.${key}Hint`)}
+              </span>
+            </span>
+          </button>
+        ))}
+      </div>
+      {report && (
+        <ul className="flex flex-wrap gap-1 text-[11px]" data-testid="ai-quick-report">
+          {report.map((r, i) => (
+            <li
+              key={`${r.step}-${i}`}
+              data-status={r.status}
+              title={detailText(r)}
+              className={`rounded-md px-2 py-0.5 ${
+                r.status === 'done'
+                  ? 'bg-accent/15 text-accent'
+                  : r.status === 'skipped'
+                    ? 'bg-surface-2 text-muted line-through'
+                    : 'bg-danger/10 text-danger'
+              }`}
+            >
+              {t(`ai.auto.steps.${r.step}`, {
+                defaultValue: t(`ai.assistant.kinds.${r.step}`, { defaultValue: r.step }),
+              })}
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && (
+        <p role="alert" className="rounded-lg bg-danger/10 p-3 text-sm text-danger">
+          {error}
+        </p>
+      )}
+    </section>
+  )
+}
+
+/** Mục thu gọn "Công cụ khác" cho các bảng ít dùng (tự biên tập tùy chọn, video ngắn, duyệt cắt…). */
+function Advanced({ children }: { children: ReactNode }) {
+  const { t } = useTranslation()
+  const [open, setOpen] = useState(false)
+  return (
+    <section className="flex flex-col gap-4" data-testid="ai-advanced">
+      <button
+        type="button"
+        data-testid="ai-advanced-toggle"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-1.5 self-start text-xs font-semibold text-muted hover:text-text"
+      >
+        <ChevronDown
+          size={14}
+          className={`transition-transform ${open ? 'rotate-180' : ''}`}
+          aria-hidden
+        />
+        {t('ai.advanced')}
+      </button>
+      <div className={open ? 'flex flex-col gap-6' : 'hidden'} data-testid="ai-advanced-body">
+        {children}
+      </div>
+    </section>
+  )
+}
+
+/** Kết quả tóm tắt: tiêu đề gợi ý, mô tả, chương, hashtag; chép hoặc lưu thành file. */
+function SummaryView({
+  summary,
+  chapterLines,
+  summaryText,
+  folder,
+  name,
+}: {
+  summary: AiSummary
+  chapterLines: string[]
+  summaryText: string
+  folder: string
+  name: string
+}) {
+  const { t } = useTranslation()
+  return (
+    <div className="flex flex-col gap-2 text-sm" data-testid="ai-summary">
+      <ul className="list-disc pl-5">
+        {summary.titles.map((title) => (
+          <li key={title}>{title}</li>
+        ))}
+      </ul>
+      <p className="text-muted">{summary.description}</p>
+      {chapterLines.length > 0 && (
+        <pre
+          className="whitespace-pre-wrap rounded bg-surface-2 p-2 text-xs"
+          data-testid="ai-chapters"
+        >
+          {chapterLines.join('\n')}
+        </pre>
+      )}
+      <p className="text-accent">{summary.hashtags.join(' ')}</p>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          className={button}
+          onClick={() => void navigator.clipboard?.writeText(summaryText)}
+        >
+          {t('ai.summary.copy')}
+        </button>
+        <button
+          type="button"
+          className={button}
+          onClick={() => void lumora().saveExportText(folder, `${name}.txt`, summaryText)}
+        >
+          {t('ai.summary.save')}
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function AiPanel() {
   const { t } = useTranslation()
   const edit = useEditorStore((s) => s.edit)
@@ -645,7 +1006,9 @@ export function AiPanel() {
 
   const findCuts = () =>
     run('cuts', async () => {
-      const list = await lumora().suggestCuts(folder)
+      const list = await runJob(t('ai.cuts.job'), () => lumora().suggestCuts(folder), {
+        kind: 'ai',
+      })
       // Chỉ gợi ý phần còn nằm trên timeline.
       const visible = list.filter((s) => sourceToOutput(edit.clips, (s.start + s.end) / 2) !== null)
       setSuggestions(visible)
@@ -667,7 +1030,12 @@ export function AiPanel() {
     setSelectedWords(new Set())
   }
 
-  const makeSummary = () => run('summary', async () => setSummary(await lumora().summarize(folder)))
+  const makeSummary = () =>
+    run('summary', async () =>
+      setSummary(
+        await runJob(t('ai.summary.job'), () => lumora().summarize(folder), { kind: 'ai' }),
+      ),
+    )
 
   const chapterLines = (summary?.chapters ?? []).flatMap((c) => {
     const out = sourceToOutput(edit.clips, c.start)
@@ -686,171 +1054,152 @@ export function AiPanel() {
     : ''
 
   return (
-    <div className="flex flex-col gap-6" data-testid="ai-panel">
+    <div className="flex flex-col gap-5" data-testid="ai-panel">
+      <AiStatusBar />
+      <QuickActions onSummary={makeSummary} />
       <Director />
-      <AutoEdit />
-      <Shorts />
 
-      <section className="flex flex-col gap-3">
-        <h3 className={heading}>{t('ai.cuts.title')}</h3>
-        <p className="text-xs text-muted">{t('ai.cuts.intro')}</p>
-        <button
-          type="button"
-          data-testid="ai-suggest"
-          className={button}
-          disabled={busy !== null}
-          onClick={() => void findCuts()}
-        >
-          {busy === 'cuts' ? t('ai.working') : t('ai.cuts.find')}
-        </button>
-        {suggestions && suggestions.length === 0 && (
-          <p className="text-sm text-muted">{t('ai.cuts.none')}</p>
-        )}
-        {suggestions && suggestions.length > 0 && (
-          <>
-            <ul className="flex max-h-60 flex-col gap-1 overflow-y-auto">
-              {suggestions.map((s) => (
-                <li key={s.id}>
-                  <label className="flex items-start gap-2 text-sm" data-testid="ai-suggestion">
-                    <input
-                      type="checkbox"
-                      className="mt-0.5 size-4 accent-accent"
-                      checked={checked.has(s.id)}
-                      onChange={(e) => {
-                        const next = new Set(checked)
-                        if (e.target.checked) next.add(s.id)
-                        else next.delete(s.id)
-                        setChecked(next)
-                      }}
-                    />
-                    <span>
-                      <span className="mr-1 rounded bg-surface-2 px-1.5 text-[11px] text-muted">
-                        {t(`ai.kinds.${s.kind}`)}
+      {summary && (
+        <section className="flex flex-col gap-2" data-testid="ai-summary-quick">
+          <h3 className={heading}>{t('ai.summary.title')}</h3>
+          <SummaryView
+            summary={summary}
+            chapterLines={chapterLines}
+            summaryText={summaryText}
+            folder={folder}
+            name={project.name}
+          />
+        </section>
+      )}
+
+      <Advanced>
+        <AutoEdit />
+        <Shorts />
+
+        <section className="flex flex-col gap-3">
+          <h3 className={heading}>{t('ai.cuts.title')}</h3>
+          <p className="text-xs text-muted">{t('ai.cuts.intro')}</p>
+          <button
+            type="button"
+            data-testid="ai-suggest"
+            className={button}
+            disabled={busy !== null}
+            onClick={() => void findCuts()}
+          >
+            {busy === 'cuts' ? t('ai.working') : t('ai.cuts.find')}
+          </button>
+          {suggestions && suggestions.length === 0 && (
+            <p className="text-sm text-muted">{t('ai.cuts.none')}</p>
+          )}
+          {suggestions && suggestions.length > 0 && (
+            <>
+              <ul className="flex max-h-60 flex-col gap-1 overflow-y-auto">
+                {suggestions.map((s) => (
+                  <li key={s.id}>
+                    <label className="flex items-start gap-2 text-sm" data-testid="ai-suggestion">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 size-4 accent-accent"
+                        checked={checked.has(s.id)}
+                        onChange={(e) => {
+                          const next = new Set(checked)
+                          if (e.target.checked) next.add(s.id)
+                          else next.delete(s.id)
+                          setChecked(next)
+                        }}
+                      />
+                      <span>
+                        <span className="mr-1 rounded bg-surface-2 px-1.5 text-[11px] text-muted">
+                          {t(`ai.kinds.${s.kind}`)}
+                        </span>
+                        <span className="font-mono text-[11px] text-muted">
+                          {formatTimecode(sourceToOutput(edit.clips, s.start) ?? 0)}
+                        </span>{' '}
+                        {s.text
+                          ? `“${s.text}”`
+                          : t('ai.cuts.silenceLength', {
+                              seconds: ((s.end - s.start) / 1000).toFixed(1),
+                            })}
+                        {s.reason && <span className="block text-xs text-muted">{s.reason}</span>}
                       </span>
-                      <span className="font-mono text-[11px] text-muted">
-                        {formatTimecode(sourceToOutput(edit.clips, s.start) ?? 0)}
-                      </span>{' '}
-                      {s.text
-                        ? `“${s.text}”`
-                        : t('ai.cuts.silenceLength', {
-                            seconds: ((s.end - s.start) / 1000).toFixed(1),
-                          })}
-                      {s.reason && <span className="block text-xs text-muted">{s.reason}</span>}
-                    </span>
-                  </label>
-                </li>
-              ))}
-            </ul>
-            <button
-              type="button"
-              data-testid="ai-apply"
-              disabled={checked.size === 0}
-              className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-accent-fg hover:opacity-90 disabled:opacity-50"
-              onClick={applyCuts}
-            >
-              {t('ai.cuts.apply', { count: checked.size })}
-            </button>
-          </>
-        )}
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <h3 className={heading}>{t('ai.text.title')}</h3>
-        {!transcript ? (
-          <p className="text-xs text-muted">{t('ai.errors.noTranscript')}</p>
-        ) : (
-          <>
-            <p className="text-xs text-muted">{t('ai.text.intro')}</p>
-            <div
-              className="max-h-56 overflow-y-auto rounded-lg border border-border bg-surface-2 p-2 text-sm leading-7"
-              data-testid="ai-transcript"
-            >
-              {transcript.words.map((w, i) => (
-                <button
-                  key={i}
-                  type="button"
-                  data-testid="ai-word"
-                  disabled={!keptWords[i]}
-                  onClick={() => {
-                    const next = new Set(selectedWords)
-                    if (next.has(i)) next.delete(i)
-                    else next.add(i)
-                    setSelectedWords(next)
-                  }}
-                  className={`mr-1 rounded px-0.5 ${
-                    !keptWords[i]
-                      ? 'text-muted line-through'
-                      : selectedWords.has(i)
-                        ? 'bg-danger/30 text-danger'
-                        : 'hover:bg-surface'
-                  }`}
-                >
-                  {w.text}
-                </button>
-              ))}
-            </div>
-            <button
-              type="button"
-              data-testid="ai-cut-words"
-              className={button}
-              disabled={selectedWords.size === 0}
-              onClick={cutWords}
-            >
-              {t('ai.text.cut', { count: selectedWords.size })}
-            </button>
-          </>
-        )}
-      </section>
-
-      <section className="flex flex-col gap-3">
-        <h3 className={heading}>{t('ai.summary.title')}</h3>
-        <button
-          type="button"
-          data-testid="ai-summarize"
-          className={button}
-          disabled={busy !== null}
-          onClick={() => void makeSummary()}
-        >
-          {busy === 'summary' ? t('ai.working') : t('ai.summary.make')}
-        </button>
-        {summary && (
-          <div className="flex flex-col gap-2 text-sm" data-testid="ai-summary">
-            <ul className="list-disc pl-5">
-              {summary.titles.map((title) => (
-                <li key={title}>{title}</li>
-              ))}
-            </ul>
-            <p className="text-muted">{summary.description}</p>
-            {chapterLines.length > 0 && (
-              <pre
-                className="whitespace-pre-wrap rounded bg-surface-2 p-2 text-xs"
-                data-testid="ai-chapters"
-              >
-                {chapterLines.join('\n')}
-              </pre>
-            )}
-            <p className="text-accent">{summary.hashtags.join(' ')}</p>
-            <div className="flex gap-2">
+                    </label>
+                  </li>
+                ))}
+              </ul>
               <button
                 type="button"
-                className={button}
-                onClick={() => void navigator.clipboard?.writeText(summaryText)}
+                data-testid="ai-apply"
+                disabled={checked.size === 0}
+                className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-accent-fg hover:opacity-90 disabled:opacity-50"
+                onClick={applyCuts}
               >
-                {t('ai.summary.copy')}
+                {t('ai.cuts.apply', { count: checked.size })}
               </button>
+            </>
+          )}
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <h3 className={heading}>{t('ai.text.title')}</h3>
+          {!transcript ? (
+            <p className="text-xs text-muted">{t('ai.errors.noTranscript')}</p>
+          ) : (
+            <>
+              <p className="text-xs text-muted">{t('ai.text.intro')}</p>
+              <div
+                className="max-h-56 overflow-y-auto rounded-lg border border-border bg-surface-2 p-2 text-sm leading-7"
+                data-testid="ai-transcript"
+              >
+                {transcript.words.map((w, i) => (
+                  <button
+                    key={i}
+                    type="button"
+                    data-testid="ai-word"
+                    disabled={!keptWords[i]}
+                    onClick={() => {
+                      const next = new Set(selectedWords)
+                      if (next.has(i)) next.delete(i)
+                      else next.add(i)
+                      setSelectedWords(next)
+                    }}
+                    className={`mr-1 rounded px-0.5 ${
+                      !keptWords[i]
+                        ? 'text-muted line-through'
+                        : selectedWords.has(i)
+                          ? 'bg-danger/30 text-danger'
+                          : 'hover:bg-surface'
+                    }`}
+                  >
+                    {w.text}
+                  </button>
+                ))}
+              </div>
               <button
                 type="button"
+                data-testid="ai-cut-words"
                 className={button}
-                onClick={() =>
-                  void lumora().saveExportText(folder, `${project.name}.txt`, summaryText)
-                }
+                disabled={selectedWords.size === 0}
+                onClick={cutWords}
               >
-                {t('ai.summary.save')}
+                {t('ai.text.cut', { count: selectedWords.size })}
               </button>
-            </div>
-          </div>
-        )}
-      </section>
+            </>
+          )}
+        </section>
+
+        <section className="flex flex-col gap-3">
+          <h3 className={heading}>{t('ai.summary.title')}</h3>
+          <button
+            type="button"
+            data-testid="ai-summarize"
+            className={button}
+            disabled={busy !== null}
+            onClick={() => void makeSummary()}
+          >
+            {busy === 'summary' ? t('ai.working') : t('ai.summary.make')}
+          </button>
+        </section>
+      </Advanced>
 
       {error && (
         <p role="alert" className="rounded-lg bg-danger/10 p-3 text-sm text-danger">

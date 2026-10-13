@@ -16,9 +16,17 @@ interface AppState {
   openProject: string | null
   /** Dự án đang mở trong trình chỉnh sửa. */
   editorFolder: string | null
+  /**
+   * Mục cần cuộn tới khi mở trang Cài đặt (ví dụ bấm vào thanh trạng thái AI). Trang Cài đặt
+   * cuộn tới `[data-section="ai"]` rồi tự xóa bằng `clearSettingsSection()`.
+   */
+  settingsSection: 'ai' | null
   init(): Promise<void>
   openEditor(folder: string): void
   setPage(page: Page): void
+  /** Mở trang Cài đặt, tùy chọn cuộn tới một mục. */
+  openSettings(section?: 'ai'): void
+  clearSettingsSection(): void
   showProject(folder: string | null): void
   updateSettings(patch: Partial<AppSettings>): Promise<void>
   saveSecret(key: SecretKey, value: string): Promise<void>
@@ -33,6 +41,7 @@ export const useAppStore = create<AppState>((set) => ({
   secrets: null,
   openProject: null,
   editorFolder: null,
+  settingsSection: null,
 
   async init() {
     const api = lumora()
@@ -46,6 +55,14 @@ export const useAppStore = create<AppState>((set) => ({
 
   setPage(page) {
     set({ page, openProject: null })
+  },
+
+  openSettings(section) {
+    set({ page: 'settings', openProject: null, settingsSection: section ?? null })
+  },
+
+  clearSettingsSection() {
+    set({ settingsSection: null })
   },
 
   openEditor(folder) {

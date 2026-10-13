@@ -1,7 +1,7 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SecretKey } from '@lumora/core'
+import type { SecretKey, WhisperModel } from '@lumora/core'
 import type { LumoraApi } from '@shared/ipc'
 import { App } from './App'
 import i18n from './i18n'
@@ -171,6 +171,7 @@ describe('AI cục bộ (Ollama)', () => {
     const api = createFakeApi()
     await renderApp(api)
     await userEvent.click(screen.getByTestId('nav-settings'))
+    await userEvent.click(screen.getByText(/Nâng cao/))
     await userEvent.click(screen.getByTestId('local-ai-enabled'))
     await waitFor(() => expect(useAppStore.getState().settings?.localAi.enabled).toBe(true))
     await userEvent.click(screen.getByTestId('local-ai-check'))
@@ -212,6 +213,7 @@ describe('Giọng nói cục bộ (whisper.cpp + Piper)', () => {
     const api = createFakeApi()
     await renderApp(api)
     await userEvent.click(screen.getByTestId('nav-settings'))
+    await userEvent.click(screen.getByText(/Nâng cao/))
     // Trạng thái và danh mục tải lúc mở trang: chưa cài gì, hai model, hai giọng (tiếng Việt trước).
     expect(await screen.findByTestId('local-speech-whisper-status')).toHaveTextContent(
       'Chưa cài whisper.cpp',
@@ -284,6 +286,7 @@ describe('Giọng nói cục bộ (whisper.cpp + Piper)', () => {
     )
     await renderApp(api)
     await userEvent.click(screen.getByTestId('nav-settings'))
+    await userEvent.click(screen.getByText(/Nâng cao/))
     await screen.findByTestId('local-speech-voice-en_US-lessac-medium')
     await userEvent.click(screen.getByTestId('local-speech-voice-en_US-lessac-medium'))
     await waitFor(() =>
@@ -325,6 +328,7 @@ describe('Giọng nói cục bộ (whisper.cpp + Piper)', () => {
     })
     await renderApp(api)
     await userEvent.click(screen.getByTestId('nav-settings'))
+    await userEvent.click(screen.getByText(/Nâng cao/))
     expect(await screen.findByTestId('local-speech-unsupported')).toHaveTextContent('linux')
     expect(screen.queryByTestId('local-speech-install-whisper')).toBeNull()
     expect(screen.queryByTestId('local-speech-download-voice')).toBeNull()
@@ -341,6 +345,194 @@ describe('Giọng nói cục bộ (whisper.cpp + Piper)', () => {
     await waitFor(() =>
       expect(screen.getByTestId('local-speech-status')).toHaveTextContent('mã 404'),
     )
+  })
+})
+
+describe('Thiết lập AI trên máy một chạm', () => {
+  const step = (key: string) => screen.getByTestId(`local-setup-step-${key}`)
+  const openSettings = async () => {
+    await userEvent.click(screen.getByTestId('nav-settings'))
+    // Chờ kiểm tra lúc gắn thẻ xong (Ollama giả đang chạy với hai model).
+    await waitFor(() => expect(step('ollama')).toHaveAttribute('data-state', 'done'))
+  }
+
+  it('danh sách sáu việc: Ollama và model đã xong, giọng nói còn thiếu; nút ghi "Hoàn tất thiết lập"', async () => {
+    await renderApp(createFakeApi())
+    await openSettings()
+    expect(
+      within(screen.getByTestId('local-setup-card')).getAllByTestId(/^local-setup-step-/),
+    ).toHaveLength(6)
+    expect(step('ollamaModel')).toHaveAttribute('data-state', 'done')
+    expect(step('ollamaModel')).toHaveTextContent('Model qwen2.5:7b đã tải')
+    for (const key of ['whisper', 'whisperModel', 'piper', 'piperVoice'])
+      expect(step(key)).toHaveAttribute('data-state', 'missing')
+    expect(step('piperVoice')).toHaveTextContent('Giọng vi_VN-vais1000-medium đã tải')
+    const run = screen.getByTestId('local-setup-run')
+    expect(run).toHaveTextContent('Hoàn tất thiết lập')
+    expect(run).toBeEnabled()
+    expect(screen.queryByTestId('local-setup-cancel')).toBeNull()
+    expect(screen.queryByTestId('local-setup-progress')).toBeNull()
+  })
+
+  it('bấm một nút: cài whisper.cpp → tải model → cài Piper → tải giọng, xong thì bật cả hai', async () => {
+    const fake = makeFakeApi()
+    const api = fake.api
+    // Trạng thái giả nhớ những gì đã cài / tải để danh sách cập nhật sau mỗi bước.
+    const installed = {
+      whisper: false,
+      piper: false,
+      models: [] as WhisperModel[],
+      voices: [] as string[],
+    }
+    api.localSpeechStatus.mockImplementation(async () => ({
+      supported: true,
+      platform: 'win32',
+      whisper: { installed: installed.whisper, models: [...installed.models] },
+      piper: { installed: installed.piper, voices: [...installed.voices] },
+    }))
+    api.installLocalSpeech.mockImplementation(async (tool) => {
+      installed[tool] = true
+    })
+    // Giữ lời gọi tải model Whisper treo để xem dòng trạng thái và thanh tiến độ giữa chừng.
+    let finishModel = () => {}
+    api.downloadLocalSpeech.mockImplementation(
+      (kind, id) =>
+        new Promise<void>((resolve) => {
+          const done = () => {
+            if (kind === 'model') installed.models.push(id as WhisperModel)
+            else installed.voices.push(id)
+            resolve()
+          }
+          if (kind === 'model') finishModel = done
+          else done()
+        }),
+    )
+    await renderApp(api)
+    await openSettings()
+    await userEvent.click(screen.getByTestId('local-setup-run'))
+    await waitFor(() =>
+      expect(screen.getByTestId('local-setup-status')).toHaveTextContent(
+        'Bước 2/4: Đang tải model Whisper large-v3-turbo-q5_0',
+      ),
+    )
+    expect(step('whisper')).toHaveAttribute('data-state', 'done')
+    expect(step('whisperModel')).toHaveAttribute('data-state', 'busy')
+    expect(screen.getByTestId('local-setup-run')).toBeDisabled()
+    expect(screen.getByTestId('local-setup-cancel')).toBeInTheDocument()
+    act(() => {
+      fake.emitLocalAiProgress({
+        kind: 'speech',
+        status: 'download',
+        item: 'large-v3-turbo-q5_0',
+        completed: 120_000_000,
+        total: 574_000_000,
+      })
+    })
+    expect(screen.getByTestId('local-setup-status')).toHaveTextContent('· 120 / 574 MB')
+    expect(screen.getByTestId('local-setup-progress')).toHaveAttribute('aria-valuenow', '21')
+    act(() => finishModel())
+    await waitFor(() => expect(screen.getByTestId('local-setup-status')).toHaveTextContent('Xong!'))
+    // Đúng thứ tự: whisper.cpp, model Whisper, Piper, giọng.
+    expect(api.installLocalSpeech.mock.calls).toEqual([['whisper'], ['piper']])
+    expect(api.downloadLocalSpeech.mock.calls).toEqual([
+      ['model', 'large-v3-turbo-q5_0'],
+      ['voice', 'vi_VN-vais1000-medium'],
+    ])
+    const order = [
+      api.installLocalSpeech.mock.invocationCallOrder[0],
+      api.downloadLocalSpeech.mock.invocationCallOrder[0],
+      api.installLocalSpeech.mock.invocationCallOrder[1],
+      api.downloadLocalSpeech.mock.invocationCallOrder[1],
+    ]
+    expect(order).toEqual([...order].sort((a, b) => a! - b!))
+    expect(api.installOllama).not.toHaveBeenCalled()
+    expect(api.pullLocalModel).not.toHaveBeenCalled()
+    for (const key of ['ollama', 'ollamaModel', 'whisper', 'whisperModel', 'piper', 'piperVoice'])
+      expect(step(key)).toHaveAttribute('data-state', 'done')
+    const run = screen.getByTestId('local-setup-run')
+    expect(run).toHaveTextContent('Đã sẵn sàng ✓')
+    expect(run).toBeDisabled()
+    expect(screen.queryByTestId('local-setup-progress')).toBeNull()
+    expect(useAppStore.getState().settings?.localAi.enabled).toBe(true)
+    expect(useAppStore.getState().settings?.localSpeech.enabled).toBe(true)
+    expect(screen.getByTestId('local-setup-use-ai')).toBeChecked()
+    expect(screen.getByTestId('local-setup-use-speech')).toBeChecked()
+  })
+
+  it('Ollama tắt: cài Ollama trước, hỏi lại mỗi 3 giây tới khi lên, rồi mới tải model', async () => {
+    const api = createFakeApi()
+    api.listLocalModels.mockRejectedValue(new Error('ollama_offline'))
+    await renderApp(api)
+    await userEvent.click(screen.getByTestId('nav-settings'))
+    await waitFor(() => expect(step('ollama')).toHaveAttribute('data-state', 'missing'))
+    expect(step('ollamaModel')).toHaveAttribute('data-state', 'missing')
+    expect(screen.getByTestId('local-setup-run')).toHaveTextContent('Thiết lập tất cả')
+    vi.useFakeTimers()
+    try {
+      fireEvent.click(screen.getByTestId('local-setup-run'))
+      await act(() => vi.advanceTimersByTimeAsync(0))
+      expect(api.installOllama).toHaveBeenCalledTimes(1)
+      expect(api.pullLocalModel).not.toHaveBeenCalled()
+      expect(screen.getByTestId('local-setup-status')).toHaveTextContent(
+        'Bước 1/6: Đang chờ bạn cài Ollama… bấm Next trong bộ cài',
+      )
+      expect(step('ollama')).toHaveAttribute('data-state', 'busy')
+      // Người dùng cài xong: lần hỏi tiếp theo (3 giây sau) thấy Ollama chạy nhưng chưa có model.
+      const asked = api.listLocalModels.mock.calls.length
+      api.listLocalModels.mockResolvedValue(['llama3.2'])
+      await act(() => vi.advanceTimersByTimeAsync(3000))
+      expect(api.listLocalModels.mock.calls.length).toBeGreaterThan(asked)
+    } finally {
+      vi.useRealTimers()
+    }
+    await waitFor(() => expect(step('ollama')).toHaveAttribute('data-state', 'done'))
+    await waitFor(() =>
+      expect(api.pullLocalModel).toHaveBeenCalledWith('http://127.0.0.1:11434', 'qwen2.5:7b'),
+    )
+    expect(api.installOllama.mock.invocationCallOrder[0]).toBeLessThan(
+      api.pullLocalModel.mock.invocationCallOrder[0]!,
+    )
+  })
+
+  it('bước lỗi thì dừng, nêu tên bước và lý do, nút vẫn còn để thử lại', async () => {
+    const api = createFakeApi()
+    api.installLocalSpeech.mockRejectedValueOnce(new Error('local_speech_download:404'))
+    await renderApp(api)
+    await openSettings()
+    await userEvent.click(screen.getByTestId('local-setup-run'))
+    await waitFor(() =>
+      expect(screen.getByTestId('local-setup-status')).toHaveTextContent(
+        'Lỗi ở bước "whisper.cpp đã cài": Không tải được (mã 404)',
+      ),
+    )
+    expect(step('whisper')).toHaveAttribute('data-state', 'error')
+    expect(api.downloadLocalSpeech).not.toHaveBeenCalled()
+    expect(screen.getByTestId('local-setup-run')).toBeEnabled()
+    expect(screen.getByTestId('local-setup-run')).toHaveTextContent('Hoàn tất thiết lập')
+    expect(useAppStore.getState().settings?.localSpeech.enabled).toBe(false)
+  })
+
+  it('hai công tắc bật / tắt AI và giọng nói trên máy', async () => {
+    await renderApp(createFakeApi())
+    await openSettings()
+    await userEvent.click(screen.getByTestId('local-setup-use-ai'))
+    await waitFor(() => expect(useAppStore.getState().settings?.localAi.enabled).toBe(true))
+    await userEvent.click(screen.getByTestId('local-setup-use-speech'))
+    await waitFor(() => expect(useAppStore.getState().settings?.localSpeech.enabled).toBe(true))
+    await userEvent.click(screen.getByTestId('local-setup-use-ai'))
+    await waitFor(() => expect(useAppStore.getState().settings?.localAi.enabled).toBe(false))
+    expect(useAppStore.getState().settings?.localSpeech.enabled).toBe(true)
+  })
+
+  it('phần Nâng cao thu gọn sẵn và chứa hai thẻ chi tiết cũ', async () => {
+    await renderApp(createFakeApi())
+    await openSettings()
+    const details = screen.getByTestId('local-setup-advanced')
+    expect(details).not.toHaveAttribute('open')
+    expect(within(details).getByTestId('local-ai-enabled')).toBeInTheDocument()
+    expect(within(details).getByTestId('local-speech-enable')).toBeInTheDocument()
+    await userEvent.click(screen.getByText(/Nâng cao/))
+    expect(details).toHaveAttribute('open')
   })
 })
 

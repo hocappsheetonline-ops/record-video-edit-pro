@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { ASPECTS, outputDuration, type Aspect } from '@lumora/core'
 import { lumora } from '../api'
+import { AiStatusBadge } from '../components/AiStatusBadge'
 import { PageHeader } from '../components/PageHeader'
 import { TITLE_BAR_SLOT } from '../components/TitleBar'
 import { ExportPanel } from '../editor/ExportPanel'
@@ -571,6 +572,7 @@ export function EditorPage() {
           {t('editor.autosave')}
         </span>
         <span className="app-no-drag flex items-center gap-1">
+          <AiStatusBadge />
           <JobsButton />
           <button
             type="button"

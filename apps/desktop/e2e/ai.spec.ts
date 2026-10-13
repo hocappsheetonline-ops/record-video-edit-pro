@@ -55,8 +55,9 @@ test('AI: nhập key, tạo phụ đề, cắt từ thừa, tạo chương, lưu
   expect(form).toMatch(/name="file"; filename="\.speech\.mp3"/)
   expect(stt.body.length).toBeGreaterThan(5000) // có âm thanh thật
 
-  // AI cắt từ thừa.
+  // AI cắt từ thừa (bảng duyệt từng đoạn cắt nằm trong "Công cụ khác", thu gọn mặc định).
   await page.getByTestId('lib-ai').click()
+  await page.getByTestId('ai-advanced-toggle').click()
   await page.getByTestId('ai-suggest').click()
   await expect(page.getByTestId('ai-suggestion')).toHaveCount(1)
   await expect(page.getByTestId('ai-suggestion')).toContainText('ừm')

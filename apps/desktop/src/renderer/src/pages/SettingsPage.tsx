@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Check, Circle, CircleAlert, LoaderCircle } from 'lucide-react'
 import {
   ACCENT_PRESETS,
   LANGUAGES,
@@ -11,6 +12,7 @@ import {
   type PreviewQuality,
   type ProjectTemplate,
   type Theme,
+  type WhisperModel,
 } from '@lumora/core'
 import { AboutCard } from '../components/AboutCard'
 import { ApiKeyCard } from '../components/ApiKeyCard'
@@ -27,6 +29,7 @@ import { PageHeader } from '../components/PageHeader'
 import { Toggle } from '../editor/ui'
 import { lumora } from '../api'
 import { useAppStore } from '../store/app'
+import { useAiStatus } from '../ai/status'
 
 const LANGUAGE_NAMES: Record<Language, string> = { vi: 'Tiếng Việt', en: 'English' }
 
@@ -642,11 +645,410 @@ function LocalSpeechCard() {
   )
 }
 
+/** Sáu việc cần có để AI chạy hoàn toàn trên máy, theo đúng thứ tự thiết lập. */
+const SETUP_STEPS = [
+  'ollama',
+  'ollamaModel',
+  'whisper',
+  'whisperModel',
+  'piper',
+  'piperVoice',
+] as const
+type SetupStep = (typeof SETUP_STEPS)[number]
+type SetupStepState = 'done' | 'missing' | 'busy' | 'error'
+type SetupDone = Record<SetupStep, boolean>
+/** Những gì cần có trên máy, lấy từ cài đặt (model Ollama, model Whisper, giọng Piper). */
+interface SetupTargets {
+  baseUrl: string
+  model: string
+  whisperModel: WhisperModel
+  piperVoice: string
+}
+
+const OLLAMA_POLL_MS = 3_000
+const OLLAMA_WAIT_MS = 10 * 60_000
+/** Ném ra khi người dùng bấm Dừng trong lúc đang chờ Ollama. */
+const SETUP_CANCELLED = 'local_setup_cancelled'
+
+/** Model đã có trong Ollama chưa (bỏ qua tag như `:latest`, giống store trạng thái AI). */
+const hasModel = (models: string[], model: string) =>
+  models.some((m) => m === model || m.split(':')[0] === model.split(':')[0])
+
+/** Hỏi Ollama và bộ giọng nói xem từng việc đã xong chưa; Ollama tắt thì thiếu cả hai việc đầu. */
+async function checkSetup(targets: SetupTargets): Promise<SetupDone> {
+  const api = lumora()
+  const [models, speech] = await Promise.all([
+    api.listLocalModels(targets.baseUrl).catch(() => null),
+    api.localSpeechStatus().catch(() => null),
+  ])
+  return {
+    ollama: models !== null,
+    ollamaModel: models !== null && hasModel(models, targets.model),
+    whisper: speech?.whisper.installed ?? false,
+    whisperModel: speech?.whisper.models.includes(targets.whisperModel) ?? false,
+    piper: speech?.piper.installed ?? false,
+    piperVoice: speech?.piper.voices.includes(targets.piperVoice) ?? false,
+  }
+}
+
+/** Đợi Ollama lên sau khi người dùng chạy bộ cài: hỏi mỗi 3 giây, tối đa 10 phút. */
+async function waitForOllama(baseUrl: string, cancelled: () => boolean): Promise<void> {
+  const deadline = Date.now() + OLLAMA_WAIT_MS
+  for (;;) {
+    try {
+      await lumora().listLocalModels(baseUrl)
+      return
+    } catch {
+      if (cancelled()) throw new Error(SETUP_CANCELLED)
+      if (Date.now() >= deadline) throw new Error('ollama_timeout')
+      await new Promise((resolve) => setTimeout(resolve, OLLAMA_POLL_MS))
+    }
+  }
+}
+
+/** Lỗi của một bước thiết lập → câu ngắn dễ hiểu (gom các câu báo lỗi của hai thẻ cũ). */
+function localSetupError(t: TFunction, step: SetupStep, e: unknown, model: string): string {
+  const message = e instanceof Error ? e.message : String(e)
+  if (step === 'ollama')
+    return message.includes('ollama_timeout')
+      ? t('settings.localSetup.errors.ollamaTimeout')
+      : t('settings.localAi.installFailed')
+  if (step === 'ollamaModel')
+    return message.includes('ollama_model')
+      ? t('settings.localAi.pullNotFound', { model })
+      : t('settings.localAi.offline')
+  return localSpeechActionError(t, e)
+}
+
+/** Sự kiện tiến độ nào thuộc về bước nào (để không lẫn tiến độ bước trước). */
+const progressKindOf = (step: SetupStep): LocalAiProgress['kind'] =>
+  step === 'ollama' ? 'install' : step === 'ollamaModel' ? 'pull' : 'speech'
+
+/**
+ * Thiết lập AI trên máy một chạm: danh sách sáu việc cần có, một nút làm hết những việc còn thiếu
+ * theo thứ tự (Ollama → model → whisper.cpp → model Whisper → Piper → giọng), hai công tắc bật
+ * dùng. Các điều khiển chi tiết (LocalAiCard, LocalSpeechCard) nằm gọn dưới "Nâng cao".
+ */
+function LocalSetupCard() {
+  const { t } = useTranslation()
+  const settings = useAppStore((s) => s.settings)
+  const updateSettings = useAppStore((s) => s.updateSettings)
+  const [done, setDone] = useState<SetupDone | null>(null)
+  const [current, setCurrent] = useState<{
+    step: SetupStep
+    index: number
+    count: number
+    /** Đã mở bộ cài Ollama, đang chờ người dùng cài xong. */
+    waiting?: boolean
+  } | null>(null)
+  const [progress, setProgress] = useState<LocalAiProgress | null>(null)
+  const [note, setNote] = useState<{ tone: 'ok' | 'error'; text: string; step?: SetupStep } | null>(
+    null,
+  )
+  const [stopping, setStopping] = useState(false)
+  const cancelRef = useRef(false)
+  const runningRef = useRef(false)
+  useEffect(() => lumora().onLocalAiProgress(setProgress), [])
+
+  const baseUrl = settings?.localAi.baseUrl
+  const model = settings?.localAi.model
+  const whisperModel = settings?.localSpeech.whisperModel
+  const piperVoice = settings?.localSpeech.piperVoice
+  // Kiểm tra lúc gắn thẻ và mỗi khi người dùng đổi model / giọng ở phần Nâng cao.
+  useEffect(() => {
+    if (!baseUrl || !model || !whisperModel || !piperVoice || runningRef.current) return
+    let live = true
+    void checkSetup({ baseUrl, model, whisperModel, piperVoice }).then((d) => {
+      if (live) setDone(d)
+    })
+    return () => {
+      live = false
+    }
+  }, [baseUrl, model, whisperModel, piperVoice])
+
+  if (!settings) return null
+  const targets: SetupTargets = {
+    baseUrl: settings.localAi.baseUrl,
+    model: settings.localAi.model,
+    whisperModel: settings.localSpeech.whisperModel,
+    piperVoice: settings.localSpeech.piperVoice,
+  }
+  const stepLabel = (step: SetupStep) =>
+    t(`settings.localSetup.steps.${step}`, {
+      model: step === 'ollamaModel' ? targets.model : targets.whisperModel,
+      voice: targets.piperVoice,
+    })
+
+  const runStep = async (step: SetupStep) => {
+    const api = lumora()
+    switch (step) {
+      case 'ollama':
+        await api.installOllama()
+        setCurrent((c) => c && { ...c, waiting: true })
+        await waitForOllama(targets.baseUrl, () => cancelRef.current)
+        return
+      case 'ollamaModel':
+        return api.pullLocalModel(targets.baseUrl, targets.model)
+      case 'whisper':
+        return api.installLocalSpeech('whisper')
+      case 'whisperModel':
+        return api.downloadLocalSpeech('model', targets.whisperModel)
+      case 'piper':
+        return api.installLocalSpeech('piper')
+      case 'piperVoice':
+        return api.downloadLocalSpeech('voice', targets.piperVoice)
+    }
+  }
+
+  /** Làm lần lượt những việc còn thiếu; xong hết thì bật cả hai công tắc. */
+  const run = async () => {
+    cancelRef.current = false
+    runningRef.current = true
+    setStopping(false)
+    setNote(null)
+    try {
+      let state = await checkSetup(targets)
+      setDone(state)
+      const plan = SETUP_STEPS.filter((k) => !state[k])
+      let finished = true
+      for (const [i, step] of plan.entries()) {
+        if (cancelRef.current) {
+          finished = false
+          break
+        }
+        // Kiểm tra lại ngay trước mỗi bước: Ollama vừa lên có thể đã sẵn model, khỏi tải lại.
+        if (i > 0) {
+          state = await checkSetup(targets)
+          setDone(state)
+          if (state[step]) continue
+        }
+        setCurrent({ step, index: i + 1, count: plan.length })
+        setProgress(null)
+        try {
+          await runStep(step)
+        } catch (e) {
+          if (e instanceof Error && e.message === SETUP_CANCELLED) {
+            finished = false
+            break
+          }
+          setNote({
+            tone: 'error',
+            step,
+            text: t('settings.localSetup.failed', {
+              step: stepLabel(step),
+              message: localSetupError(t, step, e, targets.model),
+            }),
+          })
+          setCurrent(null)
+          setDone(await checkSetup(targets))
+          void useAiStatus.getState().refresh()
+          return
+        }
+        setDone((d) => ({ ...(d ?? state), [step]: true }))
+        void useAiStatus.getState().refresh()
+      }
+      setCurrent(null)
+      setProgress(null)
+      if (!finished) {
+        setDone(await checkSetup(targets))
+        setNote({ tone: 'ok', text: t('settings.localSetup.cancelled') })
+        return
+      }
+      const latest = useAppStore.getState().settings
+      if (latest)
+        await updateSettings({
+          localAi: { ...latest.localAi, enabled: true },
+          localSpeech: { ...latest.localSpeech, enabled: true },
+        })
+      setDone(await checkSetup(targets))
+      await useAiStatus.getState().refresh()
+      setNote({ tone: 'ok', text: t('settings.localSetup.success') })
+    } finally {
+      runningRef.current = false
+      setStopping(false)
+    }
+  }
+  const cancel = () => {
+    cancelRef.current = true
+    setStopping(true)
+  }
+
+  const running = current !== null
+  const allDone = done !== null && SETUP_STEPS.every((k) => done[k])
+  const anyDone = done !== null && SETUP_STEPS.some((k) => done[k])
+  const stateOf = (step: SetupStep): SetupStepState =>
+    current?.step === step || done === null
+      ? 'busy'
+      : note?.step === step
+        ? 'error'
+        : done[step]
+          ? 'done'
+          : 'missing'
+  const shownProgress =
+    current && !current.waiting && progress?.kind === progressKindOf(current.step) ? progress : null
+  const percent =
+    shownProgress && shownProgress.total > 0
+      ? Math.round((shownProgress.completed / shownProgress.total) * 100)
+      : null
+  /** Dòng trạng thái lúc đang chạy: "Bước 3/6: Đang tải model Whisper · 120 / 574 MB". */
+  const runningText = () => {
+    if (!current) return ''
+    const what = current.waiting
+      ? t('settings.localSetup.doing.ollamaWait')
+      : t(`settings.localSetup.doing.${current.step}`, {
+          model: current.step === 'ollamaModel' ? targets.model : targets.whisperModel,
+          voice: targets.piperVoice,
+        })
+    const mb =
+      shownProgress && shownProgress.total > 0
+        ? ` · ${t('settings.localSetup.progressMb', {
+            done: toMb(shownProgress.completed),
+            total: toMb(shownProgress.total),
+          })}`
+        : ''
+    return `${t('settings.localSetup.stepOf', { index: current.index, count: current.count, what })}${mb}`
+  }
+  const StepIcon = ({ state }: { state: SetupStepState }) => {
+    const cls = 'size-4 shrink-0'
+    if (state === 'done') return <Check className={`${cls} text-success`} aria-hidden />
+    if (state === 'busy')
+      return <LoaderCircle className={`${cls} animate-spin text-accent`} aria-hidden />
+    if (state === 'error') return <CircleAlert className={`${cls} text-danger`} aria-hidden />
+    return <Circle className={`${cls} text-muted/60`} aria-hidden />
+  }
+  const buttonText = running
+    ? t('settings.localSetup.running')
+    : allDone
+      ? t('settings.localSetup.ready')
+      : anyDone
+        ? t('settings.localSetup.finish')
+        : t('settings.localSetup.run')
+
+  return (
+    <div
+      className="mb-8 flex flex-col gap-4 rounded-2xl border border-border bg-surface p-5"
+      data-testid="local-setup-card"
+    >
+      <p className="text-sm text-muted">{t('settings.localSetup.intro')}</p>
+
+      <ul className="flex flex-col" data-testid="local-setup-steps">
+        {SETUP_STEPS.map((step) => {
+          const state = stateOf(step)
+          return (
+            <li
+              key={step}
+              data-testid={`local-setup-step-${step}`}
+              data-state={state}
+              className="flex h-8 items-center gap-2.5 text-sm"
+            >
+              <StepIcon state={state} />
+              <span className={state === 'missing' ? 'text-muted' : ''}>{stepLabel(step)}</span>
+              <span className="ml-auto text-xs text-muted">
+                {done === null && state === 'busy'
+                  ? t('settings.localSetup.state.checking')
+                  : t(`settings.localSetup.state.${state}`)}
+              </span>
+            </li>
+          )
+        })}
+      </ul>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          data-testid="local-setup-run"
+          disabled={running || allDone || done === null}
+          onClick={() => void run()}
+          className="rounded-xl bg-accent px-5 py-2.5 text-sm font-semibold text-accent-fg shadow-sm hover:brightness-110 disabled:opacity-60"
+        >
+          {buttonText}
+        </button>
+        {running && (
+          <button
+            type="button"
+            data-testid="local-setup-cancel"
+            disabled={stopping}
+            onClick={cancel}
+            className={speechButton}
+          >
+            {stopping ? t('settings.localSetup.stopping') : t('settings.localSetup.cancel')}
+          </button>
+        )}
+        {(running || note) && (
+          <span
+            role="status"
+            data-testid="local-setup-status"
+            className={`text-sm ${
+              running ? 'text-muted' : note?.tone === 'ok' ? 'text-success' : 'text-danger'
+            }`}
+          >
+            {running ? runningText() : note?.text}
+          </span>
+        )}
+      </div>
+      {running && (
+        <div
+          className="h-1.5 overflow-hidden rounded-full bg-surface-2"
+          data-testid="local-setup-progress"
+          role="progressbar"
+          aria-valuenow={percent ?? undefined}
+          aria-valuemin={0}
+          aria-valuemax={100}
+        >
+          <div
+            className={`h-full bg-accent transition-[width] ${percent === null ? 'w-1/3 animate-pulse' : ''}`}
+            style={percent !== null ? { width: `${percent}%` } : undefined}
+          />
+        </div>
+      )}
+
+      <div className="flex flex-col gap-3 border-t border-border pt-4">
+        <Toggle
+          label={t('settings.localSetup.useAi')}
+          hint={t('settings.localSetup.useAiOff')}
+          checked={settings.localAi.enabled}
+          testId="local-setup-use-ai"
+          onChange={(enabled) => void updateSettings({ localAi: { ...settings.localAi, enabled } })}
+        />
+        <Toggle
+          label={t('settings.localSetup.useSpeech')}
+          hint={t('settings.localSetup.useSpeechOff')}
+          checked={settings.localSpeech.enabled}
+          testId="local-setup-use-speech"
+          onChange={(enabled) =>
+            void updateSettings({ localSpeech: { ...settings.localSpeech, enabled } })
+          }
+        />
+      </div>
+
+      <details data-testid="local-setup-advanced" className="border-t border-border pt-3">
+        <summary className="cursor-pointer text-sm text-muted hover:text-text">
+          {t('settings.localSetup.advanced')}
+        </summary>
+        <div className="mt-4 flex flex-col [&>div]:mb-0">
+          <h3 className={groupTitle}>{t('settings.localAi.title')}</h3>
+          <LocalAiCard />
+          <h3 className={`${groupTitle} mt-4`}>{t('settings.localSpeech.title')}</h3>
+          <LocalSpeechCard />
+        </div>
+      </details>
+    </div>
+  )
+}
+
 export function SettingsPage() {
   const { t } = useTranslation()
   const settings = useAppStore((s) => s.settings)
   const appInfo = useAppStore((s) => s.appInfo)
   const updateSettings = useAppStore((s) => s.updateSettings)
+  const settingsSection = useAppStore((s) => s.settingsSection)
+  const aiSectionRef = useRef<HTMLDivElement>(null)
+  // Mở từ thanh trạng thái AI: cuộn tới mục AI rồi xóa cờ để lần sau mở bình thường.
+  useEffect(() => {
+    if (settingsSection !== 'ai' || !settings) return
+    aiSectionRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+    useAppStore.setState({ settingsSection: null })
+  }, [settingsSection, settings])
   if (!settings) return null
   const encryptionAvailable = appInfo?.encryptionAvailable ?? false
 
@@ -776,11 +1178,10 @@ export function SettingsPage() {
         </div>
       </div>
 
-      <h2 className={groupTitle}>{t('settings.localAi.title')}</h2>
-      <LocalAiCard />
-
-      <h2 className={groupTitle}>{t('settings.localSpeech.title')}</h2>
-      <LocalSpeechCard />
+      <div data-section="ai" ref={aiSectionRef} className="scroll-mt-4">
+        <h2 className={groupTitle}>{t('settings.localSetup.title')}</h2>
+        <LocalSetupCard />
+      </div>
 
       <h2 className={groupTitle.replace('mb-2', 'mb-1')}>{t('settings.apiKeys')}</h2>
       <p className="mb-3 text-sm text-muted">{t('settings.apiKeysHint')}</p>

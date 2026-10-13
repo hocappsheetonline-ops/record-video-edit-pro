@@ -7,6 +7,9 @@ import { createFakeApi, sampleSummary, sampleTranscript } from '../test/fake-api
 import { AiPanel } from './AiPanel'
 import { CaptionsPanel } from './CaptionsPanel'
 import { useEditorStore } from './store'
+import { useAppStore } from '../store/app'
+import { useAiStatus } from '../ai/status'
+import { useJobs } from './jobs'
 
 async function setup(withTranscript = false) {
   const fake = createFakeApi()
@@ -438,5 +441,78 @@ describe('AiPanel', () => {
     render(<AiPanel />)
     expect(screen.getByText('Hãy tạo phụ đề trước (tab Phụ đề).')).toBeInTheDocument()
     vi.restoreAllMocks()
+  })
+})
+
+describe('AiPanel: trạng thái AI và nút làm nhanh', () => {
+  it('không có key, không bật AI trên máy → báo chưa sẵn sàng, nút Thiết lập mở Cài đặt', async () => {
+    await setup()
+    useAppStore.setState({
+      settings: { ...(await window.lumora.getSettings()) },
+      secrets: {
+        elevenlabs: { state: 'missing' },
+        anthropic: { state: 'missing' },
+        pixabay: { state: 'missing' },
+      },
+    })
+    render(<AiPanel />)
+    await waitFor(() =>
+      expect(screen.getByTestId('ai-status-bar')).toHaveAttribute('data-state', 'off'),
+    )
+    expect(screen.getByTestId('ai-status-engines')).toHaveTextContent('chỉ từ khóa')
+    expect(screen.getAllByTestId('ai-status-problem').length).toBeGreaterThan(0)
+    await userEvent.click(screen.getByTestId('ai-status-setup'))
+    expect(useAppStore.getState().page).toBe('settings')
+  })
+
+  it('bật AI trên máy có model + key ElevenLabs → sẵn sàng với tên engine', async () => {
+    const api = await setup()
+    const settings = await api.getSettings()
+    useAppStore.setState({
+      settings: {
+        ...settings,
+        localAi: { ...settings.localAi, enabled: true, model: 'qwen2.5:7b' },
+      },
+      secrets: {
+        elevenlabs: { state: 'saved', masked: 'el…' },
+        anthropic: { state: 'missing' },
+        pixabay: { state: 'missing' },
+      },
+    })
+    render(<AiPanel />)
+    await waitFor(() =>
+      expect(screen.getByTestId('ai-status-bar')).toHaveAttribute('data-state', 'ready'),
+    )
+    expect(screen.getByTestId('ai-status-engines')).toHaveTextContent('Ollama qwen2.5:7b')
+    expect(screen.getByTestId('ai-status-engines')).toHaveTextContent('ElevenLabs')
+    expect(screen.queryByTestId('ai-status-setup')).not.toBeInTheDocument()
+  })
+
+  it('nút làm nhanh: một bấm thêm phụ đề; thanh trạng thái hiện việc đang chạy rồi báo xong', async () => {
+    await setup()
+    render(<AiPanel />)
+    await userEvent.click(screen.getByTestId('ai-quick-captions'))
+    await waitFor(() => expect(useEditorStore.getState().edit!.captions.enabled).toBe(true))
+    const report = await screen.findByTestId('ai-quick-report')
+    expect(report).toHaveTextContent('Thêm phụ đề')
+    expect(useJobs.getState().jobs.some((j) => j.kind === 'ai' && j.status === 'done')).toBe(true)
+    // Việc AI đang chạy hiện ở thanh trạng thái kèm thời gian.
+    act(() => {
+      useJobs.getState().start('Đang tạo phụ đề', undefined, 'ai')
+    })
+    expect(screen.getByTestId('ai-status-bar')).toHaveAttribute('data-state', 'running')
+    expect(screen.getByTestId('ai-status-running')).toHaveTextContent('Đang tạo phụ đề')
+    expect(screen.getByTestId('ai-status-elapsed')).toHaveTextContent('0 s')
+    act(() => useJobs.getState().clearDone())
+  })
+
+  it('công cụ khác thu gọn mặc định, bấm để mở', async () => {
+    await setup()
+    render(<AiPanel />)
+    expect(screen.getByTestId('ai-advanced-body')).toHaveClass('hidden')
+    await userEvent.click(screen.getByTestId('ai-advanced-toggle'))
+    expect(screen.getByTestId('ai-advanced-body')).not.toHaveClass('hidden')
+    expect(screen.getByTestId('ai-auto-run')).toBeInTheDocument()
+    useAiStatus.setState({ checking: false })
   })
 })
