@@ -2,6 +2,12 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.5.1
+
+- **Biết AI đang làm gì**: huy hiệu trạng thái AI trên thanh tiêu đề trình chỉnh sửa và thanh trạng thái ở đầu bảng AI cho biết đang dùng gì (Ollama + model nào / Claude / whisper.cpp + Piper / ElevenLabs), sẵn sàng chưa (lý do cụ thể nếu chưa, kèm nút **Thiết lập** mở đúng mục), và việc AI nào đang chạy được bao lâu (tiến độ, hủy được). Tự kiểm tra lại khi đổi cài đặt hoặc key.
+- **Bảng AI gọn hơn**: bốn nút làm ngay (**Tự động biên tập**, **Thêm phụ đề**, **Cắt lặng & từ thừa**, **Tiêu đề & mô tả**) ở trên, Đạo diễn AI ngay dưới; các công cụ ít dùng (tự biên tập tùy chọn, video ngắn, duyệt từng đoạn cắt) thu gọn trong "Công cụ khác".
+- **Thiết lập AI trên máy một chạm** (Cài đặt → AI trên máy): một thẻ với danh sách kiểm tra 6 bước (Ollama, model, whisper.cpp, model Whisper, Piper, giọng) và nút **Thiết lập tất cả** tự làm các bước còn thiếu theo thứ tự với một thanh tiến độ, xong thì tự bật; hai công tắc đơn giản; chi tiết (model khác, địa chỉ Ollama, đo tốc độ) nằm trong "Nâng cao".
+
 ## 1.5.0
 
 - **Giọng nói cục bộ, miễn phí** (Cài đặt → Giọng nói cục bộ): cài **whisper.cpp** và **Piper** ngay trong app (tải bộ chạy chính thức, giải nén, tải model / giọng với thanh tiến độ, xóa được). Khi bật, **phụ đề** (nhận dạng từng từ, tự nhận ngôn ngữ), cắt khoảng lặng / từ thừa theo lời thoại và **giọng đọc AI** (câu meme, kịch bản, "Đọc chữ này") chạy hoàn toàn trên máy, không cần key ElevenLabs; tắt thì dùng ElevenLabs như cũ. Model Whisper: small, medium-q5_0, large-v3-turbo-q5_0 (khuyên dùng cho tiếng Việt), large-v3-turbo. Giọng Piper: tiếng Việt (vais1000, 25hours, vivos) và tiếng Anh (lessac, amy, alan). Câu đã đọc vẫn được lưu đệm dùng chung.

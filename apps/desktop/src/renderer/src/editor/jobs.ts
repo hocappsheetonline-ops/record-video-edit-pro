@@ -10,6 +10,8 @@ export interface Job {
   /** Có thể hủy (bấm nút X). */
   cancel?: () => void
   startedAt: number
+  /** Việc AI (hiện ở thanh trạng thái AI kèm thời gian đã chạy). */
+  kind?: 'ai'
 }
 
 export interface Toast {
@@ -23,7 +25,7 @@ export interface Toast {
 interface JobsState {
   jobs: Job[]
   toasts: Toast[]
-  start(label: string, cancel?: () => void): string
+  start(label: string, cancel?: () => void, kind?: Job['kind']): string
   progress(id: string, progress: number | null, label?: string): void
   finish(id: string, error?: string): void
   clearDone(): void
@@ -38,12 +40,12 @@ const nextId = (p: string) => `${p}${Date.now().toString(36)}${(seq++).toString(
 export const useJobs = create<JobsState>((set, get) => ({
   jobs: [],
   toasts: [],
-  start(label, cancel) {
+  start(label, cancel, kind) {
     const id = nextId('j')
     set({
       jobs: [
         ...get().jobs,
-        { id, label, progress: null, status: 'running', cancel, startedAt: Date.now() },
+        { id, label, progress: null, status: 'running', cancel, startedAt: Date.now(), kind },
       ],
     })
     return id
@@ -91,10 +93,10 @@ export const useJobs = create<JobsState>((set, get) => ({
 export async function runJob<T>(
   label: string,
   task: (progress: (p: number | null, label?: string) => void) => Promise<T>,
-  options: { cancel?: () => void; errorText?: (e: unknown) => string } = {},
+  options: { cancel?: () => void; errorText?: (e: unknown) => string; kind?: Job['kind'] } = {},
 ): Promise<T> {
   const jobs = useJobs.getState()
-  const id = jobs.start(label, options.cancel)
+  const id = jobs.start(label, options.cancel, options.kind)
   try {
     const result = await task((p, l) => useJobs.getState().progress(id, p, l))
     useJobs.getState().finish(id)
