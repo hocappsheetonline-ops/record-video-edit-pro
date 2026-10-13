@@ -19,6 +19,8 @@ import {
   type DirectorContext,
   type DirectorPlan,
   type LocalAiSettings,
+  type LocalSpeechSettings,
+  type WhisperModel,
   type Project,
   type Transcript,
   type TranscriptWord,
@@ -74,10 +76,26 @@ export class MissingKeyError extends Error {
   }
 }
 
+/**
+ * Giọng nói cục bộ (whisper.cpp + Piper) mà AiService cần: nhận dạng một file WAV 16 kHz, đọc
+ * một câu thành WAV, và danh sách giọng đã tải. Bản chạy thật ở `local-speech.ts`.
+ */
+export interface LocalSpeechLike {
+  transcribe(
+    wavPath: string,
+    opts: { model: WhisperModel; language?: string; timeoutMs?: number },
+  ): Promise<Transcript>
+  speak(text: string, opts: { voice: string; speed?: number }): Promise<Buffer>
+  installedVoices(): Promise<Voice[]>
+}
+
 export interface AiDeps {
   getKey(key: 'elevenlabs' | 'anthropic'): Promise<string | undefined>
   /** Cài đặt AI cục bộ (Ollama); không có thì luôn dùng Claude. */
   getLocalAi?(): Promise<LocalAiSettings>
+  /** Cài đặt giọng nói cục bộ (whisper.cpp + Piper); bật thì phụ đề và giọng đọc không cần ElevenLabs. */
+  getLocalSpeech?(): Promise<LocalSpeechSettings>
+  localSpeech?: LocalSpeechLike
   run: FfmpegRunner
   fetchImpl?: FetchLike
   /** Thư mục lưu đệm giọng đọc AI (dùng chung mọi dự án, đọc lại câu cũ không tốn credit). */
@@ -137,12 +155,64 @@ export class AiService {
   constructor(private readonly deps: AiDeps) {}
 
   /** Giọng đọc có trong tài khoản (nhớ 1 ngày). */
+  /** Piper trả WAV: đổi sang MP3 bằng ffmpeg để cùng định dạng với giọng ElevenLabs. */
+  private async speakLocally(
+    engine: LocalSpeechLike,
+    text: string,
+    voice: string,
+    speed: number,
+    target: string,
+  ): Promise<Buffer> {
+    const wav = `${target}.wav`
+    try {
+      await writeFile(wav, await engine.speak(text, { voice, speed }))
+      const result = await this.deps.run(
+        [
+          '-hide_banner',
+          '-loglevel',
+          'error',
+          '-y',
+          '-i',
+          wav,
+          '-c:a',
+          'libmp3lame',
+          '-b:a',
+          '96k',
+          target,
+        ],
+        120_000,
+      )
+      if (result.code !== 0) throw new Error(`audio_unreadable: ${result.stderr.slice(-200)}`)
+      return await readFile(target)
+    } finally {
+      await rm(wav, { force: true })
+    }
+  }
+
   async voices(): Promise<Voice[]> {
+    const local = await this.localSpeech()
+    if (local) return local.engine.installedVoices()
     if (this.voiceCache && Date.now() - this.voiceCache.at < 24 * 3600_000)
       return this.voiceCache.voices
     const voices = await listVoices(await this.key('elevenlabs'), this.deps.fetchImpl)
     this.voiceCache = { at: Date.now(), voices }
     return voices
+  }
+
+  /** Giọng nói cục bộ khi được bật và có sẵn bộ chạy; không thì null (dùng ElevenLabs). */
+  private async localSpeech(): Promise<{
+    settings: LocalSpeechSettings
+    engine: LocalSpeechLike
+  } | null> {
+    const engine = this.deps.localSpeech
+    if (!engine) return null
+    const settings = await this.deps.getLocalSpeech?.()
+    return settings?.enabled ? { settings, engine } : null
+  }
+
+  /** Có đang dùng giọng nói cục bộ (phụ đề / giọng đọc không cần ElevenLabs) không. */
+  async usingLocalSpeech(): Promise<boolean> {
+    return (await this.localSpeech()) !== null
   }
 
   /**
@@ -157,15 +227,20 @@ export class AiService {
   ): Promise<AudioAsset> {
     const clean = text.trim().slice(0, MAX_SPEECH_CHARS)
     if (!clean) throw new Error('speech_empty')
-    if (!/^[\w-]{1,64}$/.test(voiceId)) throw new Error('voice_invalid')
+    if (!/^[\w.-]{1,80}$/.test(voiceId)) throw new Error('voice_invalid')
     const settings = cleanSpeechOptions(options)
-    // Giọng mặc định giữ khóa cũ để dùng lại các câu đã đọc trước đây.
-    const variant =
-      settings.speed === 1 && settings.stability === 0.5
+    const local = await this.localSpeech()
+    // Giọng mặc định giữ khóa cũ để dùng lại các câu đã đọc trước đây. Giọng Piper (tốc độ là
+    // tham số duy nhất) có khóa riêng để không trùng với câu ElevenLabs cùng tên giọng.
+    const variant = local
+      ? settings.speed === 1
+        ? ''
+        : `\n${settings.speed}`
+      : settings.speed === 1 && settings.stability === 0.5
         ? ''
         : `\n${settings.speed}/${settings.stability}`
     const hash = createHash('sha1')
-      .update(`${voiceId}\n${clean}${variant}`)
+      .update(`${local ? 'piper:' : ''}${voiceId}\n${clean}${variant}`)
       .digest('hex')
       .slice(0, 16)
     const file = `asset-tts-${hash}.mp3`
@@ -179,13 +254,15 @@ export class AiService {
       const cached = this.deps.soundsDir ? join(this.deps.soundsDir, `tts-${hash}.mp3`) : null
       if (cached && (await exists(cached))) await copyFile(cached, target)
       else {
-        const audio = await textToSpeech(
-          clean,
-          voiceId,
-          await this.key('elevenlabs'),
-          this.deps.fetchImpl,
-          settings,
-        )
+        const audio = local
+          ? await this.speakLocally(local.engine, clean, voiceId, settings.speed, target)
+          : await textToSpeech(
+              clean,
+              voiceId,
+              await this.key('elevenlabs'),
+              this.deps.fetchImpl,
+              settings,
+            )
         await writeFile(target, audio)
         if (cached) {
           await mkdir(this.deps.soundsDir!, { recursive: true })
@@ -268,26 +345,37 @@ export class AiService {
 
   /** Nhận dạng giọng nói của cả bản quay; thời gian từng từ tính theo thời gian nguồn. */
   async transcribe(project: Project, dir: string, language?: string): Promise<Transcript> {
-    const apiKey = await this.key('elevenlabs')
+    // Giọng nói cục bộ (whisper.cpp) khi bật; không thì ElevenLabs (cần key, kiểm tra trước khi
+    // tốn công trộn âm thanh).
+    const local = await this.localSpeech()
+    const apiKey = local ? '' : await this.key('elevenlabs')
     const hasMic = project.segments.some((s) => s.tracks.mic)
     const pieces = planAudio(project, initialClips(project), { mic: 1, system: hasMic ? 0 : 1 })
     if (pieces.length === 0) throw new Error('no_audio')
-    const audio = join(dir, '.speech.mp3')
+    const audio = join(dir, local ? '.speech.wav' : '.speech.mp3')
     try {
       const result = await this.deps.run(
         buildSpeechAudioArgs({
           pieces: pieces.map((p) => ({ ...p, path: join(dir, p.file), speed: 1, volume: 1 })),
           durationS: sourceDuration(project.segments) / 1000,
           output: audio,
+          format: local ? 'wav16' : 'mp3',
         }),
         600_000,
       )
       if (result.code !== 0)
         throw new Error(`Không chuẩn bị được âm thanh: ${result.stderr.slice(-300)}`)
-      const transcript = await transcribeFile(audio, apiKey, {
-        language,
-        fetchImpl: this.deps.fetchImpl,
-      })
+      const transcript = local
+        ? await local.engine.transcribe(audio, {
+            model: local.settings.whisperModel,
+            language,
+            // Whisper trên CPU chậm hơn thời gian thực nhiều lần với model lớn: cho tối đa 1 giờ.
+            timeoutMs: 3_600_000,
+          })
+        : await transcribeFile(audio, apiKey, {
+            language,
+            fetchImpl: this.deps.fetchImpl,
+          })
       await writeJsonFile(join(dir, TRANSCRIPT_FILE), transcript)
       return transcript
     } finally {

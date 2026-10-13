@@ -1,6 +1,6 @@
 # Lumora
 
-Phần mềm desktop cho Windows để quay màn hình, tự động zoom theo chuột, chỉnh sửa video và livestream, có tích hợp AI (phụ đề bằng ElevenLabs, đạo diễn / tự biên tập bằng Ollama trên máy hoặc Claude).
+Phần mềm desktop cho Windows để quay màn hình, tự động zoom theo chuột, chỉnh sửa video và livestream, có tích hợp AI chạy hoàn toàn trên máy nếu muốn (phụ đề whisper.cpp, giọng đọc Piper, đạo diễn / tự biên tập Ollama) hoặc dịch vụ (ElevenLabs, Claude).
 Lấy cảm hứng từ Screen Studio, FocuSee, CursorClip và StreamYard.
 
 Kế hoạch đầy đủ nằm trong [PLAN.md](PLAN.md).
@@ -42,7 +42,7 @@ Kế hoạch đầy đủ nằm trong [PLAN.md](PLAN.md).
 
    ![Menu chuột phải trên timeline](docs/images/timeline-menu.jpg)
 
-5. **Phụ đề**: thư viện Phụ đề → **Tạo phụ đề** (cần key ElevenLabs) → chọn mẫu (ví dụ TikTok), dịch hoặc song ngữ (cần key Claude).
+5. **Phụ đề**: thư viện Phụ đề → **Tạo phụ đề** (giọng nói cục bộ whisper.cpp, hoặc key ElevenLabs) → chọn mẫu (ví dụ TikTok), dịch hoặc song ngữ (cần key Claude).
 
    ![Phụ đề kiểu TikTok](docs/images/captions.jpg)
 
@@ -89,7 +89,7 @@ Tính năng:
 - **Làm đẹp mặt** (Webcam): bấm **Làm đẹp tự động** hoặc chỉnh mịn da, làm sáng, tông ấm. Áp dụng cả khi xuất và khi livestream.
 - **Timeline kiểu CapCut**: mỗi clip có dải ảnh thu nhỏ của video ở trên và dạng sóng âm thanh ở dưới — sóng là một vùng tô liền, đối xứng qua trục giữa (không phải các cột rời); đoạn âm thanh là khối màu đặc với sóng trắng.
 - **Phương tiện** (Thư viện → Phương tiện): **Nhập video** chọn video trên máy để chỉnh sửa như CapCut (nối vào hàng Video làm clip chính); **Nhập ảnh** thêm ảnh / GIF (hoặc video ngắn làm lớp phủ) vào **Thư viện của tôi** dùng lại ở mọi dự án; **Video / Ảnh** tìm video, ảnh miễn phí trên **Pixabay** ngay trong app (rê chuột là phát thử, bấm để tải về thư viện và thêm vào video; cần key miễn phí lấy ở pixabay.com/api/docs sau khi đăng ký, nhập trong **Cài đặt → API key**). Kho meme Tenor đã bị Google khai tử ngày 30/6/2026 nên không còn trong app; meme đã tải trước đó vẫn nằm trong thư viện của bạn.
-- **Âm thanh meme**: 10 hiệu ứng meme tự tổng hợp (Bùm kiểu Vine, Còi thua, Rít đĩa, Còi hơi, Trống dồn, Ting tiền, Dế kêu, Boing, Vút lên, Tim đập) và **giọng đọc AI** (ElevenLabs): chọn giọng, bấm câu meme có sẵn ("Bruh", "Ối dồi ôi", "Hết cứu"…) hoặc gõ câu bất kỳ để thêm vào timeline. Câu đã đọc được lưu đệm, đọc lại không tốn credit.
+- **Âm thanh meme**: 10 hiệu ứng meme tự tổng hợp (Bùm kiểu Vine, Còi thua, Rít đĩa, Còi hơi, Trống dồn, Ting tiền, Dế kêu, Boing, Vút lên, Tim đập) và **giọng đọc AI** (Piper trên máy hoặc ElevenLabs): chọn giọng, bấm câu meme có sẵn ("Bruh", "Ối dồi ôi", "Hết cứu"…) hoặc gõ câu bất kỳ để thêm vào timeline. Câu đã đọc được lưu đệm, đọc lại không tốn credit.
 - **Lọc tạp âm & giọng nói** (Cài đặt video → Âm lượng cho micro / âm thanh máy, hoặc chọn một đoạn âm thanh): **Lọc tạp âm** Nhẹ / Vừa (AI RNNoise, chạy offline, cho kết quả như nhau trên mọi máy) / Mạnh; **Tăng cường giọng nói** (bỏ ù, khử xì, nén cho giọng rõ đều); **Chuẩn hóa âm lượng** về -16 LUFS; **hiệu ứng giọng** Sóc chuột, Trầm, Robot, Vang, Radio, Loa; chỉnh **cao độ** ±12 bán cung. Xử lý chạy nền, xong thì khung xem trước tự phát bản đã xử lý; giữ nút **Gốc** để nghe lại bản gốc. Video xuất dùng đúng bản đã xử lý.
 - **Lồng tiếng** (Thư viện → Âm thanh → Lồng tiếng): chọn micro, xem mức âm, bấm ghi (đếm ngược 3 giây, tùy chọn tắt tiếng bản gốc); video phát từ đầu phát trong lúc ghi, dừng lại là bản ghi nằm đúng chỗ trên hàng Âm thanh (màu cam).
 - **Tách âm thanh** của video meme ra thành đoạn riêng để cắt / chỉnh / thêm hiệu ứng như nhạc. Nhạc nền hiện **vạch nhịp** (beat) trên timeline để cắt theo nhạc.
@@ -109,7 +109,8 @@ Tính năng:
 - **Hiệu ứng hình**: Rung lắc, Glitch, VHS cổ, Đen trắng, Cổ điển, Viền tối, Làm mờ, Lóe theo nhịp, Nhún theo nhịp, Pháo giấy — thêm tại đầu phát, kéo trên hàng Hiệu ứng để dời/đổi độ dài, chỉnh độ mạnh.
 - **Văn bản** (Thư viện → Văn bản): **24 mẫu chữ** có xem trước (Meme, Tiêu đề, Bong bóng, Neon, Phụ đề, Tin tức, Truyện tranh, Viết tay, Retro, Hoàng hôn, Vàng kim, Karaoke, TikTok…) và **10 phông có dấu tiếng Việt** đi kèm (Be Vietnam Pro, Inter, Montserrat, Oswald, Anton, Bangers, Lobster, Pacifico, Roboto Mono, Playfair Display — giấy phép OFL, dùng offline). Bảng chữ: đậm / nghiêng / chữ in hoa / căn lề, màu hoặc **chuyển màu**, **viền**, **bóng đổ**, **nền chữ** bo góc, giãn dòng / giãn chữ, **hiệu ứng chữ** (Đánh máy, Bật từng từ, Lượn sóng, Nhiễu, Trượt từng từ). **Đọc chữ này**: giọng AI đọc nội dung lớp chữ, đặt đúng lúc chữ xuất hiện.
 - **Nhãn dán**: 30 emoji và **hình vẽ sẵn** cho video hướng dẫn (mũi tên, khoanh tròn, gạch chân, khung, con trỏ, dấu tích, dấu x, bong bóng thoại, bút dạ quang, ngôi sao) đổi màu và độ dày nét được.
-- **AI cục bộ, miễn phí (Ollama)**: Cài đặt → AI cục bộ → bấm **Cài Ollama** (app tải bộ cài chính thức và mở), **Kiểm tra kết nối**, rồi **Tải model** (ví dụ qwen2.5:7b, có thanh tiến độ) và bật. Khi bật, Đạo diễn AI, cắt từ thừa / câu lặp, tóm tắt và dịch chạy hoàn toàn trên máy, không cần key Claude. Những phần AI khác vốn đã chạy trên máy: tự zoom theo chuột, cắt khoảng lặng theo dạng sóng, lọc tạp âm RNNoise, xóa phông MediaPipe, từ đệm theo danh sách. Phụ đề (nhận dạng giọng nói) và giọng đọc AI vẫn cần key ElevenLabs.
+- **AI cục bộ, miễn phí (Ollama)**: Cài đặt → AI cục bộ → bấm **Cài Ollama** (app tải bộ cài chính thức và mở), **Kiểm tra kết nối**, rồi **Tải model** (ví dụ qwen2.5:7b, có thanh tiến độ) và bật. Khi bật, Đạo diễn AI, cắt từ thừa / câu lặp, tóm tắt và dịch chạy hoàn toàn trên máy, không cần key Claude. Những phần AI khác vốn đã chạy trên máy: tự zoom theo chuột, cắt khoảng lặng theo dạng sóng, lọc tạp âm RNNoise, xóa phông MediaPipe, từ đệm theo danh sách. Phụ đề và giọng đọc AI chạy trên máy bằng **Giọng nói cục bộ** (mục dưới).
+- **Giọng nói cục bộ, miễn phí (whisper.cpp + Piper)**: Cài đặt → Giọng nói cục bộ → **Cài whisper.cpp** (~4 MB), **Tải model** (khuyên dùng `large-v3-turbo-q5_0` ~570 MB cho tiếng Việt; `small` nhẹ hơn nhưng kém hơn), **Cài Piper** (~22 MB), **Tải giọng** (tiếng Việt `vi_VN-vais1000-medium` ~63 MB, có cả giọng tiếng Anh) rồi bật. Khi bật, phụ đề (nhận dạng từng từ), cắt khoảng lặng / từ thừa theo lời thoại, giọng đọc meme / kịch bản / "Đọc chữ này" chạy hoàn toàn trên máy, không cần key ElevenLabs; tắt thì quay lại ElevenLabs. Model chạy trên CPU: video 10 phút mất chừng 1–3 phút với model turbo trên máy phổ thông.
 - **Đạo diễn AI** (Thư viện → AI → Đạo diễn AI): gõ một câu, ví dụ "làm thành video TikTok hoàn chỉnh: cắt lặng, phụ đề kiểu TikTok, nhạc lofi nhỏ, hiệu ứng rung ở chỗ cắt, xuất 9:16 1080p"; AI (Ollama trên máy, Claude, hoặc từ khóa khi không có AI) viết lại thành kế hoạch, hỏi lại tối đa hai câu khi thiếu thông tin, rồi tự làm hết trong một bước hoàn tác và tự xuất nếu bạn yêu cầu. Lịch sử trò chuyện lưu theo dự án; "từ nay luôn…" thành quy tắc lâu dài; app học thói quen (mẫu phụ đề, bộ lọc, khung hình, nhạc…) từ cách bạn chỉnh. Bật **Hỏi lại trước khi làm** để duyệt kế hoạch trước.
 - **Xem thử trước khi thêm** (như CapCut): rê chuột lên một hiệu ứng, bộ lọc, chuyển cảnh, meme / GIF / video trong kho, nhãn dán, mẫu chữ hoặc mục kho online là khung xem trước phát thử một đoạn ngắn (lặp lại) mà chưa thêm gì vào dự án; bỏ chuột ra là trở lại chỗ cũ, bấm mới thêm thật. Nhạc trong kho có nút ▶ **Nghe thử**.
 - **Kéo giãn khung**: kéo vạch giữa thư viện / khung xem trước / bảng thuộc tính và vạch trên timeline để đổi cỡ như CapCut (nhớ cho lần sau, bấm đúp để về mặc định).
@@ -139,15 +140,15 @@ Phần xem trước và phần xuất dùng chung một hàm vẽ, nên video xu
 
 ## AI
 
-Trước tiên, nhập API key **ElevenLabs** và **Claude** trong **Cài đặt**. Sau đó, trong trình chỉnh sửa:
+Chạy hoàn toàn trên máy (miễn phí): bật **AI cục bộ** (Ollama) và **Giọng nói cục bộ** (whisper.cpp + Piper) trong **Cài đặt**. Hoặc nhập API key **ElevenLabs** và **Claude** để dùng dịch vụ. Trong trình chỉnh sửa:
 
-- **Phụ đề** (ElevenLabs Scribe v2): nhận dạng tiếng Việt, tiếng Anh hoặc tự nhận diện ngôn ngữ, có thời gian từng từ.
+- **Phụ đề** (whisper.cpp trên máy, hoặc ElevenLabs Scribe v2): nhận dạng tiếng Việt, tiếng Anh hoặc tự nhận diện ngôn ngữ, có thời gian từng từ.
   - **8 mẫu phụ đề** có xem trước: Hộp tối, Karaoke (tô dần các từ đã nói), Viền đen, Nảy từng từ, Bật từng từ, Gạch chân, Neon, TikTok (chữ in hoa đậm, khối màu sau từ đang nói). Chỉnh phông (10 phông đi kèm), màu chữ, màu nhấn, chữ in hoa, số từ hiện mỗi lần (1–4 hoặc cả dòng), vị trí trên / giữa / dưới hoặc kéo độ cao, cỡ chữ; tô sáng từ đang nói hoặc hiện cả dòng.
   - Sửa nội dung từng dòng; **tách** dòng làm đôi hoặc **gộp** với dòng sau.
   - Hàng **Phụ đề** trên timeline: mỗi dòng một khối, bấm để nhảy tới, kéo để dời, kéo mép để chỉnh thời gian.
   - **Dịch** bằng Claude sang 10 ngôn ngữ (Việt, Anh, Nhật, Hàn, Trung, Thái, Indonesia, Pháp, Tây Ban Nha, Đức): thay nội dung bằng bản dịch, hoặc **phụ đề song ngữ** (dòng dịch nhỏ hơn hiện bên dưới, sửa riêng được).
   - Lưu ra SRT/VTT hoặc in thẳng vào video khi xuất.
-- **Giọng đọc AI** (ElevenLabs): chỉnh **tốc độ đọc** (0.7–1.2×) và **độ ổn định** của giọng, dùng chung cho câu meme, kịch bản và "Đọc chữ này".
+- **Giọng đọc AI** (Piper trên máy, hoặc ElevenLabs): chỉnh **tốc độ đọc** (0.7–1.2×) và **độ ổn định** của giọng, dùng chung cho câu meme, kịch bản và "Đọc chữ này".
 - **AI** (Claude):
   - Tìm từ đệm, câu nói lặp và khoảng lặng dài. Bạn duyệt danh sách rồi mới áp dụng.
   - Chỉnh video bằng văn bản: chọn các từ muốn bỏ, phần video tương ứng sẽ bị cắt.
@@ -231,7 +232,7 @@ apps/desktop/          Ứng dụng Electron
   src/main/recording/  Phiên quay, bộ điều phối, ghi chuột/bàn phím, lập kế hoạch quay
   src/main/projects/   Đọc danh sách dự án, giao thức lumora-media:// (hỗ trợ tua video)
   src/main/export/     Ghi file xuất, trộn âm thanh, tạo GIF
-  src/main/ai/         ElevenLabs (phụ đề) và Claude (cắt, tiêu đề, chương, dịch)
+  src/main/ai/         whisper.cpp + Piper / ElevenLabs (phụ đề, giọng đọc), Ollama / Claude (đạo diễn, cắt, tiêu đề, chương, dịch)
   src/main/logger.ts   Nhật ký lỗi (che thông tin bí mật)
   src/main/updater.ts  Tự cập nhật từ GitHub Releases
   src/main/live/       Phát RTMP, máy chủ báo hiệu + trang khách mời, bình luận, phụ đề trực tiếp

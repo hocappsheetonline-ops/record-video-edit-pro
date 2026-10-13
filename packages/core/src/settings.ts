@@ -37,6 +37,44 @@ export interface AppSettings {
   reduceTransparency: boolean
   /** AI cục bộ (Ollama) thay cho Claude: trợ lý, cắt từ thừa, tóm tắt, dịch chạy trên máy. */
   localAi: LocalAiSettings
+  /** Giọng nói cục bộ (whisper.cpp + Piper) thay cho ElevenLabs: phụ đề và giọng đọc chạy trên máy. */
+  localSpeech: LocalSpeechSettings
+}
+
+/** Model Whisper (ggml) tải được trong app: cân bằng giữa cỡ file, tốc độ và chất lượng tiếng Việt. */
+export const WHISPER_MODELS = [
+  'small',
+  'medium-q5_0',
+  'large-v3-turbo-q5_0',
+  'large-v3-turbo',
+] as const
+export type WhisperModel = (typeof WHISPER_MODELS)[number]
+
+export interface LocalSpeechSettings {
+  enabled: boolean
+  /** Model Whisper dùng để nhận dạng (tải trong Cài đặt). */
+  whisperModel: WhisperModel
+  /** Giọng Piper mặc định (ví dụ vi_VN-vais1000-medium). */
+  piperVoice: string
+}
+
+export const DEFAULT_LOCAL_SPEECH: LocalSpeechSettings = {
+  enabled: false,
+  whisperModel: 'large-v3-turbo-q5_0',
+  piperVoice: 'vi_VN-vais1000-medium',
+}
+
+/** Chuẩn hóa cài đặt giọng nói cục bộ: model trong danh sách, tên giọng là tên file an toàn. */
+export function normalizeLocalSpeech(input: unknown): LocalSpeechSettings {
+  const raw = (typeof input === 'object' && input !== null ? input : {}) as Record<string, unknown>
+  const voice = typeof raw.piperVoice === 'string' ? raw.piperVoice.trim() : ''
+  return {
+    enabled: raw.enabled === true,
+    whisperModel: WHISPER_MODELS.includes(raw.whisperModel as WhisperModel)
+      ? (raw.whisperModel as WhisperModel)
+      : DEFAULT_LOCAL_SPEECH.whisperModel,
+    piperVoice: /^[\w.-]{1,80}$/.test(voice) ? voice : DEFAULT_LOCAL_SPEECH.piperVoice,
+  }
 }
 
 export interface LocalAiSettings {
@@ -84,6 +122,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   projectTemplate: 'tutorial',
   reduceTransparency: false,
   localAi: { ...DEFAULT_LOCAL_AI },
+  localSpeech: { ...DEFAULT_LOCAL_SPEECH },
 }
 
 function pick<T extends string>(allowed: readonly T[], value: unknown, fallback: T): T {
@@ -110,6 +149,7 @@ export function normalizeSettings(input: unknown): AppSettings {
     projectTemplate: pick(PROJECT_TEMPLATES, raw.projectTemplate, DEFAULT_SETTINGS.projectTemplate),
     reduceTransparency: raw.reduceTransparency === true,
     localAi: normalizeLocalAi(raw.localAi),
+    localSpeech: normalizeLocalSpeech(raw.localSpeech),
   }
 }
 

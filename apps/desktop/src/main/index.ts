@@ -33,6 +33,8 @@ import { IMPORT_VIDEO_EXT, importVideoSegment, mergeProject } from './projects/i
 import { importImageFile, MEDIA_EXTENSIONS, MemeLibrary } from './projects/images'
 import { MusicLibrary, recentDownloads } from './projects/music'
 import { ollamaInstallerUrl } from './ai/ollama'
+import { LocalSpeech, PIPER_VOICES, WHISPER_MODEL_INFO } from './ai/local-speech'
+import { WHISPER_MODELS, type WhisperModel } from '@lumora/core'
 import { createWriteStream } from 'node:fs'
 import { mkdir } from 'node:fs/promises'
 import { Readable } from 'node:stream'
@@ -222,6 +224,26 @@ if (!app.requestSingleInstanceLock()) {
     )
     const reverser = new ClipReverser(runFfmpeg)
     const cacheDirs = [join(userData, 'cache'), join(userData, 'sounds')]
+    // Giọng nói cục bộ: whisper.cpp + Piper ở tools/, model và giọng ở models/ (không bị xóa khi
+    // dọn bộ đệm).
+    const localSpeech = new LocalSpeech({
+      toolsDir: join(userData, 'tools'),
+      modelsDir: join(userData, 'models'),
+      cacheDir: join(userData, 'cache'),
+    })
+    const speechCatalog = () => ({
+      models: WHISPER_MODELS.map((id) => ({
+        id,
+        label: WHISPER_MODEL_INFO[id].label,
+        sizeMb: WHISPER_MODEL_INFO[id].sizeMb,
+      })),
+      voices: PIPER_VOICES.map((v) => ({
+        id: v.id,
+        language: v.language,
+        label: v.label,
+        sizeMb: v.sizeMb,
+      })),
+    })
     const online = new OnlineService({
       getKey: (name) => secrets.get(name),
       library: memes,
@@ -289,9 +311,32 @@ if (!app.requestSingleInstanceLock()) {
       ai: new AiService({
         getKey: (key) => secrets.get(key),
         getLocalAi: async () => (await settings.get()).localAi,
+        getLocalSpeech: async () => (await settings.get()).localSpeech,
+        localSpeech: {
+          transcribe: (wav, opts) => localSpeech.transcribe(wav, opts),
+          speak: (text, opts) => localSpeech.speak(text, opts),
+          installedVoices: async () =>
+            (await localSpeech.status()).piper.voices.map((id) => ({
+              id,
+              name: PIPER_VOICES.find((v) => v.id === id)?.label ?? id,
+            })),
+        },
         run: runFfmpeg,
         soundsDir: join(userData, 'sounds'),
       }),
+      localSpeech: {
+        status: () => localSpeech.status(),
+        catalog: speechCatalog,
+        install: (tool, onProgress) => localSpeech.installTool(tool, onProgress),
+        download: (kind, id, onProgress) =>
+          kind === 'model'
+            ? localSpeech.downloadModel(id as WhisperModel, onProgress)
+            : localSpeech.downloadVoice(id, onProgress),
+        remove: (kind, id) =>
+          kind === 'model'
+            ? localSpeech.removeModel(id as WhisperModel)
+            : localSpeech.removeVoice(id),
+      },
       online,
       cache: { size: () => dirSize(cacheDirs), clear: () => clearDirs(cacheDirs) },
       recording,

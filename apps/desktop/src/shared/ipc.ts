@@ -20,6 +20,7 @@ import type {
   RecordingOptions,
   SecretKey,
   TrackKind,
+  WhisperModel,
 } from '@lumora/core'
 
 /** Tên các kênh IPC giữa main process và giao diện. */
@@ -94,6 +95,11 @@ export const IPC = {
   aiPullModel: 'ai:pull-model',
   aiInstallOllama: 'ai:install-ollama',
   aiBenchmark: 'ai:benchmark',
+  aiSpeechStatus: 'ai:speech-status',
+  aiSpeechCatalog: 'ai:speech-catalog',
+  aiSpeechInstall: 'ai:speech-install',
+  aiSpeechDownload: 'ai:speech-download',
+  aiSpeechRemove: 'ai:speech-remove',
   aiDirect: 'ai:direct',
   aiTranslate: 'ai:translate',
   aiVoices: 'ai:voices',
@@ -139,12 +145,53 @@ export const EVENTS = {
   localAiProgress: 'ai:local-progress',
 } as const
 
-/** Tiến độ tải model / tải bộ cài Ollama (gửi liên tục trong lúc chạy). */
+/**
+ * Tiến độ tải model / tải bộ cài Ollama / tải công cụ và model giọng nói cục bộ (gửi liên tục trong
+ * lúc chạy). `kind: 'speech'` dùng chung kênh này; `item` cho biết đang tải gì (`whisper`, `piper`,
+ * tên model Whisper hoặc tên giọng Piper).
+ */
 export interface LocalAiProgress {
-  kind: 'pull' | 'install'
+  kind: 'pull' | 'install' | 'speech'
   status: string
   completed: number
   total: number
+  item?: string
+}
+
+/** Công cụ giọng nói cục bộ: whisper.cpp (nhận dạng) hoặc Piper (giọng đọc). */
+export type SpeechTool = 'whisper' | 'piper'
+
+/** Loại dữ liệu tải về cho giọng nói cục bộ: model Whisper hoặc giọng Piper. */
+export type SpeechAssetKind = 'model' | 'voice'
+
+/** Trạng thái cài đặt giọng nói cục bộ trên máy này. */
+export interface LocalSpeechStatus {
+  /** false khi hệ điều hành / kiến trúc không có bản dựng sẵn (khi đó không cài được trong app). */
+  supported: boolean
+  platform: string
+  whisper: { installed: boolean; models: WhisperModel[] }
+  piper: { installed: boolean; voices: string[] }
+}
+
+/** Một giọng Piper tải được trong app. */
+export interface PiperVoiceInfo {
+  id: string
+  language: 'vi' | 'en'
+  label: string
+  sizeMb: number
+}
+
+/** Một model Whisper tải được trong app. */
+export interface WhisperModelInfo {
+  id: WhisperModel
+  label: string
+  sizeMb: number
+}
+
+/** Danh mục model Whisper và giọng Piper mà app biết cách tải. */
+export interface LocalSpeechCatalog {
+  models: WhisperModelInfo[]
+  voices: PiperVoiceInfo[]
 }
 
 export interface AppInfo {
@@ -499,6 +546,16 @@ export interface LumoraApi {
     model: string,
   ): Promise<{ loadMs: number; tokensPerSecond: number; totalMs: number }>
   onLocalAiProgress(listener: (p: LocalAiProgress) => void): Unsubscribe
+  /** Giọng nói cục bộ (whisper.cpp + Piper): đã cài gì, đã tải model / giọng nào. */
+  localSpeechStatus(): Promise<LocalSpeechStatus>
+  /** Danh mục model Whisper và giọng Piper tải được trong app (kèm cỡ file). */
+  localSpeechCatalog(): Promise<LocalSpeechCatalog>
+  /** Tải và cài whisper.cpp hoặc Piper vào thư mục dữ liệu của app (tiến độ qua `onLocalAiProgress`). */
+  installLocalSpeech(tool: SpeechTool): Promise<void>
+  /** Tải một model Whisper hoặc giọng Piper (tiến độ qua `onLocalAiProgress`, `kind: 'speech'`). */
+  downloadLocalSpeech(kind: SpeechAssetKind, id: string): Promise<void>
+  /** Xóa một model Whisper hoặc giọng Piper đã tải. */
+  removeLocalSpeech(kind: SpeechAssetKind, id: string): Promise<void>
   /** Lưu bản lồng tiếng vừa ghi (WebM) vào dự án. */
   addVoiceover(folder: string, data: ArrayBuffer): Promise<AudioAsset>
   /** Lọc tạp âm / hiệu ứng giọng cho một file trong dự án; trả về tên file đã xử lý. */

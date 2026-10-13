@@ -15,7 +15,14 @@ import {
 import { AboutCard } from '../components/AboutCard'
 import { ApiKeyCard } from '../components/ApiKeyCard'
 import { CacheCard } from '../components/CacheCard'
-import type { LocalAiProgress } from '@shared/ipc'
+import type { TFunction } from 'i18next'
+import type {
+  LocalAiProgress,
+  LocalSpeechCatalog,
+  LocalSpeechStatus,
+  SpeechAssetKind,
+  SpeechTool,
+} from '@shared/ipc'
 import { PageHeader } from '../components/PageHeader'
 import { Toggle } from '../editor/ui'
 import { lumora } from '../api'
@@ -281,6 +288,360 @@ function LocalAiCard() {
   )
 }
 
+const speechButton =
+  'rounded-lg border border-border bg-surface-2/70 px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-surface-2 disabled:opacity-50'
+const speechPrimary =
+  'rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-accent-fg shadow-sm hover:brightness-110 disabled:opacity-50'
+
+/** Lỗi của bước cài / tải trong thẻ giọng nói cục bộ → câu ngắn dễ hiểu. */
+function localSpeechActionError(t: TFunction, e: unknown): string {
+  const message = e instanceof Error ? e.message : String(e)
+  const code = /local_speech_download:(\d+)/.exec(message)?.[1]
+  if (code) return t('settings.localSpeech.errors.download', { code })
+  if (message.includes('local_speech_unsupported'))
+    return t('settings.localSpeech.errors.unsupported')
+  return t('settings.localSpeech.errors.generic', { message })
+}
+
+const toMb = (bytes: number) => (bytes / 1_000_000).toFixed(0)
+
+/** Chip chọn model Whisper / giọng Piper: tên, cỡ file, dấu check khi đã tải. */
+function SpeechChip({
+  id,
+  label,
+  sizeMb,
+  installed,
+  selected,
+  testId,
+  onClick,
+}: {
+  id: string
+  label: string
+  sizeMb: number
+  installed: boolean
+  selected: boolean
+  testId: string
+  onClick: () => void
+}) {
+  const { t } = useTranslation()
+  return (
+    <button
+      type="button"
+      data-testid={testId}
+      aria-pressed={selected}
+      data-installed={installed || undefined}
+      data-tooltip={id}
+      onClick={onClick}
+      className={`rounded-md border px-2.5 py-0.5 text-[11px] ${
+        selected
+          ? 'border-accent bg-accent/15 text-accent'
+          : 'border-border text-muted hover:text-text'
+      }`}
+    >
+      {installed && <span aria-label={t('settings.localSpeech.ready')}>✓ </span>}
+      {label} · {t('settings.localSpeech.sizeMb', { size: sizeMb })}
+    </button>
+  )
+}
+
+/**
+ * Giọng nói cục bộ: phụ đề bằng whisper.cpp và giọng đọc bằng Piper, cài và tải ngay trong app (như
+ * Ollama) để không cần key ElevenLabs. Mọi tiến độ tải đi qua `onLocalAiProgress` với kind 'speech'.
+ */
+function LocalSpeechCard() {
+  const { t } = useTranslation()
+  const settings = useAppStore((s) => s.settings)
+  const updateSettings = useAppStore((s) => s.updateSettings)
+  const [status, setStatus] = useState<LocalSpeechStatus | null>(null)
+  const [catalog, setCatalog] = useState<LocalSpeechCatalog>({ models: [], voices: [] })
+  const [note, setNote] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [progress, setProgress] = useState<LocalAiProgress | null>(null)
+  useEffect(
+    () =>
+      lumora().onLocalAiProgress((p) => {
+        if (p.kind === 'speech') setProgress(p)
+      }),
+    [],
+  )
+  /** Đọc lại trạng thái cài đặt và danh mục (không đụng cờ bận, để gọi được từ effect). */
+  const load = () =>
+    Promise.all([lumora().localSpeechStatus(), lumora().localSpeechCatalog()])
+      .then(([s, c]) => {
+        setStatus(s)
+        setCatalog(c)
+      })
+      .catch((e: unknown) => setNote({ tone: 'error', text: localSpeechActionError(t, e) }))
+  const refresh = async () => {
+    setBusy(true)
+    try {
+      await load()
+    } finally {
+      setBusy(false)
+    }
+  }
+  useEffect(() => {
+    void load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ tải lúc gắn thẻ; "Làm mới" gọi lại bằng tay
+  }, [])
+  if (!settings) return null
+  const local = settings.localSpeech
+  const patch = (p: Partial<typeof local>) =>
+    void updateSettings({ localSpeech: { ...local, ...p } })
+  /** Chạy một bước cài / tải / xóa: hiện tiến độ, báo kết quả rồi tải lại trạng thái. */
+  const run = async (item: string, action: () => Promise<void>, doneText: string) => {
+    setBusy(true)
+    setNote(null)
+    setProgress({ kind: 'speech', status: 'download', item, completed: 0, total: 0 })
+    try {
+      await action()
+      setNote({ tone: 'ok', text: doneText })
+    } catch (e) {
+      setNote({ tone: 'error', text: localSpeechActionError(t, e) })
+    } finally {
+      setProgress(null)
+      setBusy(false)
+      await load()
+    }
+  }
+  const install = (tool: SpeechTool) =>
+    run(
+      tool,
+      () => lumora().installLocalSpeech(tool),
+      t('settings.localSpeech.done.installed', {
+        tool: tool === 'whisper' ? 'whisper.cpp' : 'Piper',
+      }),
+    )
+  const download = (kind: SpeechAssetKind, id: string) =>
+    run(
+      id,
+      () => lumora().downloadLocalSpeech(kind, id),
+      t('settings.localSpeech.done.downloaded', { id }),
+    )
+  const remove = (kind: SpeechAssetKind, id: string) =>
+    run(
+      id,
+      () => lumora().removeLocalSpeech(kind, id),
+      t('settings.localSpeech.done.removed', { id }),
+    )
+  const supported = status?.supported !== false
+  const modelInstalled = status?.whisper.models.includes(local.whisperModel) ?? false
+  const voiceInstalled = status?.piper.voices.includes(local.piperVoice) ?? false
+  const percent =
+    progress && progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : null
+  const toolStatus = (tool: SpeechTool) => {
+    const installed = tool === 'whisper' ? status?.whisper.installed : status?.piper.installed
+    const name = tool === 'whisper' ? 'whisper.cpp' : 'Piper'
+    return (
+      <span
+        data-testid={`local-speech-${tool}-status`}
+        className={`text-xs ${installed ? 'text-success' : 'text-muted'}`}
+      >
+        {installed
+          ? t('settings.localSpeech.installed', { tool: name })
+          : t('settings.localSpeech.notInstalled', { tool: name })}
+      </span>
+    )
+  }
+  // Giọng Piper gộp theo ngôn ngữ, tiếng Việt trước.
+  const voiceGroups = (['vi', 'en'] as const)
+    .map((lang) => ({ lang, voices: catalog.voices.filter((v) => v.language === lang) }))
+    .filter((g) => g.voices.length > 0)
+  return (
+    <div className={group} data-testid="local-speech-card">
+      <div className="sm:col-span-2">
+        <Toggle
+          label={t('settings.localSpeech.enable')}
+          hint={t('settings.localSpeech.hint')}
+          checked={local.enabled}
+          testId="local-speech-enable"
+          onChange={(enabled) => patch({ enabled })}
+        />
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-2 sm:col-span-2">
+        <p className="text-xs text-muted">{t('settings.localSpeech.steps')}</p>
+        <button
+          type="button"
+          data-testid="local-speech-refresh"
+          disabled={busy}
+          onClick={() => void refresh()}
+          className={speechButton}
+        >
+          {busy ? t('settings.localSpeech.refreshing') : t('settings.localSpeech.refresh')}
+        </button>
+      </div>
+      {status && !supported && (
+        <p
+          role="alert"
+          data-testid="local-speech-unsupported"
+          className="rounded-lg bg-danger/10 p-3 text-sm text-danger sm:col-span-2"
+        >
+          {t('settings.localSpeech.unsupported', { platform: status.platform })}
+        </p>
+      )}
+
+      {/* Nhận dạng giọng nói (whisper.cpp) */}
+      <div className="flex flex-col gap-2 sm:col-span-2" data-testid="local-speech-whisper">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm font-medium">{t('settings.localSpeech.whisper.title')}</span>
+          {toolStatus('whisper')}
+        </div>
+        <div className="flex flex-wrap gap-1" data-testid="local-speech-models">
+          {catalog.models.map((m) => (
+            <SpeechChip
+              key={m.id}
+              id={m.id}
+              label={m.label}
+              sizeMb={m.sizeMb}
+              installed={status?.whisper.models.includes(m.id) ?? false}
+              selected={local.whisperModel === m.id}
+              testId={`local-speech-model-${m.id}`}
+              onClick={() => patch({ whisperModel: m.id })}
+            />
+          ))}
+        </div>
+        {supported && (
+          <div className="flex flex-wrap items-center gap-3">
+            {!status?.whisper.installed && (
+              <button
+                type="button"
+                data-testid="local-speech-install-whisper"
+                disabled={busy}
+                onClick={() => void install('whisper')}
+                className={speechPrimary}
+              >
+                {t('settings.localSpeech.whisper.install')}
+              </button>
+            )}
+            {modelInstalled ? (
+              <button
+                type="button"
+                data-testid="local-speech-remove-model"
+                disabled={busy}
+                onClick={() => void remove('model', local.whisperModel)}
+                className={speechButton}
+              >
+                {t('settings.localSpeech.removeModel', { id: local.whisperModel })}
+              </button>
+            ) : (
+              <button
+                type="button"
+                data-testid="local-speech-download-model"
+                disabled={busy}
+                onClick={() => void download('model', local.whisperModel)}
+                className={status?.whisper.installed ? speechPrimary : speechButton}
+              >
+                {t('settings.localSpeech.downloadModel', { id: local.whisperModel })}
+              </button>
+            )}
+          </div>
+        )}
+        <p className="text-xs text-muted">{t('settings.localSpeech.whisper.hint')}</p>
+      </div>
+
+      {/* Giọng đọc (Piper) */}
+      <div className="flex flex-col gap-2 sm:col-span-2" data-testid="local-speech-piper">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm font-medium">{t('settings.localSpeech.piper.title')}</span>
+          {toolStatus('piper')}
+        </div>
+        {voiceGroups.map((g) => (
+          <div
+            key={g.lang}
+            className="flex flex-wrap items-center gap-1"
+            data-testid={`local-speech-voices-${g.lang}`}
+          >
+            <span className="mr-1 text-[11px] text-muted">
+              {t(`settings.localSpeech.languages.${g.lang}`)}
+            </span>
+            {g.voices.map((v) => (
+              <SpeechChip
+                key={v.id}
+                id={v.id}
+                label={v.label}
+                sizeMb={v.sizeMb}
+                installed={status?.piper.voices.includes(v.id) ?? false}
+                selected={local.piperVoice === v.id}
+                testId={`local-speech-voice-${v.id}`}
+                onClick={() => patch({ piperVoice: v.id })}
+              />
+            ))}
+          </div>
+        ))}
+        {supported && (
+          <div className="flex flex-wrap items-center gap-3">
+            {!status?.piper.installed && (
+              <button
+                type="button"
+                data-testid="local-speech-install-piper"
+                disabled={busy}
+                onClick={() => void install('piper')}
+                className={speechPrimary}
+              >
+                {t('settings.localSpeech.piper.install')}
+              </button>
+            )}
+            {voiceInstalled ? (
+              <button
+                type="button"
+                data-testid="local-speech-remove-voice"
+                disabled={busy}
+                onClick={() => void remove('voice', local.piperVoice)}
+                className={speechButton}
+              >
+                {t('settings.localSpeech.removeVoice', { id: local.piperVoice })}
+              </button>
+            ) : (
+              <button
+                type="button"
+                data-testid="local-speech-download-voice"
+                disabled={busy}
+                onClick={() => void download('voice', local.piperVoice)}
+                className={status?.piper.installed ? speechPrimary : speechButton}
+              >
+                {t('settings.localSpeech.downloadVoice', { id: local.piperVoice })}
+              </button>
+            )}
+          </div>
+        )}
+        <p className="text-xs text-muted">{t('settings.localSpeech.piper.hint')}</p>
+      </div>
+
+      {note && (
+        <span
+          role="status"
+          data-testid="local-speech-status"
+          className={`text-sm sm:col-span-2 ${note.tone === 'ok' ? 'text-success' : 'text-danger'}`}
+        >
+          {note.text}
+        </span>
+      )}
+      {progress && (
+        <div
+          className="flex flex-col gap-1 text-xs text-muted sm:col-span-2"
+          data-testid="local-speech-progress"
+        >
+          <span>
+            {t('settings.localSpeech.downloading', { item: progress.item ?? '' })}
+            {progress.total > 0 &&
+              ` ${t('settings.localSpeech.progressMb', {
+                done: toMb(progress.completed),
+                total: toMb(progress.total),
+              })}`}
+            {percent !== null && ` · ${percent}%`}
+          </span>
+          <div className="h-1.5 overflow-hidden rounded-full bg-surface-2">
+            <div
+              className={`h-full bg-accent ${percent === null ? 'w-1/3 animate-pulse' : ''}`}
+              style={percent !== null ? { width: `${percent}%` } : undefined}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function SettingsPage() {
   const { t } = useTranslation()
   const settings = useAppStore((s) => s.settings)
@@ -417,6 +778,9 @@ export function SettingsPage() {
 
       <h2 className={groupTitle}>{t('settings.localAi.title')}</h2>
       <LocalAiCard />
+
+      <h2 className={groupTitle}>{t('settings.localSpeech.title')}</h2>
+      <LocalSpeechCard />
 
       <h2 className={groupTitle.replace('mb-2', 'mb-1')}>{t('settings.apiKeys')}</h2>
       <p className="mb-3 text-sm text-muted">{t('settings.apiKeysHint')}</p>

@@ -32,6 +32,10 @@ import {
   type MusicTrack,
   type RecentDownload,
   type LocalAiProgress,
+  type LocalSpeechCatalog,
+  type LocalSpeechStatus,
+  type SpeechAssetKind,
+  type SpeechTool,
 } from '@shared/ipc'
 import { validateKey, type Validators } from './key-validation'
 import { mkdir, writeFile } from 'node:fs/promises'
@@ -170,6 +174,18 @@ export interface IpcDeps {
     sendProgress(p: LocalAiProgress): void
     installOllama(onProgress: (completed: number, total: number) => void): Promise<void>
   }
+  /** Giọng nói cục bộ: cài whisper.cpp / Piper, tải và xóa model Whisper / giọng Piper. */
+  localSpeech: {
+    status(): Promise<LocalSpeechStatus>
+    catalog(): LocalSpeechCatalog
+    install(tool: SpeechTool, onProgress: (completed: number, total: number) => void): Promise<void>
+    download(
+      kind: SpeechAssetKind,
+      id: string,
+      onProgress: (completed: number, total: number) => void,
+    ): Promise<void>
+    remove(kind: SpeechAssetKind, id: string): Promise<void>
+  }
   /** Điều khiển cửa sổ chính (thanh tiêu đề tự vẽ của cửa sổ không viền). */
   window: {
     minimize(): void
@@ -208,6 +224,21 @@ function parseRegion(value: unknown): Rect | null {
   if (!nums.every((n) => typeof n === 'number' && Number.isFinite(n))) return null
   const [x, y, width, height] = nums as number[]
   return width! > 0 && height! > 0 ? { x: x!, y: y!, width: width!, height: height! } : null
+}
+
+const SPEECH_TOOLS: readonly SpeechTool[] = ['whisper', 'piper']
+const SPEECH_ASSET_KINDS: readonly SpeechAssetKind[] = ['model', 'voice']
+
+function assertSpeechTool(tool: unknown): SpeechTool {
+  if (!SPEECH_TOOLS.includes(tool as SpeechTool)) throw new Error('speech_input')
+  return tool as SpeechTool
+}
+
+/** Loại và tên model / giọng: tên chỉ gồm chữ, số, `.`, `_`, `-` (dùng làm tên file). */
+function assertSpeechAsset(kind: unknown, id: unknown): [SpeechAssetKind, string] {
+  if (!SPEECH_ASSET_KINDS.includes(kind as SpeechAssetKind)) throw new Error('speech_input')
+  if (typeof id !== 'string' || !/^[\w.-]{1,80}$/.test(id)) throw new Error('speech_input')
+  return [kind as SpeechAssetKind, id]
 }
 
 function assertFolder(folder: unknown): string {
@@ -590,6 +621,23 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
       deps.localAi.sendProgress({ kind: 'install', status: 'download', completed, total }),
     ),
   )
+  // Giọng nói cục bộ: tiến độ tải đi chung kênh với Ollama, phân biệt bằng kind 'speech' và item.
+  const speechProgress = (item: string) => (completed: number, total: number) =>
+    deps.localAi.sendProgress({ kind: 'speech', status: 'download', item, completed, total })
+  ipcMain.handle(IPC.aiSpeechStatus, () => deps.localSpeech.status())
+  ipcMain.handle(IPC.aiSpeechCatalog, () => deps.localSpeech.catalog())
+  ipcMain.handle(IPC.aiSpeechInstall, (_event, tool: unknown) => {
+    const t = assertSpeechTool(tool)
+    return deps.localSpeech.install(t, speechProgress(t))
+  })
+  ipcMain.handle(IPC.aiSpeechDownload, (_event, kind: unknown, id: unknown) => {
+    const [k, name] = assertSpeechAsset(kind, id)
+    return deps.localSpeech.download(k, name, speechProgress(name))
+  })
+  ipcMain.handle(IPC.aiSpeechRemove, (_event, kind: unknown, id: unknown) => {
+    const [k, name] = assertSpeechAsset(kind, id)
+    return deps.localSpeech.remove(k, name)
+  })
   ipcMain.handle(IPC.aiVoices, () => deps.ai.voices())
   ipcMain.handle(
     IPC.aiSpeak,

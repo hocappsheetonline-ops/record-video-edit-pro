@@ -328,11 +328,15 @@ export function buildSpeechAudioArgs(options: {
   pieces: readonly MuxAudioPiece[]
   durationS: number
   output: string
-  /** `pcm`: PCM 16-bit mono 8 kHz thô (để vẽ dạng sóng), mặc định MP3 16 kHz. */
-  format?: 'mp3' | 'pcm'
+  /**
+   * `pcm`: PCM 16-bit mono 8 kHz thô (để vẽ dạng sóng); `wav16`: WAV 16 kHz mono 16-bit (đầu vào
+   * cho whisper.cpp); mặc định MP3 16 kHz.
+   */
+  format?: 'mp3' | 'pcm' | 'wav16'
 }): string[] {
   const { pieces, durationS, output } = options
   const pcm = options.format === 'pcm'
+  const wav = options.format === 'wav16'
   const files = [...new Set(pieces.map((p) => p.path))]
   const filters: string[] = []
   const labels = new Map<string, string[]>()
@@ -377,7 +381,11 @@ export function buildSpeechAudioArgs(options: {
     '1',
     '-ar',
     pcm ? '8000' : '16000',
-    ...(pcm ? ['-f', 's16le', '-c:a', 'pcm_s16le'] : ['-c:a', 'libmp3lame', '-b:a', '64k']),
+    ...(pcm
+      ? ['-f', 's16le', '-c:a', 'pcm_s16le']
+      : wav
+        ? ['-f', 'wav', '-c:a', 'pcm_s16le']
+        : ['-c:a', 'libmp3lame', '-b:a', '64k']),
     output,
   ]
 }

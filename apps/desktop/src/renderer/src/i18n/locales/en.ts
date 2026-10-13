@@ -206,7 +206,8 @@ export const en: Messages = {
       voiceHint:
         'The video plays from the playhead while you record; when you stop, the take lands at the right spot on the Audio track.',
       speechTitle: 'AI voice',
-      speechNeedsKey: 'An ElevenLabs key is needed to read meme lines with an AI voice.',
+      speechNeedsKey:
+        'An ElevenLabs key or local speech (Settings) is needed to read meme lines with an AI voice.',
       voice: 'Voice',
       speechPlaceholder: 'Type a line to read…',
       speechAdd: 'Read and add to the video',
@@ -680,9 +681,9 @@ export const en: Messages = {
         slideWords: 'Slide words',
       },
       readAloud: 'Read with AI voice',
-      readNeedsKey: 'An ElevenLabs key (Settings → API keys) is needed to read text aloud.',
+      readNeedsKey: 'An ElevenLabs key or local speech (Settings) is needed to read text aloud.',
       readThis: 'Read this text',
-      readFailed: 'Could not read it. Check your network and ElevenLabs key.',
+      readFailed: 'Could not read it. Check your network and ElevenLabs key, or local speech.',
     },
     menu: {
       copy: 'Copy',
@@ -983,7 +984,7 @@ export const en: Messages = {
   },
   captions: {
     intro:
-      'Lumora sends the speech to ElevenLabs to create word-timed captions. You can edit them, save SRT/VTT, or burn them into the video.',
+      'Lumora sends the speech to ElevenLabs (or transcribes it on this computer with local speech) to create word-timed captions. You can edit them, save SRT/VTT, or burn them into the video.',
     language: 'Spoken language',
     auto: 'Detect automatically',
     generate: 'Create captions',
@@ -1184,6 +1185,22 @@ export const en: Messages = {
         'The local model answered in the wrong format. Try a larger model (e.g. qwen2.5:7b).',
       noAudio: 'This recording has no microphone or computer audio to transcribe.',
       noTranscript: 'Create captions first (Captions tab).',
+      local_speech_unsupported:
+        'Local speech cannot run on this operating system. Turn it off in Settings → Local speech and use ElevenLabs.',
+      local_speech_missing_whisper:
+        'whisper.cpp is not installed. Open Settings → Local speech and click "Install whisper.cpp".',
+      local_speech_missing_piper:
+        'Piper is not installed. Open Settings → Local speech and click "Install Piper".',
+      local_speech_missing_model:
+        'The selected Whisper model is not downloaded. Open Settings → Local speech and click "Download model".',
+      local_speech_missing_voice:
+        'The selected Piper voice is not downloaded. Open Settings → Local speech and click "Download voice".',
+      local_speech_download:
+        'Could not download the local speech tool / model (code {{code}}). Check your network and try again in Settings → Local speech.',
+      local_speech_failed_whisper:
+        'whisper.cpp failed while transcribing. Try another model or reinstall it in Settings → Local speech.',
+      local_speech_failed_piper:
+        'Piper failed while speaking. Try another voice or reinstall it in Settings → Local speech.',
       generic: 'Error: {{message}}',
     },
   },
@@ -1347,7 +1364,49 @@ export const en: Messages = {
         big: 'Highest quality, needs a strong machine (~16 GB RAM or a 12 GB GPU)',
       },
       models:
-        'Suggested: qwen2.5:7b (good Vietnamese, ~8 GB RAM), llama3.2 (light, ~3 GB), gemma3. Captions still need an ElevenLabs key.',
+        'Suggested: qwen2.5:7b (good Vietnamese, ~8 GB RAM), llama3.2 (light, ~3 GB), gemma3. Captions need an ElevenLabs key or local speech.',
+    },
+    localSpeech: {
+      title: 'Local speech (whisper.cpp + Piper)',
+      enable: 'Use speech running on this computer instead of ElevenLabs',
+      hint: 'Captions (speech recognition) with whisper.cpp, AI voice with Piper: runs on your machine, free, no ElevenLabs key needed. When off, ElevenLabs works as before.',
+      steps:
+        'Five steps right here: Install whisper.cpp → Download model → Install Piper → Download voice → Turn on.',
+      unsupported:
+        'There is no prebuilt whisper.cpp / Piper for this operating system ({{platform}}), so it cannot be installed from the app. Use ElevenLabs instead.',
+      refresh: 'Refresh',
+      refreshing: 'Checking…',
+      installed: '{{tool}} installed',
+      notInstalled: '{{tool}} not installed',
+      whisper: {
+        title: 'Speech recognition (whisper.cpp)',
+        install: 'Install whisper.cpp (~4 MB)',
+        hint: 'For Vietnamese use large-v3-turbo-q5_0 (best, ~570 MB). Weak machines: small (~490 MB, less accurate).',
+      },
+      piper: {
+        title: 'AI voice (Piper)',
+        install: 'Install Piper (~22 MB)',
+        hint: 'Vietnamese and English voices, about 60 MB each. Downloaded voices work right away for meme lines and commentary.',
+      },
+      downloadModel: 'Download model {{id}}',
+      removeModel: 'Remove model {{id}}',
+      downloadVoice: 'Download voice {{id}}',
+      removeVoice: 'Remove voice {{id}}',
+      ready: 'downloaded',
+      sizeMb: '{{size}} MB',
+      languages: { vi: 'Vietnamese', en: 'English' },
+      downloading: 'Downloading {{item}}…',
+      progressMb: '{{done}} / {{total}} MB',
+      done: {
+        installed: '{{tool}} installed.',
+        downloaded: '{{id}} downloaded and ready.',
+        removed: '{{id}} removed.',
+      },
+      errors: {
+        download: 'Download failed (code {{code}}). Check your network and try again.',
+        unsupported: 'This operating system is not supported.',
+        generic: 'Error: {{message}}',
+      },
     },
     reduceTransparency: 'Reduce transparency',
     reduceTransparencyHint:
@@ -1386,7 +1445,10 @@ export const en: Messages = {
     },
   },
   keys: {
-    elevenlabs: { name: 'ElevenLabs', purpose: 'Speech-to-text captions' },
+    elevenlabs: {
+      name: 'ElevenLabs',
+      purpose: 'Cloud captions and AI voice (not needed when local speech is on)',
+    },
     anthropic: { name: 'Claude (Anthropic)', purpose: 'AI editing, titles and chapters' },
     pixabay: {
       name: 'Pixabay',
