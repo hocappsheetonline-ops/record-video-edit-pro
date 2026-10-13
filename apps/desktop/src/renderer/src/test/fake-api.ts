@@ -380,6 +380,45 @@ export function createFakeApi(
       localAiListeners.add(l)
       return () => localAiListeners.delete(l)
     }),
+    localSpeechStatus: vi.fn<LumoraApi['localSpeechStatus']>(async () => ({
+      supported: true,
+      platform: 'win32',
+      whisper: { installed: false, models: [] },
+      piper: { installed: false, voices: [] },
+    })),
+    localSpeechCatalog: vi.fn<LumoraApi['localSpeechCatalog']>(async () => ({
+      models: [
+        { id: 'small', label: 'Small', sizeMb: 488 },
+        { id: 'large-v3-turbo-q5_0', label: 'Large v3 Turbo (q5)', sizeMb: 574 },
+      ],
+      voices: [
+        { id: 'vi_VN-vais1000-medium', language: 'vi', label: 'Vais 1000 (nữ)', sizeMb: 63 },
+        { id: 'en_US-lessac-medium', language: 'en', label: 'Lessac (nữ)', sizeMb: 63 },
+      ],
+    })),
+    installLocalSpeech: vi.fn<LumoraApi['installLocalSpeech']>(async (tool) => {
+      localAiListeners.forEach((l) =>
+        l({
+          kind: 'speech',
+          status: 'download',
+          item: tool,
+          completed: 2_000_000,
+          total: 4_000_000,
+        }),
+      )
+    }),
+    downloadLocalSpeech: vi.fn<LumoraApi['downloadLocalSpeech']>(async (_kind, id) => {
+      localAiListeners.forEach((l) =>
+        l({
+          kind: 'speech',
+          status: 'download',
+          item: id,
+          completed: 50_000_000,
+          total: 100_000_000,
+        }),
+      )
+    }),
+    removeLocalSpeech: vi.fn<LumoraApi['removeLocalSpeech']>(async () => {}),
     summarize: vi.fn<LumoraApi['summarize']>(async () => ({
       titles: ['Hướng dẫn Lumora', 'Lumora trong 5 phút', 'Quay màn hình đẹp'],
       description: 'Video hướng dẫn.',
@@ -502,6 +541,7 @@ export function createFakeApi(
     emitFinished: (folder: string) => finishedListeners.forEach((l) => l(folder)),
     emitComments: (comments: LiveComment[]) => commentListeners.forEach((l) => l(comments)),
     emitUpdate: (state: UpdateState) => updateListeners.forEach((l) => l(state)),
+    emitLocalAiProgress: (p: LocalAiProgress) => localAiListeners.forEach((l) => l(p)),
     emitLiveStatus: (status: LiveStatus) => statusListeners.forEach((l) => l(status)),
     emitLiveEnded: (ended: LiveEnded) => endedListeners.forEach((l) => l(ended)),
   }

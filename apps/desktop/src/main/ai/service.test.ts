@@ -1,11 +1,11 @@
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Project } from '@lumora/core'
 import { runFfmpeg } from '../ffmpeg/runner'
 import type { FetchLike } from '../key-validation'
-import { AiService, MissingKeyError } from './service'
+import { AiService, MissingKeyError, type LocalSpeechLike } from './service'
 
 let dir: string
 beforeEach(async () => {
@@ -641,5 +641,121 @@ describe('AI cục bộ: độ bền và hiệu năng', () => {
       tokensPerSecond: 20,
       totalMs: 5000,
     })
+  })
+})
+
+describe('AiService với giọng nói cục bộ (whisper.cpp + Piper)', () => {
+  /** Bộ chạy giả: ghi lại tham số, trả transcript cố định và WAV 0,8 giây do ffmpeg tạo. */
+  function fakeEngine() {
+    const calls: { transcribe: unknown[]; speak: unknown[] } = { transcribe: [], speak: [] }
+    const engine: LocalSpeechLike = {
+      transcribe: vi.fn(async (wavPath: string, opts: unknown) => {
+        calls.transcribe.push({ wavPath, opts })
+        // File đưa cho whisper phải là WAV 16 kHz mono.
+        const head = (await readFile(wavPath)).subarray(0, 36)
+        expect(head.toString('ascii', 0, 4)).toBe('RIFF')
+        expect(head.toString('ascii', 8, 12)).toBe('WAVE')
+        expect(head.readUInt32LE(24)).toBe(16000)
+        expect(head.readUInt16LE(22)).toBe(1)
+        return {
+          language: 'vi',
+          words: [
+            { text: 'Xin', start: 0, end: 300 },
+            { text: 'chào', start: 300, end: 700 },
+          ],
+        }
+      }),
+      speak: vi.fn(async (text: string, opts: unknown) => {
+        calls.speak.push({ text, opts })
+        const wav = join(dir, 'piper-out.wav')
+        const r = await runFfmpeg([
+          '-hide_banner',
+          '-loglevel',
+          'error',
+          '-y',
+          '-f',
+          'lavfi',
+          '-i',
+          'sine=frequency=440:duration=0.8',
+          '-ar',
+          '22050',
+          '-ac',
+          '1',
+          wav,
+        ])
+        if (r.code !== 0) throw new Error(r.stderr)
+        return readFile(wav)
+      }),
+      installedVoices: vi.fn(async () => [
+        { id: 'vi_VN-vais1000-medium', name: 'Tiếng Việt – Vais' },
+      ]),
+    }
+    return { engine, calls }
+  }
+  const localAi = (engine: LocalSpeechLike, enabled = true, soundsDir?: string) =>
+    new AiService({
+      getKey: async () => undefined,
+      getLocalSpeech: async () => ({
+        enabled,
+        whisperModel: 'large-v3-turbo-q5_0',
+        piperVoice: 'vi_VN-vais1000-medium',
+      }),
+      localSpeech: engine,
+      run: runFfmpeg,
+      soundsDir,
+    })
+
+  it('nhận dạng bằng whisper.cpp: không cần key, trộn thành WAV 16 kHz, lưu transcript, dọn file tạm', async () => {
+    const { engine, calls } = fakeEngine()
+    const ai = localAi(engine)
+    expect(await ai.usingLocalSpeech()).toBe(true)
+    const transcript = await ai.transcribe(project, dir, 'vi')
+    expect(transcript.words.map((w) => w.text)).toEqual(['Xin', 'chào'])
+    expect(calls.transcribe).toHaveLength(1)
+    expect(calls.transcribe[0]).toMatchObject({
+      wavPath: join(dir, '.speech.wav'),
+      opts: { model: 'large-v3-turbo-q5_0', language: 'vi' },
+    })
+    expect(JSON.parse(await readFile(join(dir, 'transcript.json'), 'utf8'))).toEqual(transcript)
+    expect((await readdir(dir)).some((f) => f.startsWith('.speech'))).toBe(false)
+    expect(await ai.getTranscript(dir)).toEqual(transcript)
+  })
+
+  it('đọc bằng Piper: WAV đổi sang MP3, lưu đệm chung, khóa riêng với ElevenLabs; tốc độ là file riêng', async () => {
+    const { engine, calls } = fakeEngine()
+    const sounds = join(dir, 'sounds')
+    const ai = localAi(engine, true, sounds)
+    expect(await ai.voices()).toEqual([{ id: 'vi_VN-vais1000-medium', name: 'Tiếng Việt – Vais' }])
+    const asset = await ai.speak(dir, ' Xin chào cả nhà ', 'vi_VN-vais1000-medium')
+    expect(asset.file).toMatch(/^asset-tts-[0-9a-f]{16}\.mp3$/)
+    expect(asset.name).toBe('Xin chào cả nhà')
+    expect(asset.durationMs).toBeGreaterThan(600)
+    expect(calls.speak[0]).toEqual({
+      text: 'Xin chào cả nhà',
+      opts: { voice: 'vi_VN-vais1000-medium', speed: 1 },
+    })
+    // File WAV tạm đã dọn; bản MP3 nằm trong dự án và trong bộ đệm chung.
+    expect(
+      (await readdir(dir)).filter((f) => f.startsWith('asset-tts-') && f.endsWith('.wav')),
+    ).toEqual([])
+    expect(await readdir(sounds)).toHaveLength(1)
+    const again = await ai.speak(dir, 'Xin chào cả nhà', 'vi_VN-vais1000-medium')
+    expect(again.file).toBe(asset.file)
+    expect(calls.speak).toHaveLength(1)
+    const fast = await ai.speak(dir, 'Xin chào cả nhà', 'vi_VN-vais1000-medium', { speed: 1.2 })
+    expect(fast.file).not.toBe(asset.file)
+    expect(calls.speak[1]).toMatchObject({ opts: { speed: 1.2 } })
+  })
+
+  it('tắt giọng nói cục bộ thì quay về ElevenLabs (thiếu key báo rõ)', async () => {
+    const { engine, calls } = fakeEngine()
+    const ai = localAi(engine, false)
+    expect(await ai.usingLocalSpeech()).toBe(false)
+    await expect(ai.transcribe(project, dir)).rejects.toBeInstanceOf(MissingKeyError)
+    await expect(ai.speak(dir, 'hi', 'vi_VN-vais1000-medium')).rejects.toBeInstanceOf(
+      MissingKeyError,
+    )
+    expect(calls.transcribe).toHaveLength(0)
+    expect(calls.speak).toHaveLength(0)
   })
 })

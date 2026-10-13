@@ -207,6 +207,143 @@ describe('AI cục bộ (Ollama)', () => {
   })
 })
 
+describe('Giọng nói cục bộ (whisper.cpp + Piper)', () => {
+  it('hiện trạng thái, cài whisper.cpp, chọn và tải model, bật', async () => {
+    const api = createFakeApi()
+    await renderApp(api)
+    await userEvent.click(screen.getByTestId('nav-settings'))
+    // Trạng thái và danh mục tải lúc mở trang: chưa cài gì, hai model, hai giọng (tiếng Việt trước).
+    expect(await screen.findByTestId('local-speech-whisper-status')).toHaveTextContent(
+      'Chưa cài whisper.cpp',
+    )
+    expect(screen.getByTestId('local-speech-piper-status')).toHaveTextContent('Chưa cài Piper')
+    expect(await screen.findByTestId('local-speech-model-small')).toHaveTextContent('488 MB')
+    expect(screen.getByTestId('local-speech-model-large-v3-turbo-q5_0')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+    const groups = screen
+      .getByTestId('local-speech-piper')
+      .querySelectorAll('[data-testid^="local-speech-voices-"]')
+    expect([...groups].map((g) => g.getAttribute('data-testid'))).toEqual([
+      'local-speech-voices-vi',
+      'local-speech-voices-en',
+    ])
+    expect(screen.queryByTestId('local-speech-unsupported')).toBeNull()
+    // Cài whisper.cpp: tiến độ kind 'speech' hiện trên thanh, xong thì báo và tải lại trạng thái.
+    api.localSpeechStatus.mockResolvedValue({
+      supported: true,
+      platform: 'win32',
+      whisper: { installed: true, models: [] },
+      piper: { installed: false, voices: [] },
+    })
+    await userEvent.click(screen.getByTestId('local-speech-install-whisper'))
+    expect(api.installLocalSpeech).toHaveBeenCalledWith('whisper')
+    await waitFor(() =>
+      expect(screen.getByTestId('local-speech-status')).toHaveTextContent('Đã cài whisper.cpp'),
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('local-speech-whisper-status')).toHaveTextContent(
+        'Đã cài whisper.cpp',
+      ),
+    )
+    expect(screen.queryByTestId('local-speech-install-whisper')).toBeNull()
+    // Chọn model khác rồi tải: cài đặt đổi theo chip, nút tải gọi đúng model.
+    await userEvent.click(screen.getByTestId('local-speech-model-small'))
+    await waitFor(() =>
+      expect(useAppStore.getState().settings?.localSpeech.whisperModel).toBe('small'),
+    )
+    api.localSpeechStatus.mockResolvedValue({
+      supported: true,
+      platform: 'win32',
+      whisper: { installed: true, models: ['small'] },
+      piper: { installed: false, voices: [] },
+    })
+    await userEvent.click(screen.getByTestId('local-speech-download-model'))
+    expect(api.downloadLocalSpeech).toHaveBeenCalledWith('model', 'small')
+    await waitFor(() =>
+      expect(screen.getByTestId('local-speech-status')).toHaveTextContent('Đã tải small'),
+    )
+    // Model đã tải: chip có dấu check, nút tải đổi thành xóa.
+    expect(await screen.findByTestId('local-speech-remove-model')).toBeInTheDocument()
+    expect(screen.getByTestId('local-speech-model-small')).toHaveAttribute('data-installed', 'true')
+    await userEvent.click(screen.getByTestId('local-speech-remove-model'))
+    expect(api.removeLocalSpeech).toHaveBeenCalledWith('model', 'small')
+    // Bật giọng nói cục bộ.
+    await userEvent.click(screen.getByTestId('local-speech-enable'))
+    await waitFor(() => expect(useAppStore.getState().settings?.localSpeech.enabled).toBe(true))
+  })
+
+  it('thanh tiến độ hiện MB đã tải từ sự kiện kind speech; giọng Piper chọn và tải được', async () => {
+    const fake = makeFakeApi()
+    const api = fake.api
+    // Giữ lời gọi tải treo để xem thanh tiến độ trong lúc chạy.
+    let finish = () => {}
+    api.downloadLocalSpeech.mockImplementation(
+      () => new Promise<void>((resolve) => (finish = resolve)),
+    )
+    await renderApp(api)
+    await userEvent.click(screen.getByTestId('nav-settings'))
+    await screen.findByTestId('local-speech-voice-en_US-lessac-medium')
+    await userEvent.click(screen.getByTestId('local-speech-voice-en_US-lessac-medium'))
+    await waitFor(() =>
+      expect(useAppStore.getState().settings?.localSpeech.piperVoice).toBe('en_US-lessac-medium'),
+    )
+    await userEvent.click(screen.getByTestId('local-speech-download-voice'))
+    expect(api.downloadLocalSpeech).toHaveBeenCalledWith('voice', 'en_US-lessac-medium')
+    act(() => {
+      fake.emitLocalAiProgress({
+        kind: 'speech',
+        status: 'download',
+        item: 'en_US-lessac-medium',
+        completed: 30_000_000,
+        total: 60_000_000,
+      })
+    })
+    expect(screen.getByTestId('local-speech-progress')).toHaveTextContent(
+      'Đang tải en_US-lessac-medium… 30 / 60 MB · 50%',
+    )
+    // Tiến độ của Ollama không lẫn vào thanh này.
+    act(() => {
+      fake.emitLocalAiProgress({ kind: 'pull', status: 'x', completed: 1, total: 100 })
+    })
+    expect(screen.getByTestId('local-speech-progress')).toHaveTextContent('30 / 60 MB')
+    act(() => finish())
+    await waitFor(() => expect(screen.queryByTestId('local-speech-progress')).toBeNull())
+    expect(screen.getByTestId('local-speech-status')).toHaveTextContent(
+      'Đã tải en_US-lessac-medium',
+    )
+  })
+
+  it('máy không hỗ trợ: báo thay vì hiện nút cài; lỗi tải hiện mã', async () => {
+    const api = createFakeApi()
+    api.localSpeechStatus.mockResolvedValue({
+      supported: false,
+      platform: 'linux',
+      whisper: { installed: false, models: [] },
+      piper: { installed: false, voices: [] },
+    })
+    await renderApp(api)
+    await userEvent.click(screen.getByTestId('nav-settings'))
+    expect(await screen.findByTestId('local-speech-unsupported')).toHaveTextContent('linux')
+    expect(screen.queryByTestId('local-speech-install-whisper')).toBeNull()
+    expect(screen.queryByTestId('local-speech-download-voice')).toBeNull()
+    // Máy hỗ trợ nhưng tải lỗi: câu báo có mã HTTP.
+    api.localSpeechStatus.mockResolvedValue({
+      supported: true,
+      platform: 'win32',
+      whisper: { installed: false, models: [] },
+      piper: { installed: false, voices: [] },
+    })
+    await userEvent.click(screen.getByTestId('local-speech-refresh'))
+    api.installLocalSpeech.mockRejectedValueOnce(new Error('local_speech_download:404'))
+    await userEvent.click(await screen.findByTestId('local-speech-install-piper'))
+    await waitFor(() =>
+      expect(screen.getByTestId('local-speech-status')).toHaveTextContent('mã 404'),
+    )
+  })
+})
+
 describe('Màu chủ đạo', () => {
   it('mặc định xanh dương; chọn màu khác thì cả app đổi theo', async () => {
     await renderApp(createFakeApi())

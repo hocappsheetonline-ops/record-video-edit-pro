@@ -28,6 +28,7 @@ describe('normalizeSettings', () => {
       projectTemplate: 'tiktok',
       reduceTransparency: false,
       localAi: { enabled: false, baseUrl: 'http://127.0.0.1:11434', model: 'qwen2.5:7b' },
+      localSpeech: DEFAULT_SETTINGS.localSpeech,
     })
   })
 
@@ -78,5 +79,21 @@ describe('màu nhấn', () => {
   it('chữ trên nền màu nhấn đủ tương phản', () => {
     expect(accentForeground('#2563eb')).toBe('#ffffff')
     expect(accentForeground('#facc15')).toBe('#0b0b10')
+  })
+
+  it('giọng nói cục bộ: model trong danh sách, tên giọng an toàn, mặc định khi sai', () => {
+    expect(normalizeSettings({}).localSpeech).toEqual({
+      enabled: false,
+      whisperModel: 'large-v3-turbo-q5_0',
+      piperVoice: 'vi_VN-vais1000-medium',
+    })
+    expect(
+      normalizeSettings({
+        localSpeech: { enabled: true, whisperModel: 'small', piperVoice: 'en_US-lessac-medium' },
+      }).localSpeech,
+    ).toEqual({ enabled: true, whisperModel: 'small', piperVoice: 'en_US-lessac-medium' })
+    expect(
+      normalizeSettings({ localSpeech: { whisperModel: 'huge', piperVoice: '../x' } }).localSpeech,
+    ).toEqual(DEFAULT_SETTINGS.localSpeech)
   })
 })

@@ -2,6 +2,11 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.5.0
+
+- **Giọng nói cục bộ, miễn phí** (Cài đặt → Giọng nói cục bộ): cài **whisper.cpp** và **Piper** ngay trong app (tải bộ chạy chính thức, giải nén, tải model / giọng với thanh tiến độ, xóa được). Khi bật, **phụ đề** (nhận dạng từng từ, tự nhận ngôn ngữ), cắt khoảng lặng / từ thừa theo lời thoại và **giọng đọc AI** (câu meme, kịch bản, "Đọc chữ này") chạy hoàn toàn trên máy, không cần key ElevenLabs; tắt thì dùng ElevenLabs như cũ. Model Whisper: small, medium-q5_0, large-v3-turbo-q5_0 (khuyên dùng cho tiếng Việt), large-v3-turbo. Giọng Piper: tiếng Việt (vais1000, 25hours, vivos) và tiếng Anh (lessac, amy, alan). Câu đã đọc vẫn được lưu đệm dùng chung.
+- Cùng với AI cục bộ (Ollama) ở 1.3.0, toàn bộ tính năng AI của Lumora giờ chạy được trên máy mà không tốn phí.
+
 ## 1.4.0
 
 - **Đạo diễn AI** (Thư viện → AI, thay cho Trợ lý AI): nói bạn muốn video thế nào, AI viết lại thành **kế hoạch** (cắt khoảng lặng / từ thừa, tự zoom, phụ đề và kiểu phụ đề, làm sạch âm thanh, tiêu đề, bộ lọc, tốc độ, khung hình, **hiệu ứng**, **chuyển cảnh**, **nhạc nền từ kho nhạc**, **xuất video** theo độ phân giải / định dạng, **chỉnh theo mẫu dự án khác**) rồi tự làm hết trong một bước hoàn tác; có yêu cầu xuất thì mở hộp thoại xuất và bắt đầu xuất luôn.

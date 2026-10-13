@@ -198,7 +198,8 @@ export const vi = {
       voiceHint:
         'Video phát từ đầu phát trong lúc ghi; dừng lại là bản ghi nằm đúng chỗ trên hàng Âm thanh.',
       speechTitle: 'Giọng đọc AI',
-      speechNeedsKey: 'Cần key ElevenLabs để đọc câu meme bằng giọng AI.',
+      speechNeedsKey:
+        'Cần key ElevenLabs hoặc giọng nói cục bộ (Cài đặt) để đọc câu meme bằng giọng AI.',
       voice: 'Giọng',
       speechPlaceholder: 'Gõ câu muốn đọc…',
       speechAdd: 'Đọc và thêm vào video',
@@ -670,9 +671,9 @@ export const vi = {
         slideWords: 'Trượt từng từ',
       },
       readAloud: 'Đọc bằng giọng AI',
-      readNeedsKey: 'Cần key ElevenLabs (Cài đặt → API key) để đọc chữ bằng giọng AI.',
+      readNeedsKey: 'Cần key ElevenLabs hoặc giọng nói cục bộ (Cài đặt) để đọc chữ bằng giọng AI.',
       readThis: 'Đọc chữ này',
-      readFailed: 'Không đọc được, kiểm tra mạng và key ElevenLabs.',
+      readFailed: 'Không đọc được, kiểm tra mạng và key ElevenLabs hoặc giọng nói cục bộ.',
     },
     menu: {
       copy: 'Sao chép',
@@ -973,7 +974,7 @@ export const vi = {
   },
   captions: {
     intro:
-      'Lumora gửi phần lời nói lên ElevenLabs để tạo phụ đề có thời gian từng từ. Bạn sửa được nội dung và xuất SRT/VTT, hoặc in thẳng vào video.',
+      'Lumora gửi phần lời nói lên ElevenLabs (hoặc nhận dạng ngay trên máy bằng giọng nói cục bộ) để tạo phụ đề có thời gian từng từ. Bạn sửa được nội dung và xuất SRT/VTT, hoặc in thẳng vào video.',
     language: 'Ngôn ngữ nói',
     auto: 'Tự nhận diện',
     generate: 'Tạo phụ đề',
@@ -1174,6 +1175,22 @@ export const vi = {
         'Model AI cục bộ trả lời không đúng định dạng. Thử model lớn hơn (ví dụ qwen2.5:7b).',
       noAudio: 'Bản quay không có âm thanh micro hay âm thanh máy để nhận dạng.',
       noTranscript: 'Hãy tạo phụ đề trước (tab Phụ đề).',
+      local_speech_unsupported:
+        'Giọng nói cục bộ không chạy được trên hệ điều hành này. Hãy tắt nó trong Cài đặt → Giọng nói cục bộ và dùng ElevenLabs.',
+      local_speech_missing_whisper:
+        'Chưa cài whisper.cpp. Mở Cài đặt → Giọng nói cục bộ và bấm "Cài whisper.cpp".',
+      local_speech_missing_piper:
+        'Chưa cài Piper. Mở Cài đặt → Giọng nói cục bộ và bấm "Cài Piper".',
+      local_speech_missing_model:
+        'Chưa tải model Whisper đã chọn. Mở Cài đặt → Giọng nói cục bộ và bấm "Tải model".',
+      local_speech_missing_voice:
+        'Chưa tải giọng Piper đã chọn. Mở Cài đặt → Giọng nói cục bộ và bấm "Tải giọng".',
+      local_speech_download:
+        'Không tải được công cụ / model giọng nói cục bộ (mã {{code}}). Kiểm tra mạng rồi thử lại trong Cài đặt → Giọng nói cục bộ.',
+      local_speech_failed_whisper:
+        'whisper.cpp gặp lỗi khi nhận dạng. Thử chọn model khác hoặc cài lại trong Cài đặt → Giọng nói cục bộ.',
+      local_speech_failed_piper:
+        'Piper gặp lỗi khi đọc. Thử chọn giọng khác hoặc cài lại trong Cài đặt → Giọng nói cục bộ.',
       generic: 'Lỗi: {{message}}',
     },
   },
@@ -1336,7 +1353,48 @@ export const vi = {
         big: 'Chất lượng cao nhất, cần máy mạnh (~16 GB RAM hoặc GPU 12 GB)',
       },
       models:
-        'Gợi ý: qwen2.5:7b (tiếng Việt tốt, cần ~8 GB RAM), llama3.2 (nhẹ, ~3 GB), gemma3. Phụ đề vẫn cần key ElevenLabs.',
+        'Gợi ý: qwen2.5:7b (tiếng Việt tốt, cần ~8 GB RAM), llama3.2 (nhẹ, ~3 GB), gemma3. Phụ đề cần key ElevenLabs hoặc giọng nói cục bộ.',
+    },
+    localSpeech: {
+      title: 'Giọng nói cục bộ (whisper.cpp + Piper)',
+      enable: 'Dùng giọng nói chạy trên máy thay cho ElevenLabs',
+      hint: 'Phụ đề (nhận dạng giọng nói) bằng whisper.cpp, giọng đọc AI bằng Piper: chạy trên máy bạn, miễn phí, không cần key ElevenLabs. Tắt đi thì ElevenLabs vẫn dùng như cũ.',
+      steps: 'Năm bước ngay tại đây: Cài whisper.cpp → Tải model → Cài Piper → Tải giọng → Bật.',
+      unsupported:
+        'Hệ điều hành này ({{platform}}) chưa có bản dựng sẵn của whisper.cpp / Piper nên không cài được trong app. Hãy dùng ElevenLabs.',
+      refresh: 'Làm mới',
+      refreshing: 'Đang kiểm tra…',
+      installed: 'Đã cài {{tool}}',
+      notInstalled: 'Chưa cài {{tool}}',
+      whisper: {
+        title: 'Nhận dạng giọng nói (whisper.cpp)',
+        install: 'Cài whisper.cpp (~4 MB)',
+        hint: 'Tiếng Việt nên dùng large-v3-turbo-q5_0 (tốt nhất, ~570 MB). Máy yếu: small (~490 MB, kém chính xác hơn).',
+      },
+      piper: {
+        title: 'Giọng đọc (Piper)',
+        install: 'Cài Piper (~22 MB)',
+        hint: 'Giọng đọc tiếng Việt và tiếng Anh, mỗi giọng ~60 MB. Giọng đã tải dùng được ngay cho câu meme và lời bình.',
+      },
+      downloadModel: 'Tải model {{id}}',
+      removeModel: 'Xóa model {{id}}',
+      downloadVoice: 'Tải giọng {{id}}',
+      removeVoice: 'Xóa giọng {{id}}',
+      ready: 'đã tải',
+      sizeMb: '{{size}} MB',
+      languages: { vi: 'Tiếng Việt', en: 'Tiếng Anh' },
+      downloading: 'Đang tải {{item}}…',
+      progressMb: '{{done}} / {{total}} MB',
+      done: {
+        installed: 'Đã cài {{tool}}.',
+        downloaded: 'Đã tải {{id}}, sẵn sàng dùng.',
+        removed: 'Đã xóa {{id}}.',
+      },
+      errors: {
+        download: 'Không tải được (mã {{code}}). Kiểm tra mạng rồi thử lại.',
+        unsupported: 'Hệ điều hành này chưa được hỗ trợ.',
+        generic: 'Lỗi: {{message}}',
+      },
     },
     reduceTransparency: 'Giảm trong suốt',
     reduceTransparencyHint:
@@ -1373,7 +1431,10 @@ export const vi = {
     },
   },
   keys: {
-    elevenlabs: { name: 'ElevenLabs', purpose: 'Chuyển giọng nói thành phụ đề' },
+    elevenlabs: {
+      name: 'ElevenLabs',
+      purpose: 'Phụ đề và giọng đọc AI trên đám mây (không cần nếu bật giọng nói cục bộ)',
+    },
     anthropic: { name: 'Claude (Anthropic)', purpose: 'AI tự biên tập, tạo tiêu đề và chương' },
     pixabay: {
       name: 'Pixabay',

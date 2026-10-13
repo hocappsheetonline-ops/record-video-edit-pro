@@ -49,6 +49,29 @@ const updates = {
 }
 let validators: { [K in keyof Validators]: Mock<Validators[K]> }
 let ai: Parameters<typeof registerIpc>[1]['ai']
+const speechStatus = {
+  supported: true,
+  platform: 'win32',
+  whisper: { installed: true, models: ['small' as const] },
+  piper: { installed: false, voices: [] },
+}
+const sendProgress = vi.fn()
+const localSpeech = {
+  status: vi.fn(async () => speechStatus),
+  catalog: vi.fn(() => ({
+    models: [{ id: 'small' as const, label: 'Small', sizeMb: 488 }],
+    voices: [{ id: 'vi_VN-vais1000-medium', language: 'vi' as const, label: 'Vais', sizeMb: 63 }],
+  })),
+  install: vi.fn(async (_tool: string, onProgress: (c: number, t: number) => void) => {
+    onProgress(3, 4)
+  }),
+  download: vi.fn(
+    async (_kind: string, _id: string, onProgress: (c: number, t: number) => void) => {
+      onProgress(5, 6)
+    },
+  ),
+  remove: vi.fn(async () => {}),
+}
 
 // Electron biến lỗi ném ra trong handler (kể cả đồng bộ) thành promise bị từ chối.
 const call = async (channel: string, ...args: unknown[]) => handlers.get(channel)!({}, ...args)
@@ -124,11 +147,12 @@ beforeEach(async () => {
         openYouTube: vi.fn(async () => {}),
       },
       localAi: {
-        sendProgress: vi.fn(),
+        sendProgress,
         installOllama: vi.fn(async (onProgress: (c: number, t: number) => void) => {
           onProgress(1, 2)
         }),
       },
+      localSpeech,
       window: {
         minimize: vi.fn(),
         toggleMaximize: vi.fn(() => true),
@@ -447,6 +471,48 @@ describe('registerIpc', () => {
       tokensPerSecond: 20,
       totalMs: 900,
     })
+  })
+
+  it('giọng nói cục bộ: trạng thái, danh mục, cài và tải báo tiến độ kind speech, từ chối tham số lạ', async () => {
+    expect(await call(IPC.aiSpeechStatus)).toEqual(speechStatus)
+    expect(await call(IPC.aiSpeechCatalog)).toMatchObject({
+      models: [{ id: 'small' }],
+      voices: [{ id: 'vi_VN-vais1000-medium', language: 'vi' }],
+    })
+    // Cài công cụ: tiến độ chuyển xuống giao diện với item là tên công cụ.
+    await call(IPC.aiSpeechInstall, 'whisper')
+    expect(localSpeech.install).toHaveBeenCalledWith('whisper', expect.any(Function))
+    expect(sendProgress).toHaveBeenCalledWith({
+      kind: 'speech',
+      status: 'download',
+      item: 'whisper',
+      completed: 3,
+      total: 4,
+    })
+    await expect(call(IPC.aiSpeechInstall, 'ollama')).rejects.toThrow('speech_input')
+    // Tải model / giọng: item là tên model hoặc giọng; loại và tên lạ bị từ chối.
+    await call(IPC.aiSpeechDownload, 'model', 'large-v3-turbo-q5_0')
+    expect(localSpeech.download).toHaveBeenCalledWith(
+      'model',
+      'large-v3-turbo-q5_0',
+      expect.any(Function),
+    )
+    expect(sendProgress).toHaveBeenCalledWith({
+      kind: 'speech',
+      status: 'download',
+      item: 'large-v3-turbo-q5_0',
+      completed: 5,
+      total: 6,
+    })
+    await call(IPC.aiSpeechDownload, 'voice', 'vi_VN-vais1000-medium')
+    await expect(call(IPC.aiSpeechDownload, 'font', 'small')).rejects.toThrow('speech_input')
+    await expect(call(IPC.aiSpeechDownload, 'model', '../etc')).rejects.toThrow('speech_input')
+    await expect(call(IPC.aiSpeechDownload, 'model', 42)).rejects.toThrow('speech_input')
+    await expect(call(IPC.aiSpeechDownload, 'voice', '')).rejects.toThrow('speech_input')
+    await call(IPC.aiSpeechRemove, 'voice', 'vi_VN-vais1000-medium')
+    expect(localSpeech.remove).toHaveBeenCalledWith('voice', 'vi_VN-vais1000-medium')
+    await expect(call(IPC.aiSpeechRemove, 'model', 'a b')).rejects.toThrow('speech_input')
+    expect(localSpeech.remove).toHaveBeenCalledTimes(1)
   })
 
   it('đạo diễn AI: kiểm tra câu yêu cầu, chuẩn hóa ngữ cảnh lộn xộn rồi gọi dịch vụ AI', async () => {
