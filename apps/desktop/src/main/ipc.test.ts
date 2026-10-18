@@ -112,6 +112,12 @@ beforeEach(async () => {
     summarize: vi.fn(async () => ({ titles: [], description: '', hashtags: [], chapters: [] })),
     translate: vi.fn(async (lines: { id: string; text: string }[]) => lines),
     editCaptions,
+    captionEmojis: vi.fn(async (lines: { id: string; text: string }[]) =>
+      lines.map((l) => ({ id: l.id, emoji: '🔥' })),
+    ),
+    captionKeywords: vi.fn(async (lines: { id: string; text: string }[]) =>
+      lines.map((l) => ({ id: l.id, keywords: [l.text.split(' ')[0]!] })),
+    ),
     planZooms,
     voices: vi.fn(async () => [{ id: 'v1', name: 'Anna' }]),
     speak: vi.fn(async (_dir: string, text: string) => ({

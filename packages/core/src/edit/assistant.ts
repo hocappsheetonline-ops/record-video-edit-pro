@@ -223,6 +223,17 @@ export type AssistantCommand =
     }
   /** Thẻ kết (CTA: "Đăng ký", "Xem video tiếp") hiện trong `ms` cuối video, luôn bám cuối. */
   | { kind: 'outro'; text: string; ms: number; template: TextTemplateId }
+  // ---- Phụ đề kiểu app Captions (1.12.0) ----
+  /** AI gắn một emoji hợp nội dung vào các dòng phụ đề. */
+  | { kind: 'captionsEmoji' }
+  /** AI chọn từ khóa mỗi dòng phụ đề để tô màu riêng. */
+  | { kind: 'captionsKeywords' }
+  /**
+   * Lồng tiếng AI: dịch lời thoại sang `language` (nếu khác ngôn ngữ gốc) rồi đọc bằng giọng AI
+   * đúng thời điểm từng dòng; tắt tiếng micro gốc trừ khi `keepOriginal` (giữ nhỏ phía dưới).
+   * `voice` = tên / id giọng (bỏ trống = giọng đầu tiên).
+   */
+  | { kind: 'dub'; language: string; keepOriginal: boolean; voice?: string }
 
 export type AssistantKind = AssistantCommand['kind']
 
@@ -279,6 +290,9 @@ export const ASSISTANT_KINDS: readonly AssistantKind[] = [
   'transitionAt',
   'captionsLook',
   'outro',
+  'captionsEmoji',
+  'captionsKeywords',
+  'dub',
 ]
 
 /** Thông tin về video gửi kèm yêu cầu để AI ra lệnh phù hợp. */
@@ -363,7 +377,20 @@ function parseCommand(r: Record<string, unknown>): AssistantCommand | null {
     case 'captions':
     case 'cleanAudio':
     case 'chapters':
+    case 'captionsEmoji':
+    case 'captionsKeywords':
       return { kind: r.kind }
+    case 'dub': {
+      const language = typeof r.language === 'string' ? r.language.trim().toLowerCase() : ''
+      if (!LANGUAGE_CODE.test(language)) return null
+      return compact({
+        kind: 'dub' as const,
+        language: language.slice(0, 8),
+        keepOriginal: r.keepOriginal === true,
+        voice:
+          typeof r.voice === 'string' && r.voice.trim() ? r.voice.trim().slice(0, 80) : undefined,
+      })
+    }
     case 'title':
       if (typeof r.text === 'string' && r.text.trim())
         return { kind: 'title', text: r.text.trim().slice(0, 80) }
@@ -922,11 +949,30 @@ export function parseAssistantRequest(text: string): AssistantCommand[] {
   )
     push({ kind: 'captionsLayout', position: 'bottom' })
 
-  // Dịch phụ đề ("dịch phụ đề sang tiếng Anh", "song ngữ Anh").
-  if (/dịch|translate|song ngữ|bilingual/i.test(t)) {
+  // Lồng tiếng AI ("lồng tiếng tiếng Anh", "thuyết minh sang tiếng Nhật, giữ giọng gốc", "dub to English").
+  const dub = /lồng tiếng|thuyết minh|\bdub(?:bing|bed)?\b|voice.?over (?:in|sang|to)/i.test(t)
+  if (dub) {
+    const language = LANGUAGE_WORDS.find(([re]) => re.test(t))?.[1] ?? 'en'
+    push({
+      kind: 'dub',
+      language,
+      keepOriginal: /giữ (?:tiếng|giọng|lời) gốc|keep (?:the )?original/i.test(t),
+    })
+  }
+  // Dịch phụ đề ("dịch phụ đề sang tiếng Anh", "song ngữ Anh"); lồng tiếng đã bao gồm việc dịch.
+  if (!dub && /dịch|translate|song ngữ|bilingual/i.test(t)) {
     const language = LANGUAGE_WORDS.find(([re]) => re.test(t))?.[1]
     if (language) push({ kind: 'translate', language, bilingual: /song ngữ|bilingual/i.test(t) })
   }
+  // Emoji và từ khóa cho phụ đề (kiểu app Captions).
+  if (/emoji|biểu tượng cảm xúc/i.test(t) && !/(?:bỏ|xóa|tắt|remove|delete|no)\s+emoji/i.test(t))
+    push({ kind: 'captionsEmoji' })
+  if (
+    /(?:tô|đánh dấu|làm nổi|nhấn|highlight|mark|emphasi[sz]e|color)\D{0,20}(?:từ khóa|từ quan trọng|keywords?)|(?:từ khóa|keywords?)\D{0,12}(?:nổi bật|màu|tô|highlight)/i.test(
+      t,
+    )
+  )
+    push({ kind: 'captionsKeywords' })
 
   // Tắt tiếng micro / âm thanh máy ("tắt tiếng mic", "mute system audio").
   if (/(?:tắt tiếng|tắt|mute)\s+(?:tiếng\s+)?(?:mic|micro|giọng|voice)/i.test(t))

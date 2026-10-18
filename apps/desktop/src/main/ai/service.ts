@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto'
 import { access, copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
+  cleanCaptionEmoji,
+  cleanCaptionKeywords,
   findFillerWords,
   findSilences,
   indexedTranscript,
@@ -38,8 +40,14 @@ import {
   ASSISTANT_SCHEMA,
   assistantSystem,
   CAPTION_EDIT_SCHEMA,
+  CAPTION_EMOJI_SCHEMA,
   CAPTION_FIX_INSTRUCTION,
+  CAPTION_KEYWORDS_SCHEMA,
   captionEditSystem,
+  captionEmojiSystem,
+  captionKeywordsSystem,
+  type CaptionEmojiResponse,
+  type CaptionKeywordsResponse,
   createClaude,
   CUTS_SCHEMA,
   CUTS_SYSTEM,
@@ -570,6 +578,47 @@ export class AiService {
     })
     const byId = new Map((answer.lines ?? []).map((l) => [l.id, l.text]))
     return lines.map((l) => ({ id: l.id, text: byId.get(l.id) ?? l.text }))
+  }
+
+  /**
+   * Emoji cho từng dòng phụ đề (kiểu app Captions): AI chọn một emoji hợp nghĩa hoặc để trống.
+   * Trả về theo id, đã lọc (chỉ emoji, không chữ); dòng AI bỏ sót thì rỗng.
+   */
+  async captionEmojis(
+    lines: { id: string; text: string }[],
+    language: string,
+  ): Promise<{ id: string; emoji: string }[]> {
+    if (lines.length === 0) return []
+    const answer = await this.askJson<CaptionEmojiResponse>({
+      system: captionEmojiSystem(language),
+      user: JSON.stringify({ lines }),
+      schema: CAPTION_EMOJI_SCHEMA,
+      effort: 'low',
+    })
+    const byId = new Map((answer.lines ?? []).map((l) => [l.id, cleanCaptionEmoji(l.emoji)]))
+    return lines.map((l) => ({ id: l.id, emoji: byId.get(l.id) ?? '' }))
+  }
+
+  /**
+   * Từ khóa cần tô màu trong từng dòng phụ đề (kiểu app Captions). Chỉ giữ từ có thật trong dòng,
+   * tối đa 3; dòng AI bỏ sót thì rỗng.
+   */
+  async captionKeywords(
+    lines: { id: string; text: string }[],
+    language: string,
+  ): Promise<{ id: string; keywords: string[] }[]> {
+    if (lines.length === 0) return []
+    const answer = await this.askJson<CaptionKeywordsResponse>({
+      system: captionKeywordsSystem(language),
+      user: JSON.stringify({ lines }),
+      schema: CAPTION_KEYWORDS_SCHEMA,
+      effort: 'low',
+    })
+    const byId = new Map((answer.lines ?? []).map((l) => [l.id, l.keywords]))
+    return lines.map((l) => ({
+      id: l.id,
+      keywords: cleanCaptionKeywords(l.text, byId.get(l.id) ?? []),
+    }))
   }
 
   /**

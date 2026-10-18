@@ -72,6 +72,8 @@ function commandLabel(t: ReturnType<typeof useTranslation>['t'], c: AssistantCom
       return `${t('ai.assistant.kinds.export')}: ${c.resolution}p ${c.format.toUpperCase()}`
     case 'styleFrom':
       return `${t('ai.assistant.kinds.styleFrom')}: ${c.project}`
+    case 'dub':
+      return `${t('ai.assistant.kinds.dub')}: ${t(`captions.languages.${c.language}`, { defaultValue: c.language })}`
     default:
       return t(`ai.assistant.kinds.${c.kind}`)
   }

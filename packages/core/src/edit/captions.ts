@@ -26,6 +26,10 @@ export interface CaptionLine {
   edited: boolean
   /** Bản dịch (phụ đề song ngữ: hiện dưới dòng gốc). */
   translation?: string
+  /** Emoji theo nội dung dòng (kiểu app Captions), vẽ ngay sau chữ. */
+  emoji?: string
+  /** Từ khóa của dòng (đúng chữ như trong dòng) được tô màu riêng. */
+  keywords?: string[]
 }
 
 export interface CaptionsState {

@@ -120,13 +120,19 @@ export function editSummary(edit: EditState): string {
   parts.push(`${edit.effects.length} effect(s)`)
   parts.push(`${edit.overlays.length} overlay(s)`)
   const music = edit.audioClips.filter((c) => c.kind === 'music').length
-  const sfx = edit.audioClips.length - music
+  const voice = edit.audioClips.filter((c) => c.kind === 'voice').length
+  const sfx = edit.audioClips.length - music - voice
   parts.push(`${music} music track(s), ${sfx} sound effect(s)`)
-  parts.push(
-    edit.captions.enabled && edit.captions.lines.length > 0
-      ? `captions on (${edit.captions.look.template})`
-      : 'captions off',
-  )
+  if (voice > 0) parts.push(`${voice} voice-over / dubbing clip(s)`)
+  if (edit.captions.enabled && edit.captions.lines.length > 0) {
+    const extras: string[] = []
+    if (edit.captions.lines.some((l) => l.emoji)) extras.push('emoji')
+    if (edit.captions.lines.some((l) => l.keywords && l.keywords.length > 0))
+      extras.push('keywords')
+    parts.push(
+      `captions on (${edit.captions.look.template}${extras.length > 0 ? `, ${extras.join(' + ')}` : ''})`,
+    )
+  } else parts.push('captions off')
   if (edit.look.filter !== 'none') parts.push(`filter ${edit.look.filter}`)
   if (edit.markers.length > 0) parts.push(`${edit.markers.length} marker(s)`)
   if (edit.audio.duck.enabled) parts.push('music ducking on')
@@ -180,6 +186,8 @@ export function expandRecipe(style: RecipeStyle, ctx: RecipeContext): AssistantC
       }
       out.push({ kind: 'captions' }, { kind: 'captionsStyle', template: 'tiktok' })
       out.push({ kind: 'captionsLayout', position: 'bottom', size: 1.2 })
+      // Từ khóa tô màu riêng như app Captions: phụ đề short-form nổi bật hơn.
+      out.push({ kind: 'captionsKeywords' })
       out.push({ kind: 'transitions', transition: 'zoom', ms: 300 })
       music(0.3, 0.2)
       break

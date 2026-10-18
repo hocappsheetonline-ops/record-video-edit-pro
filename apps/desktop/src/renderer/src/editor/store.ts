@@ -85,6 +85,13 @@ import {
   wordsToRanges,
   type SourceRange,
   withCaptionTemplate,
+  applyCaptionEmojis,
+  applyCaptionKeywords,
+  suggestCaptionEmoji,
+  suggestCaptionKeywords,
+  planDubClips,
+  dubSlots,
+  dubSpeedFor,
   EMPTY_MEMORY,
   forgetRule,
   isStandingRule,
@@ -410,6 +417,26 @@ interface EditorStore {
    * Chia video thành nhiều video ngắn: mỗi đoạn (theo chương AI hoặc mỗi N giây) thành một dự án
    * riêng (bản sao) chỉ giữ phần đó, tuỳ chọn khung dọc 9:16. Trả về số dự án đã tạo.
    */
+  /**
+   * Phụ đề kiểu app Captions: AI gắn emoji hợp nghĩa cho từng dòng (không có AI thì theo từ điển).
+   * Trả về số dòng có emoji.
+   */
+  addCaptionEmojis(): Promise<number>
+  /** AI chọn từ khóa mỗi dòng phụ đề để tô màu riêng (không có AI thì theo quy tắc). Trả về số dòng. */
+  addCaptionKeywords(): Promise<number>
+  /**
+   * Lồng tiếng AI: dịch các dòng phụ đề sang `language` (nếu khác ngôn ngữ gốc), đọc từng dòng
+   * bằng giọng AI đúng thời điểm dòng trên video xuất (đọc nhanh hơn tới 1,2× khi câu dài hơn chỗ
+   * trống), tắt tiếng micro gốc (hoặc giữ nhỏ khi `keepOriginal`), phụ đề đổi sang ngôn ngữ đích.
+   * Một bước hoàn tác. Trả về số đoạn lồng tiếng đã thêm.
+   */
+  dubCaptions(options: {
+    language: string
+    keepOriginal?: boolean
+    /** Id hoặc tên giọng; bỏ trống = giọng đầu tiên trong danh sách. */
+    voice?: string
+    onProgress?: (done: number, total: number) => void
+  }): Promise<number>
   splitIntoShorts(
     options: {
       mode: 'chapters' | 'fixed'
@@ -2414,6 +2441,47 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           }
           break
         }
+        case 'captionsEmoji': {
+          if (get().edit!.captions.lines.length === 0) {
+            skipped('captionsEmoji', 'no_captions')
+            break
+          }
+          const n = await get().addCaptionEmojis()
+          if (get().folder !== folder) return report
+          if (n === 0) skipped('captionsEmoji', 'no_emoji')
+          else done('captionsEmoji', n)
+          break
+        }
+        case 'captionsKeywords': {
+          if (get().edit!.captions.lines.length === 0) {
+            skipped('captionsKeywords', 'no_captions')
+            break
+          }
+          const n = await get().addCaptionKeywords()
+          if (get().folder !== folder) return report
+          if (n === 0) skipped('captionsKeywords', 'no_keywords')
+          else done('captionsKeywords', n)
+          break
+        }
+        case 'dub': {
+          if (get().edit!.captions.lines.length === 0) {
+            skipped('dub', 'no_captions')
+            break
+          }
+          try {
+            const n = await get().dubCaptions({
+              language: c.language,
+              keepOriginal: c.keepOriginal,
+              voice: c.voice,
+            })
+            if (get().folder !== folder) return report
+            if (n === 0) skipped('dub', 'too_short')
+            else done('dub', n)
+          } catch (e) {
+            report.push({ step: 'dub', status: 'error', detail: errorCode(e) })
+          }
+          break
+        }
         default:
           break
       }
@@ -2560,6 +2628,139 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   requestExport(autoStart) {
     set({ exportRequest: get().exportRequest + 1, autoExport: autoStart })
+  },
+
+  async addCaptionEmojis() {
+    const { folder, edit } = get()
+    if (!folder || !edit || edit.captions.lines.length === 0) return 0
+    const lines = edit.captions.lines.map((l) => ({ id: l.id, text: l.text }))
+    let items: { id: string; emoji: string }[]
+    try {
+      items = await lumora().captionEmojis(lines, edit.captions.language)
+    } catch {
+      // Không có AI: từ điển emoji theo từ khóa.
+      items = lines.map((l) => ({ id: l.id, emoji: suggestCaptionEmoji(l.text) }))
+    }
+    if (get().folder !== folder) return 0
+    const cur = get().edit!
+    const result = applyCaptionEmojis(cur.captions.lines, items)
+    if (result.count > 0)
+      get().change((e) => ({ ...e, captions: { ...e.captions, lines: result.lines } }))
+    return result.lines.filter((l) => l.emoji).length
+  },
+
+  async addCaptionKeywords() {
+    const { folder, edit } = get()
+    if (!folder || !edit || edit.captions.lines.length === 0) return 0
+    const lines = edit.captions.lines.map((l) => ({ id: l.id, text: l.text }))
+    let items: { id: string; keywords: string[] }[]
+    try {
+      items = await lumora().captionKeywords(lines, edit.captions.language)
+    } catch {
+      items = lines.map((l) => ({ id: l.id, keywords: suggestCaptionKeywords(l.text) }))
+    }
+    if (get().folder !== folder) return 0
+    const cur = get().edit!
+    const result = applyCaptionKeywords(cur.captions.lines, items)
+    if (result.count > 0)
+      get().change((e) => ({ ...e, captions: { ...e.captions, lines: result.lines } }))
+    return result.lines.filter((l) => l.keywords && l.keywords.length > 0).length
+  },
+
+  async dubCaptions(options) {
+    const { folder, edit } = get()
+    if (!folder || !edit || edit.captions.lines.length === 0) return 0
+    const target = options.language.trim().toLowerCase().slice(0, 8)
+    const sameLanguage =
+      !!edit.captions.language && edit.captions.language.slice(0, 2) === target.slice(0, 2)
+    const source = edit.captions.lines
+    // Giọng: theo id / tên, không thì giọng đầu tiên.
+    const voices = await lumora().listVoices()
+    if (get().folder !== folder) return 0
+    const wanted = options.voice?.trim().toLowerCase()
+    const voice =
+      (wanted &&
+        voices.find((v) => v.id.toLowerCase() === wanted || v.name.toLowerCase() === wanted)) ||
+      (wanted && voices.find((v) => v.name.toLowerCase().includes(wanted))) ||
+      voices[0]
+    if (!voice) throw new Error('no_voice')
+    // Lời đọc: bản dịch (khi khác ngôn ngữ) hoặc chính nội dung phụ đề.
+    let texts = new Map(source.map((l) => [l.id, l.text]))
+    if (!sameLanguage) {
+      const translated = await lumora().translateLines(
+        source.map((l) => ({ id: l.id, text: l.text })),
+        target,
+      )
+      if (get().folder !== folder) return 0
+      texts = new Map(translated.map((l) => [l.id, l.text]))
+    }
+    // Đọc từng dòng; câu dài hơn chỗ trống tới dòng sau thì đọc lại nhanh hơn (tối đa 1,2×).
+    const total = outputDuration(edit.clips)
+    const slots = dubSlots(source, edit.clips, total)
+    const base = get().voiceOptions
+    const assets = new Map<string, AudioAsset>()
+    let done = 0
+    for (const [i, line] of source.entries()) {
+      const slot = slots[i]
+      const text = (texts.get(line.id) ?? line.text).trim()
+      if (!slot || !text) continue
+      let asset = await lumora().speak(folder, text, voice.id, base)
+      if (get().folder !== folder) return 0
+      const speed = dubSpeedFor(asset.durationMs, slot.slot, Math.max(base.speed, 1.2))
+      if (speed > base.speed) {
+        asset = await lumora().speak(folder, text, voice.id, { ...base, speed })
+        if (get().folder !== folder) return 0
+      }
+      assets.set(line.id, asset)
+      done += 1
+      options.onProgress?.(done, source.length)
+    }
+    const placements = planDubClips(
+      source,
+      edit.clips,
+      new Map([...assets].map(([id, a]) => [id, a.durationMs])),
+      total,
+    )
+    if (placements.length === 0) return 0
+    const clips: AudioClip[] = placements.map((p) => {
+      const asset = assets.get(p.lineId)!
+      const text = texts.get(p.lineId) ?? ''
+      return {
+        id: newAudioClipId(),
+        file: asset.file,
+        name: text.length > 40 ? `${text.slice(0, 40)}…` : text,
+        kind: 'voice',
+        start: p.start,
+        offset: 0,
+        duration: p.duration,
+        sourceDuration: asset.durationMs,
+        volume: 1,
+        fadeIn: 0,
+        fadeOut: p.duration < asset.durationMs ? 120 : 0,
+        loop: false,
+      }
+    })
+    get().change((e) => ({
+      ...e,
+      audio: { ...e.audio, mic: options.keepOriginal ? Math.min(e.audio.mic, 0.15) : 0 },
+      audioClips: [...e.audioClips, ...clips],
+      captions: sameLanguage
+        ? e.captions
+        : {
+            ...e.captions,
+            language: target,
+            bilingual: false,
+            lines: e.captions.lines.map((l) => {
+              const text = texts.get(l.id)
+              if (!text || text === l.text) return l
+              const next = { ...l, text, edited: true }
+              delete next.translation
+              return next
+            }),
+          },
+    }))
+    get().select({ kind: 'audio', id: clips[0]!.id })
+    return clips.length
   },
 
   async splitIntoShorts(options, onProgress) {

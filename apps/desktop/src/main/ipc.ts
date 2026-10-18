@@ -149,6 +149,8 @@ export interface IpcDeps {
     | 'benchmarkLocalModel'
     | 'translate'
     | 'editCaptions'
+    | 'captionEmojis'
+    | 'captionKeywords'
     | 'planZooms'
     | 'voices'
     | 'speak'
@@ -716,6 +718,15 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
         typeof instruction === 'string' ? instruction : '',
         typeof language === 'string' ? language.slice(0, 8) : '',
       ),
+  )
+  ipcMain.handle(IPC.aiCaptionEmojis, (_event, lines: unknown, language: unknown) =>
+    deps.ai.captionEmojis(cleanLines(lines), typeof language === 'string' ? language.slice(0, 8) : ''),
+  )
+  ipcMain.handle(IPC.aiCaptionKeywords, (_event, lines: unknown, language: unknown) =>
+    deps.ai.captionKeywords(
+      cleanLines(lines),
+      typeof language === 'string' ? language.slice(0, 8) : '',
+    ),
   )
   ipcMain.handle(IPC.aiPlanZooms, async (_event, folder: unknown, input: unknown) => {
     const { path, project } = await projectPath(folder)
