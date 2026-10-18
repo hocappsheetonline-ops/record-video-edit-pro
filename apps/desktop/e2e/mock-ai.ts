@@ -123,6 +123,23 @@ export async function startMockAi(): Promise<{
         }
         if (system.includes('AI director')) {
           const goal = String(request.messages[0].content)
+          // Kế hoạch dựng chuyên nghiệp 1.9.0: hiệu ứng tại thời điểm, tua nhanh một đoạn, chuyển
+          // cảnh tại chỗ nối vừa tạo, kiểu phụ đề, thẻ kết bám cuối.
+          if (goal.includes('chuyên nghiệp'))
+            return json(
+              200,
+              anthropicMessage({
+                summary: 'Dựng theo chuẩn YouTube: điểm nhấn, tua nhanh, chuyển cảnh, thẻ kết',
+                questions: [],
+                commands: [
+                  { kind: 'effectAt', effect: 'flash', atMs: 500, ms: 1000, intensity: 0.8 },
+                  { kind: 'speedRange', fromMs: 2000, toMs: 4000, factor: 2 },
+                  { kind: 'transitionAt', atMs: 2000, transition: 'slide', ms: 400 },
+                  { kind: 'captionsLook', uppercase: true, style: 'classic' },
+                  { kind: 'outro', text: 'Đăng ký kênh', ms: 1500, template: 'title' },
+                ],
+              }),
+            )
           // Kế hoạch nhiều lệnh mở rộng (chữ, nhãn dán, mốc, zoom, âm lượng, khung, màu, cắt).
           if (goal.includes('làm hết'))
             return json(

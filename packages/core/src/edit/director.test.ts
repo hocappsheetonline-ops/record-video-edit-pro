@@ -1,15 +1,20 @@
 import { describe, expect, it } from 'vitest'
 import { parseAssistantRequest } from './assistant'
 import {
+  editSummary,
   EMPTY_MEMORY,
+  expandRecipe,
+  expandRecipes,
   forgetRule,
   isStandingRule,
   learnFromEdit,
   memorySummary,
   normalizeDirectorPlan,
+  outputClicks,
   planLocally,
   rememberRule,
   topChoice,
+  transcriptExcerpt,
 } from './director'
 import { createDefaultEdit, type EditState } from './edit-state'
 import type { Project } from '../project'
@@ -145,5 +150,135 @@ describe('Đạo diễn AI: kế hoạch và trí nhớ', () => {
       m,
     )
     expect(empty.questions).toHaveLength(1)
+  })
+})
+
+describe('dựng chuyên nghiệp 1.9.0: công thức, lời thoại có mốc, thời điểm bấm, tóm tắt bản dựng', () => {
+  it('expandRecipe: youtube / shorts / vlog / clean ra lệnh đúng phong cách, tùy chuột và kho nhạc', () => {
+    const youtube = expandRecipe('youtube', { hasCursor: true, hasMusic: true, durationMs: 90_000 })
+    const kinds = youtube.map((c) => c.kind)
+    expect(kinds).toEqual([
+      'aspect',
+      'cutSilences',
+      'removeFillers',
+      'cleanAudio',
+      'autoZoom',
+      'motion',
+      'cursor',
+      'captions',
+      'captionsStyle',
+      'captionsLayout',
+      'music',
+      'duck',
+      'fade',
+      'chapters',
+    ])
+    expect(youtube).toContainEqual({ kind: 'captionsStyle', template: 'box' })
+    // Không có chuột, kho nhạc trống, video ngắn: bỏ zoom, nhạc và chương.
+    const bare = expandRecipe('youtube', { hasCursor: false, hasMusic: false, durationMs: 30_000 })
+    expect(bare.map((c) => c.kind)).not.toEqual(
+      expect.arrayContaining(['autoZoom', 'music', 'duck', 'chapters']),
+    )
+    const shorts = expandRecipe('shorts', { hasCursor: true, hasMusic: true, durationMs: 40_000 })
+    expect(shorts).toContainEqual({ kind: 'aspect', aspect: '9:16' })
+    expect(shorts).toContainEqual({ kind: 'captionsStyle', template: 'tiktok' })
+    expect(shorts).toContainEqual({ kind: 'transitions', transition: 'zoom', ms: 300 })
+    expect(shorts).toContainEqual({ kind: 'duck', enabled: true, level: 0.2 })
+    expect(
+      expandRecipe('vlog', { hasCursor: true, hasMusic: false, durationMs: 1 }),
+    ).toContainEqual({
+      kind: 'filter',
+      preset: 'warm',
+      intensity: 0.6,
+    })
+    expect(
+      expandRecipe('clean', { hasCursor: true, hasMusic: true, durationMs: 1 }),
+    ).toContainEqual({ kind: 'captionsLook', style: 'classic' })
+  })
+
+  it('expandRecipes: lệnh nêu rõ thắng lệnh cùng loại của công thức; không có recipe thì giữ nguyên', () => {
+    const ctx = { hasCursor: true, hasMusic: true, durationMs: 10_000 }
+    const plain = [{ kind: 'captions' } as const]
+    expect(expandRecipes(plain, ctx)).toBe(plain)
+    const out = expandRecipes(
+      [
+        { kind: 'recipe', style: 'youtube' },
+        { kind: 'captionsStyle', template: 'neon' },
+        { kind: 'music', query: 'lofi', volume: 0.1 },
+      ],
+      ctx,
+    )
+    expect(out.filter((c) => c.kind === 'recipe')).toEqual([])
+    expect(out.filter((c) => c.kind === 'captionsStyle')).toEqual([
+      { kind: 'captionsStyle', template: 'neon' },
+    ])
+    expect(out.filter((c) => c.kind === 'music')).toEqual([
+      { kind: 'music', query: 'lofi', volume: 0.1 },
+    ])
+    expect(out).toContainEqual({ kind: 'cutSilences' })
+  })
+
+  it('planLocally mở rộng công thức và vẫn áp thói quen; keyword "kiểu youtube" đi tới công thức', () => {
+    const memory = { ...EMPTY_MEMORY, counts: { captionsTemplate: { karaoke: 3 } } }
+    const plan = planLocally(
+      parseAssistantRequest('dựng kiểu youtube'),
+      { musicTracks: [], hasCursor: false, durationMs: 20_000 },
+      memory,
+    )
+    expect(plan.questions).toEqual([])
+    const kinds = plan.commands.map((c) => c.kind)
+    expect(kinds).toContain('cutSilences')
+    expect(kinds).not.toContain('recipe')
+    expect(kinds).not.toContain('music')
+    // Công thức đã chọn mẫu phụ đề nên thói quen không chèn thêm.
+    expect(plan.commands.filter((c) => c.kind === 'captionsStyle')).toEqual([
+      { kind: 'captionsStyle', template: 'box' },
+    ])
+  })
+
+  it('transcriptExcerpt: dòng có mốc trên video xuất, bỏ phần đã cắt, cắt bớt khi quá dài', () => {
+    const words = [
+      { text: 'Xin', start: 0, end: 300 },
+      { text: 'chào', start: 350, end: 700 },
+      { text: 'các', start: 1100, end: 1300 },
+      { text: 'bạn.', start: 1350, end: 1700 },
+      { text: 'Hôm', start: 4100, end: 4300 },
+      { text: 'nay', start: 4350, end: 4600 },
+    ]
+    const clips = [
+      { id: 'a', sourceStart: 0, sourceEnd: 2000, speed: 1 },
+      { id: 'b', sourceStart: 4000, sourceEnd: 6000, speed: 1 },
+    ]
+    expect(transcriptExcerpt(words, clips)).toBe('[0:00.0] Xin chào các bạn.\n[0:02.1] Hôm nay')
+    expect(transcriptExcerpt(words, clips, { maxLines: 1 })).toBe('[0:00.0] Xin chào các bạn.\n…')
+    expect(transcriptExcerpt([], clips)).toBe('')
+    // Lời trong phần đã cắt không xuất hiện.
+    expect(transcriptExcerpt(words, [clips[0]!])).toBe('[0:00.0] Xin chào các bạn.')
+  })
+
+  it('outputClicks: đổi sang thời gian xuất, gộp lần bấm sát nhau, bỏ lần bấm trong phần đã cắt', () => {
+    const clips = [{ id: 'b', sourceStart: 4000, sourceEnd: 6000, speed: 1 }]
+    const clicks = [
+      { s: 500, x: 0, y: 0, button: 'left' as const },
+      { s: 4500, x: 0, y: 0, button: 'left' as const },
+      { s: 4700, x: 0, y: 0, button: 'left' as const },
+      { s: 5500, x: 0, y: 0, button: 'left' as const },
+    ]
+    expect(outputClicks(clicks, clips)).toEqual([500, 1500])
+    expect(outputClicks(clicks, clips, { max: 1 })).toEqual([500])
+  })
+
+  it('editSummary: một dòng tiếng Anh về bản dựng', () => {
+    const edit = createDefaultEdit(project)
+    expect(editSummary(edit)).toBe(
+      'duration 10 s; 1 clip(s), 0 cut(s); aspect 16:9; 0 zoom(s); 0 transition(s); 0 effect(s); 0 overlay(s); 0 music track(s), 0 sound effect(s); captions off',
+    )
+    const rich: EditState = {
+      ...edit,
+      look: { ...edit.look, filter: 'warm' },
+      markers: [{ id: 'm', t: 1000, label: 'x', color: '#f59e0b' }],
+      audio: { ...edit.audio, duck: { enabled: true, level: 0.3 } },
+    }
+    expect(editSummary(rich)).toContain('filter warm; 1 marker(s); music ducking on')
   })
 })

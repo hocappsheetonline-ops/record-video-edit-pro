@@ -667,7 +667,8 @@ describe('AI cục bộ: độ bền và hiệu năng', () => {
     ])
     expect(calls).toBe(2)
     expect(bodies[0]!.keep_alive).toBe('15m')
-    expect(bodies[0]!.options.num_ctx).toBe(4096)
+    // Cửa sổ ngữ cảnh theo độ dài lời nhắc (lời nhắc trợ lý nay dài hơn 4 KB).
+    expect(bodies[0]!.options.num_ctx).toBeGreaterThanOrEqual(4096)
     expect(bodies[1]!.messages[0]!.content).toContain('exactly one JSON object')
     // Hỏng lần hai thì báo lỗi rõ.
     const alwaysBad: FetchLike = async () =>

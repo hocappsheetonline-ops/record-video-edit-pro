@@ -258,3 +258,70 @@ describe('lệnh mới 1.8.0: che vùng, tự giảm nhạc, hiện phím tắt'
     ])
   })
 })
+
+describe('lệnh AI 1.9.0: công thức dựng, hiệu ứng / tốc độ / chuyển cảnh theo thời điểm, kiểu chữ phụ đề, thẻ kết', () => {
+  it('hiểu phong cách dựng theo từ khóa, không nhầm "phụ đề kiểu TikTok" với công thức', () => {
+    expect(parseAssistantRequest('Dựng kiểu YouTube chuyên nghiệp cho mình')).toContainEqual({
+      kind: 'recipe',
+      style: 'youtube',
+    })
+    const shorts = parseAssistantRequest('Làm thành video TikTok hoàn chỉnh, nhạc lofi')
+    expect(shorts).toContainEqual({ kind: 'recipe', style: 'shorts' })
+    expect(shorts).toContainEqual({ kind: 'aspect', aspect: '9:16' })
+    expect(parseAssistantRequest('edit this like a vlog')).toContainEqual({
+      kind: 'recipe',
+      style: 'vlog',
+    })
+    expect(parseAssistantRequest('làm bản tối giản, sạch sẽ')).toContainEqual({
+      kind: 'recipe',
+      style: 'clean',
+    })
+    expect(parseAssistantRequest('phụ đề kiểu TikTok').some((c) => c.kind === 'recipe')).toBe(false)
+  })
+
+  it('thẻ kết và kiểu phụ đề theo từ khóa', () => {
+    expect(parseAssistantRequest('thêm thẻ kết: Đăng ký kênh nhé')).toEqual([
+      { kind: 'outro', text: 'Đăng ký kênh nhé', ms: 4000, template: 'title' },
+    ])
+    expect(parseAssistantRequest('phụ đề in hoa, phụ đề hiện cả dòng')).toEqual([
+      { kind: 'captions' },
+      { kind: 'captionsLook', uppercase: true, style: 'classic' },
+    ])
+  })
+
+  it('chuẩn hóa lệnh mới: kẹp giá trị, mặc định, bỏ lệnh thiếu dữ liệu', () => {
+    expect(
+      normalizeAssistantCommands([
+        { kind: 'recipe', style: 'youtube' },
+        { kind: 'recipe', style: 'nope' },
+        { kind: 'effectAt', effect: 'flash', atMs: 1000 },
+        { kind: 'effectAt', effect: 'shake', atMs: 2000, ms: 50, intensity: 9 },
+        { kind: 'effectAt', effect: 'nope', atMs: 0 },
+        { kind: 'speedRange', fromMs: 1000, toMs: 3000, factor: 40 },
+        { kind: 'speedRange', fromMs: 3000, toMs: 1000, factor: 2 },
+        { kind: 'speedCurve', preset: 'hero' },
+        { kind: 'speedCurve', preset: 'custom', atMs: 0 },
+        { kind: 'transitionAt', atMs: 2500, transition: 'slide' },
+        { kind: 'transitionAt', atMs: 2500, transition: 'zoom', ms: 5 },
+        { kind: 'captionsLook', font: 'anton', color: 'red', highlightColor: '#FF0000' },
+        { kind: 'captionsLook', maxWords: 99, uppercase: 'yes', style: 'classic' },
+        { kind: 'captionsLook' },
+        { kind: 'outro', text: '  Đăng ký  ', ms: 100 },
+        { kind: 'outro', text: '' },
+        { kind: 'transitions', transition: 'fadeBlack', ms: 50_000 },
+        { kind: 'export', resolution: 1080, format: 'mp4', enhance: true },
+      ]),
+    ).toEqual([
+      { kind: 'recipe', style: 'youtube' },
+      { kind: 'effectAt', effect: 'flash', atMs: 1000, ms: 1500, intensity: 0.7 },
+      { kind: 'effectAt', effect: 'shake', atMs: 2000, ms: 200, intensity: 1 },
+      { kind: 'speedRange', fromMs: 1000, toMs: 3000, factor: 16 },
+      { kind: 'speedCurve', preset: 'hero', atMs: 0 },
+      { kind: 'transitionAt', atMs: 2500, transition: 'slide', ms: 600 },
+      { kind: 'captionsLook', font: 'anton', highlightColor: '#ff0000' },
+      { kind: 'outro', text: 'Đăng ký', ms: 1000, template: 'title' },
+      { kind: 'transitions', transition: 'fadeBlack', ms: 3000 },
+      { kind: 'export', resolution: 1080, format: 'mp4', enhance: true },
+    ])
+  })
+})

@@ -569,6 +569,9 @@ describe('registerIpc', () => {
           { role: 'ai', text: 'Đã thêm nhạc.', at: 'x' },
           'junk',
         ],
+        transcript: '[0:00.0] Xin chào',
+        clicks: [1500, 'x', -5, 4200],
+        edit: 'duration 7 s',
       }),
     ).toEqual({ summary: 'ok', questions: [], commands: [{ kind: 'captions' }] })
     expect(direct).toHaveBeenCalledWith('làm cho hay', {
@@ -583,12 +586,15 @@ describe('registerIpc', () => {
         { role: 'user', text: 'thêm nhạc', at: 5 },
         { role: 'ai', text: 'Đã thêm nhạc.', at: 0 },
       ],
+      transcript: '[0:00.0] Xin chào',
+      clicks: [1500, 4200],
+      edit: 'duration 7 s',
     })
     // Ngữ cảnh không phải object: dùng giá trị mặc định.
     await call(IPC.aiDirect, 'x', null)
     expect(direct).toHaveBeenLastCalledWith(
       'x',
-      expect.objectContaining({ memory: '', history: [] }),
+      expect.objectContaining({ memory: '', history: [], transcript: '', clicks: [], edit: '' }),
     )
     await expect(call(IPC.aiDirect, 42, {})).rejects.toThrow('direct_input')
     await expect(call(IPC.aiDirect, 'x'.repeat(2001), {})).rejects.toThrow('direct_input')

@@ -10,10 +10,13 @@ import {
   CLEAR_TARGETS,
   CORNERS,
   EFFECT_KINDS,
+  FONT_IDS,
   OVERLAY_POSITIONS,
+  RECIPE_STYLES,
   RESOLUTIONS,
   SHAPES,
   SOUND_EFFECT_IDS,
+  SPEED_CURVE_PRESETS,
   TEXT_TEMPLATE_IDS,
   TIMELINE_ROWS,
   TRANSITION_KINDS,
@@ -174,7 +177,11 @@ const COMMAND_SCHEMA: Schema = {
   type: 'object',
   properties: {
     kind: { type: 'string', enum: [...ASSISTANT_KINDS] },
-    text: { type: 'string', description: 'title: the opening title text; text: the overlay text' },
+    text: {
+      type: 'string',
+      description:
+        'title: the opening title text; text: the overlay text; outro: the end-card text',
+    },
     preset: {
       type: 'string',
       enum: [
@@ -189,26 +196,47 @@ const COMMAND_SCHEMA: Schema = {
         'pastel',
         'tealOrange',
         'sunset',
+        ...SPEED_CURVE_PRESETS,
       ],
-      description: 'filter: colour look preset',
+      description: `filter: colour look preset; speedCurve: curve preset (${SPEED_CURVE_PRESETS.join(', ')})`,
     },
-    intensity: { type: 'number', description: 'filter: 0.1-1' },
-    factor: { type: 'number', description: 'speed: playback factor 0.25-8' },
+    intensity: { type: 'number', description: 'filter / effectAt: strength 0.1-1' },
+    factor: {
+      type: 'number',
+      description: 'speed: playback factor 0.25-8; speedRange: factor for that span 0.25-16',
+    },
+    style: {
+      type: 'string',
+      enum: [...RECIPE_STYLES, 'highlight', 'classic'],
+      description: `recipe: editing recipe (${RECIPE_STYLES.join(' / ')}); captionsLook: highlight (word by word) or classic (whole line)`,
+    },
+    font: { type: 'string', enum: [...FONT_IDS], description: 'captionsLook: caption font' },
+    highlightColor: {
+      type: 'string',
+      description: 'captionsLook: hex colour of the spoken word / highlight',
+    },
+    uppercase: { type: 'boolean', description: 'captionsLook: captions in capitals' },
+    maxWords: {
+      type: 'integer',
+      description: 'captionsLook: words shown at once (0 = whole line; 2-3 for TikTok style)',
+    },
+    enhance: { type: 'boolean', description: 'export: HD enhance (denoise + sharpen)' },
     aspect: { type: 'string', enum: ['16:9', '9:16', '1:1', '4:3', 'source'] },
     ms: {
       type: 'integer',
       description:
-        'trimStart / trimEnd: milliseconds to cut; freeze / zoomAt / text / sticker / shape: duration in ms; fade: fade length in ms',
+        'trimStart / trimEnd: milliseconds to cut; freeze / zoomAt / text / sticker / shape / blur / effectAt / outro: duration in ms; fade: fade length in ms; transitions / transitionAt: transition length in ms',
     },
     effect: {
       type: 'string',
       enum: [...EFFECT_KINDS],
-      description: 'effect: visual effect at the start of the video and at every cut',
+      description:
+        'effect: visual effect at the start of the video and at every cut; effectAt: effect at one time',
     },
     transition: {
       type: 'string',
       enum: [...TRANSITION_KINDS],
-      description: 'transitions: transition used at every cut',
+      description: 'transitions: transition used at every cut; transitionAt: transition at one cut',
     },
     query: {
       type: 'string',
@@ -218,7 +246,7 @@ const COMMAND_SCHEMA: Schema = {
     template: {
       type: 'string',
       enum: [...new Set<string>([...CAPTION_TEMPLATES, ...TEXT_TEMPLATE_IDS])],
-      description: `captionsStyle: subtitle template (${CAPTION_TEMPLATES.join(', ')}); text: text template (${TEXT_TEMPLATE_IDS.join(', ')})`,
+      description: `captionsStyle: subtitle template (${CAPTION_TEMPLATES.join(', ')}); text / outro: text template (${TEXT_TEMPLATE_IDS.join(', ')})`,
     },
     resolution: {
       type: 'integer',
@@ -234,10 +262,10 @@ const COMMAND_SCHEMA: Schema = {
     atMs: {
       type: 'integer',
       description:
-        'freeze / sound / zoomAt / text / sticker / shape / marker: time on the output video, milliseconds',
+        'freeze / sound / zoomAt / text / sticker / shape / blur / marker / effectAt / transitionAt / speedCurve: time on the output video, milliseconds',
     },
-    fromMs: { type: 'integer', description: 'cutRange: start of the span to cut (ms)' },
-    toMs: { type: 'integer', description: 'cutRange: end of the span to cut (ms)' },
+    fromMs: { type: 'integer', description: 'cutRange / speedRange: start of the span (ms)' },
+    toMs: { type: 'integer', description: 'cutRange / speedRange: end of the span (ms)' },
     axis: { type: 'string', enum: ['horizontal', 'vertical'], description: 'flip' },
     degrees: { type: 'integer', enum: [90, 180, 270], description: 'rotate: clockwise' },
     target: {
@@ -266,7 +294,7 @@ const COMMAND_SCHEMA: Schema = {
     },
     color: {
       type: 'string',
-      description: 'background / shape: hex colour like #1e1b4b',
+      description: 'background / shape / captionsLook: hex colour like #1e1b4b',
     },
     color2: {
       type: 'string',
@@ -345,9 +373,9 @@ const COMMAND_GUIDE = `- cutSilences: remove long pauses. removeFillers: remove 
 - aspect {aspect}: output aspect ratio ("9:16" for TikTok / Shorts / Reels, "1:1" square, "16:9" landscape).
 - trimStart {ms} / trimEnd {ms}: cut that many milliseconds from the beginning / end.
 - effect {effect}: visual effect at the start of the video and at every cut (${EFFECT_KINDS.join(', ')}).
-- transitions {transition}: transition at every cut (${TRANSITION_KINDS.join(', ')}).
+- transitions {transition, ms}: transition at every cut (${TRANSITION_KINDS.join(', ')}); ms = length (600 by default, 200-300 for punchy short-form).
 - music {query, volume}: background music from the user's own library; query = words from one track name; volume 0.05-1 (0.4 by default, about 0.25 when asked for quiet music).
-- export {resolution, format}: set export settings and export right away (resolution ${RESOLUTIONS.join(' / ')}; format mp4 or gif).
+- export {resolution, format, fps, enhance}: set export settings and export right away (resolution ${RESOLUTIONS.join(' / ')}; format mp4 or gif; enhance = HD denoise + sharpen).
 - styleFrom {project}: copy the style (frame, filter, captions, motion…) of one of the user's other projects, by its exact name.
 Timeline (all times are on the output video, in milliseconds):
 - cutRange {fromMs, toMs}: cut out that span. freeze {atMs, ms}: freeze frame at a time for ms. flip {axis}: mirror the screen video. rotate {degrees}: 90 / 180 / 270 clockwise.
@@ -369,7 +397,15 @@ Markers & rows:
 - marker {atMs, label}: a timeline marker. chapters: create chapter markers from the transcript (needs captions / transcript).
 - track {row, hidden, muted, locked}: hide / mute / lock a timeline row (${TIMELINE_ROWS.join(', ')}).
 - clear {target}: remove every item of one kind (${CLEAR_TARGETS.join(', ')}); "cuts" restores the full recording; "captions" turns captions off; "filter" / "adjust" reset the colour look.
-- shorts {mode, seconds, vertical}: split the video into short clips, each becoming its own project (mode fixed = every N seconds, chapters = by AI chapters).`
+- shorts {mode, seconds, vertical}: split the video into short clips, each becoming its own project (mode fixed = every N seconds, chapters = by AI chapters).
+Pro editing (1.9.0):
+- recipe {style}: a whole professional recipe in one command (${RECIPE_STYLES.join(' / ')}): youtube = long-form 16:9 tutorial (silence + filler cuts, clean voice, smooth cursor zoom, pressed keys, box captions, quiet ducked music, chapters); shorts = vertical TikTok / Shorts / Reels (9:16, fast pacing, big TikTok captions, zoom transitions, ducked music); vlog = talking head (karaoke captions, warm look, soft music); clean = minimal (silence cuts, clean voice, outline captions). Explicit commands in the same plan override the recipe's.
+- effectAt {effect, atMs, ms, intensity}: one visual effect at a time (a pattern interrupt: flash / shake / pulse on a reveal, confetti on a success).
+- speedRange {fromMs, toMs, factor}: speed up a boring span (loading, typing, waiting: 2-4×) or slow down a key moment (0.5×).
+- speedCurve {preset, atMs}: a CapCut-style speed curve on the clip at atMs (${SPEED_CURVE_PRESETS.join(', ')}).
+- transitionAt {atMs, transition, ms}: a transition at the cut nearest atMs only (use for section changes; hard cuts elsewhere).
+- captionsLook {font, color, highlightColor, uppercase, maxWords, style}: caption typography; style highlight = word by word (short-form), classic = whole line (long-form, tutorials).
+- outro {text, ms, template}: an end card shown during the last ms of the video (call to action: subscribe / follow / next video); always anchored to the end, even after cuts.`
 
 export function assistantSystem(context: {
   language: string
@@ -403,8 +439,27 @@ export const DIRECTOR_SCHEMA: Schema = {
 }
 
 /**
- * Lời nhắc hệ thống của đạo diễn AI: giải thích tập lệnh và đưa toàn bộ ngữ cảnh (kho nhạc, dự
- * án khác, thói quen + quy tắc đã dặn, hội thoại gần đây) vào; câu yêu cầu đi riêng ở lượt người dùng.
+ * Sổ tay dựng video chuyên nghiệp (YouTube dài / TikTok-Shorts ngắn) cho đạo diễn AI: rút từ cách
+ * làm của các kênh hướng dẫn và short-form phổ biến (hook 3 giây đầu, đổi hình mỗi 10-20 giây,
+ * cắt khoảng lặng, zoom đúng lúc, phụ đề ngắn, nhạc nền nhỏ tự giảm khi nói, thẻ kết CTA…).
+ */
+export const EDITING_PLAYBOOK = `Professional editing playbook (follow it whenever the user asks for a "professional", "complete", "YouTube", "TikTok" or "like a pro" edit, or gives only a goal):
+1. Pick the format first: long-form (YouTube tutorial / demo, 16:9, calm pace, whole-line captions) or short-form (TikTok / Shorts / Reels, 9:16 fill, fast pace, 2-3 word highlight captions). A recipe command (youtube / shorts / vlog / clean) is the quickest way to apply the right defaults; add explicit commands on top for anything specific.
+2. Hook (first 3-5 s): never open with a slow intro. Put a text hook at atMs 0 for 2-3 s that states the result or promise ("Làm X trong 30 giây", "3 lỗi khiến…"); add a quick effectAt flash/pulse or a sound at 0 if the style is energetic. Trim dead time before the first spoken words (trimStart) when the transcript shows a late start.
+3. Pacing: remove silences (>0.5 s) and filler words, then make something change on screen every 10-20 s (zoomAt on the UI detail being explained, a text label for a key step or setting, a shape arrow at a click, a sticker, a short effectAt). Speed up waiting / loading / typing spans with speedRange 2-4×; slow a key moment to 0.5× only when it matters. Short-form: cuts every 2-4 s, zoom transitions 200-300 ms; long-form: hard cuts, a transition (fadeBlack / slide 400-600 ms) only at section changes (transitionAt).
+4. Zoom and cursor: autoZoom for screen recordings with mouse data; punch in (zoomAt 1.6-2.5×, 2-4 s) where small UI details are mentioned, starting just before the narration names the target and holding through the click; keep the cursor visible with click ripples; show pressed shortcuts when the tutorial uses them. Never zoom on talking-head only footage.
+5. Captions: always on for short-form and recommended for tutorials. Short-form: tiktok / popWord template, highlight style, 2-3 words, large, slightly below centre. Long-form: box / outline template, classic style, bottom. Keep the caption language = spoken language; translate / bilingual only when asked. Add chapters for long-form videos over about 60 s.
+6. Audio: cleanAudio first (noise reduction, voice enhance, loudness about -14 LUFS). Background music from the library at 0.15-0.3, ducked under speech (duck level 0.2-0.3), fade in/out 1-2 s; mute the music entirely for calm tutorials if the user hints at it. Sound effects sparingly (a pop / whoosh on a reveal or key step, a success chime at the end), never over every cut.
+7. Look: a light filter (cinematic / warm / tealOrange at 0.4-0.7) for vlogs; keep screen recordings neutral (no filter, maybe small contrast / sharpen adjust). Frame: 16:9 with padding 0.04-0.08, radius, shadow and a gradient background for long-form; 9:16 fill for short-form.
+8. Privacy: blur / pixelate emails, passwords, names or tokens visible in the transcript or the goal (blur command at that time span).
+9. Ending: a short outro / CTA card in the last 3-5 s (subscribe, follow, next video, link in description), optionally a marker at the CTA; fade the music out. Short-form: end right after the payoff, no long goodbye (trimEnd if needed).
+10. Order of commands: cuts (cutSilences, removeFillers, trimStart/End, cutRange, speedRange) → audio (cleanAudio, music, duck, fade) → zoom & motion → frame & look → captions → overlays (text, sticker, shape, blur, effectAt, outro) → markers / chapters → export last. The app runs the AI steps (silence / filler cuts, autoZoom, captions, cleanAudio) first, so every atMs / fromMs / toMs you give must already be on the cut video: when you also cut silences, prefer times from the transcript excerpt at the start of the video, use outro for the ending, and avoid exact times late in the video.
+11. Say what you did in the summary in the user's language, briefly; do not ask questions when a sensible professional default exists.`
+
+/**
+ * Lời nhắc hệ thống của đạo diễn AI: giải thích tập lệnh, sổ tay dựng chuyên nghiệp và toàn bộ ngữ
+ * cảnh (lời thoại có mốc thời gian, thời điểm bấm chuột, bản dựng hiện tại, kho nhạc, dự án khác,
+ * thói quen + quy tắc đã dặn, hội thoại gần đây); câu yêu cầu đi riêng ở lượt người dùng.
  */
 export function directorSystem(context: DirectorContext): string {
   const language = languageName(context.language)
@@ -416,16 +471,29 @@ export function directorSystem(context: DirectorContext): string {
           .map((m) => `${m.role === 'user' ? 'User' : 'Director'}: ${m.text}`)
           .join('\n')
       : '(none)'
-  return `You are the AI director of a screen-recording video editor. The user states a goal for their video, in ${language} or English; you turn it into a plan the app executes.
+  const clicks =
+    context.clicks && context.clicks.length > 0
+      ? context.clicks.map((ms) => (ms / 1000).toFixed(1) + ' s').join(', ')
+      : '(none)'
+  return `You are the AI director of a screen-recording video editor. The user states a goal for their video, in ${language} or English; you turn it into a plan the app executes, editing like a professional YouTube / TikTok editor.
 Video: duration ${Math.round(context.durationMs / 1000)} s; transcript ${context.hasTranscript ? 'available' : 'not available yet (the app transcribes first when captions, cutSilences or removeFillers are requested)'}; mouse / cursor data ${context.hasCursor ? 'available' : 'not available (autoZoom will do nothing)'}.
+Current edit: ${context.edit?.trim() || '(fresh recording, nothing edited yet)'}
 
 Reply with:
 - summary: one short sentence in ${language} restating what you are going to do (the user confirms it before anything runs).
-- questions: at most 2 clarifying questions, in ${language}, ONLY when the request is genuinely ambiguous (e.g. the user wants background music but the music library is empty, or says "make it good" with no detail). Otherwise an empty list: while there are questions nothing runs, so never ask when a sensible default exists.
-- commands: editing commands from the fixed set below, in the order they should run. Include only what the user asked for or what the user's standing rules clearly imply; nothing else. Empty list if nothing applies.
+- questions: at most 2 clarifying questions, in ${language}, ONLY when the request is genuinely ambiguous (e.g. the user wants background music but the music library is empty). Otherwise an empty list: while there are questions nothing runs, so never ask when a sensible default exists.
+- commands: editing commands from the fixed set below, in the order they should run. Include what the user asked for, what the user's standing rules imply, and, when the user asks for a complete / professional edit or gives only a goal, the steps of the playbook that fit this video. Empty list if nothing applies.
 
 Commands:
 ${COMMAND_GUIDE}
+
+${EDITING_PLAYBOOK}
+
+Transcript with output-video timestamps [m:ss.s] (place hooks, labels, zooms, markers and blur at the real moments; empty when not transcribed yet):
+${context.transcript?.trim() || '(none)'}
+
+Mouse click times on the output video (good anchors for zoomAt / shape arrows):
+${clicks}
 
 Music library (track names; pick music.query from one of them; if empty, ask or skip the music):
 ${list(context.musicTracks, '(empty)')}

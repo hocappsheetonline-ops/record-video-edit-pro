@@ -15,7 +15,8 @@ import { RESOLUTIONS, type Resolution } from './layout'
 import { ROTATIONS, type Rotation } from './orient'
 import { SHAPES, type ShapeKind } from './shapes'
 import { BLUR_MODES, DEFAULT_OVERLAY_MS, type BlurMode } from './overlays'
-import { TEXT_TEMPLATES, type TextTemplateId } from './text-style'
+import { SPEED_CURVE_PRESETS } from './speed-curve'
+import { FONT_IDS, TEXT_TEMPLATES, type FontId, type TextTemplateId } from './text-style'
 import { TIMELINE_ROWS, type TimelineRow } from './tracks'
 import { TRANSITION_KINDS, type TransitionKind } from './transitions'
 
@@ -49,6 +50,17 @@ export type CameraShape = (typeof CAMERA_SHAPES)[number]
 export const TEXT_TEMPLATE_IDS = TEXT_TEMPLATES.map((t) => t.id) as TextTemplateId[]
 
 /**
+ * Công thức dựng (phong cách) có sẵn: `youtube` = hướng dẫn dài 16:9, `shorts` = TikTok / Shorts /
+ * Reels dọc, `vlog` = nói trước camera, `clean` = tối giản sạch sẽ. Mỗi công thức mở rộng thành
+ * nhiều lệnh (xem `expandRecipes` trong director.ts).
+ */
+export const RECIPE_STYLES = ['youtube', 'shorts', 'vlog', 'clean'] as const
+export type RecipeStyle = (typeof RECIPE_STYLES)[number]
+
+/** Mẫu đường cong tốc độ dùng được qua lệnh `speedCurve`. */
+export type SpeedCurvePresetId = (typeof SPEED_CURVE_PRESETS)[number]
+
+/**
  * Lệnh chỉnh sửa mà trợ lý AI (kiểu EditPilot của CapCut) có thể ra: người dùng mô tả bằng lời,
  * Claude (hoặc bộ phân tích từ khóa khi không có key) đổi thành danh sách lệnh, app thực hiện.
  * Mọi mốc thời gian (`atMs`, `fromMs`, `toMs`) tính trên video xuất (sau khi cắt).
@@ -67,14 +79,21 @@ export type AssistantCommand =
   | { kind: 'trimEnd'; ms: number }
   /** Hiệu ứng hình tại đầu video và mỗi chỗ nối clip. */
   | { kind: 'effect'; effect: EffectKind }
-  /** Chuyển cảnh cho mọi chỗ nối. */
-  | { kind: 'transitions'; transition: TransitionKind }
+  /** Chuyển cảnh cho mọi chỗ nối; `ms` = độ dài (mặc định 600). */
+  | { kind: 'transitions'; transition: TransitionKind; ms?: number }
   /** Nhạc nền từ kho nhạc của tôi (tìm theo từ khóa trong tên bài), âm lượng 0–1. */
   | { kind: 'music'; query: string; volume: number }
   /** Mẫu phụ đề (tiktok, karaoke, neon…). */
   | { kind: 'captionsStyle'; template: CaptionTemplate }
   /** Đặt cài đặt xuất rồi xuất luôn. */
-  | { kind: 'export'; resolution: Resolution; format: 'mp4' | 'gif'; fps?: 30 | 60 }
+  | {
+      kind: 'export'
+      resolution: Resolution
+      format: 'mp4' | 'gif'
+      fps?: 30 | 60
+      /** Nâng cao chất lượng (giảm nhiễu, làm nét) khi xuất. */
+      enhance?: boolean
+    }
   /** Áp dụng phong cách (khung hình, bộ lọc, phụ đề, chuyển động…) của một dự án mẫu. */
   | { kind: 'styleFrom'; project: string }
   // ---- Timeline ----
@@ -181,6 +200,29 @@ export type AssistantCommand =
   | { kind: 'clear'; target: ClearTarget }
   /** Chia thành video ngắn: mỗi N giây hoặc theo chương AI, tuỳ chọn khung dọc. */
   | { kind: 'shorts'; mode: 'fixed' | 'chapters'; seconds: number; vertical: boolean }
+  // ---- Dựng chuyên nghiệp (1.9.0) ----
+  /** Công thức dựng theo phong cách (mở rộng thành nhiều lệnh trước khi chạy). */
+  | { kind: 'recipe'; style: RecipeStyle }
+  /** Hiệu ứng hình tại một thời điểm (điểm nhấn / pattern interrupt), độ mạnh 0..1. */
+  | { kind: 'effectAt'; effect: EffectKind; atMs: number; ms: number; intensity: number }
+  /** Đổi tốc độ một đoạn (tua nhanh phần chờ đợi, chậm lại chỗ quan trọng). */
+  | { kind: 'speedRange'; fromMs: number; toMs: number; factor: number }
+  /** Đường cong tốc độ kiểu CapCut cho clip chứa `atMs` (0 = clip đầu). */
+  | { kind: 'speedCurve'; preset: SpeedCurvePresetId; atMs: number }
+  /** Chuyển cảnh tại chỗ nối gần `atMs` nhất, dài `ms`. */
+  | { kind: 'transitionAt'; atMs: number; transition: TransitionKind; ms: number }
+  /** Phông, màu, chữ in hoa, số từ mỗi lần hiện và kiểu tô (từng từ / cả dòng) của phụ đề. */
+  | {
+      kind: 'captionsLook'
+      font?: FontId
+      color?: string
+      highlightColor?: string
+      uppercase?: boolean
+      maxWords?: number
+      style?: 'highlight' | 'classic'
+    }
+  /** Thẻ kết (CTA: "Đăng ký", "Xem video tiếp") hiện trong `ms` cuối video, luôn bám cuối. */
+  | { kind: 'outro'; text: string; ms: number; template: TextTemplateId }
 
 export type AssistantKind = AssistantCommand['kind']
 
@@ -230,6 +272,13 @@ export const ASSISTANT_KINDS: readonly AssistantKind[] = [
   'track',
   'clear',
   'shorts',
+  'recipe',
+  'effectAt',
+  'speedRange',
+  'speedCurve',
+  'transitionAt',
+  'captionsLook',
+  'outro',
 ]
 
 /** Thông tin về video gửi kèm yêu cầu để AI ra lệnh phù hợp. */
@@ -292,6 +341,14 @@ export function assistantCommandKey(cmd: AssistantCommand): string {
       return `freeze:${cmd.atMs}`
     case 'cutRange':
       return `cutRange:${cmd.fromMs}`
+    case 'effectAt':
+      return `effectAt:${cmd.atMs}:${cmd.effect}`
+    case 'speedRange':
+      return `speedRange:${cmd.fromMs}`
+    case 'speedCurve':
+      return `speedCurve:${cmd.atMs}`
+    case 'transitionAt':
+      return `transitionAt:${cmd.atMs}`
     default:
       return cmd.kind
   }
@@ -336,10 +393,15 @@ function parseCommand(r: Record<string, unknown>): AssistantCommand | null {
       if (EFFECT_KINDS.includes(r.effect as EffectKind))
         return { kind: 'effect', effect: r.effect as EffectKind }
       return null
-    case 'transitions':
-      if (TRANSITION_KINDS.includes(r.transition as TransitionKind))
-        return { kind: 'transitions', transition: r.transition as TransitionKind }
-      return null
+    case 'transitions': {
+      const transition = oneOf(TRANSITION_KINDS, r.transition)
+      if (!transition) return null
+      return compact({
+        kind: 'transitions' as const,
+        transition,
+        ms: isNum(r.ms) && r.ms > 0 ? Math.round(clamp(r.ms, 100, 3000)) : undefined,
+      })
+    }
     case 'music':
       return {
         kind: 'music',
@@ -359,6 +421,7 @@ function parseCommand(r: Record<string, unknown>): AssistantCommand | null {
           : 1080,
         format: (r.format === 'gif' ? 'gif' : 'mp4') as 'mp4' | 'gif',
         fps,
+        enhance: boolOr(r.enhance),
       })
     }
     case 'styleFrom':
@@ -565,6 +628,65 @@ function parseCommand(r: Record<string, unknown>): AssistantCommand | null {
         vertical: r.vertical !== false,
       }
     }
+    case 'recipe': {
+      const style = oneOf(RECIPE_STYLES, r.style)
+      return style ? { kind: 'recipe', style } : null
+    }
+    case 'effectAt': {
+      const effect = oneOf(EFFECT_KINDS, r.effect)
+      const atMs = timeMs(r.atMs)
+      if (!effect || atMs === undefined) return null
+      return {
+        kind: 'effectAt',
+        effect,
+        atMs,
+        ms: durMs(r.ms, 1500, 200, 60_000),
+        intensity: numOr(r.intensity, 0.1, 1) ?? 0.7,
+      }
+    }
+    case 'speedRange': {
+      const fromMs = timeMs(r.fromMs)
+      const toMs = timeMs(r.toMs)
+      if (fromMs === undefined || toMs === undefined || toMs <= fromMs) return null
+      if (!isNum(r.factor) || r.factor <= 0) return null
+      return {
+        kind: 'speedRange',
+        fromMs,
+        toMs,
+        factor: clamp(Number(r.factor.toFixed(2)), 0.25, 16),
+      }
+    }
+    case 'speedCurve': {
+      const preset = oneOf(SPEED_CURVE_PRESETS, r.preset)
+      return preset ? { kind: 'speedCurve', preset, atMs: timeMs(r.atMs) ?? 0 } : null
+    }
+    case 'transitionAt': {
+      const transition = oneOf(TRANSITION_KINDS, r.transition)
+      const atMs = timeMs(r.atMs)
+      if (!transition || atMs === undefined) return null
+      return { kind: 'transitionAt', atMs, transition, ms: durMs(r.ms, 600, 100, 3000) }
+    }
+    case 'captionsLook': {
+      const cmd = compact({
+        kind: 'captionsLook' as const,
+        font: oneOf(FONT_IDS, r.font),
+        color: hex(r.color),
+        highlightColor: hex(r.highlightColor),
+        uppercase: boolOr(r.uppercase),
+        maxWords: isNum(r.maxWords) ? Math.round(clamp(r.maxWords, 0, 12)) : undefined,
+        style: oneOf(['highlight', 'classic'] as const, r.style),
+      })
+      return Object.keys(cmd).length > 1 ? cmd : null
+    }
+    case 'outro': {
+      if (typeof r.text !== 'string' || !r.text.trim()) return null
+      return {
+        kind: 'outro',
+        text: r.text.trim().slice(0, 120),
+        ms: durMs(r.ms, 4000, 1000, 30_000),
+        template: oneOf(TEXT_TEMPLATE_IDS, r.template) ?? 'title',
+      }
+    }
     default:
       return null
   }
@@ -655,6 +777,11 @@ export function parseAssistantRequest(text: string): AssistantCommand[] {
     push({ kind: 'autoZoom' })
     push({ kind: 'cleanAudio' })
   }
+  // Công thức dựng theo phong cách ("dựng kiểu YouTube", "video TikTok hoàn chỉnh", "kiểu vlog");
+  // "phụ đề kiểu TikTok" nói về mẫu phụ đề nên bỏ cụm đó trước.
+  const forRecipe = t.replace(/(?:phụ đề|caption|subtitle)[^,.;]*/gi, '')
+  const recipe = RECIPE_WORDS.find(([re]) => re.test(forRecipe))?.[1]
+  if (recipe) push({ kind: 'recipe', style: recipe })
   if (/khoảng lặng|im lặng|khoảng trống|silence|silent|pause|dead air/i.test(t))
     push({ kind: 'cutSilences' })
   if (/từ thừa|từ đệm|nói lặp|ừm|filler|stutter|repeat/i.test(t)) push({ kind: 'removeFillers' })
@@ -869,6 +996,25 @@ export function parseAssistantRequest(text: string): AssistantCommand[] {
     })
   }
 
+  // Thẻ kết / lời kêu gọi ("thêm thẻ kết Đăng ký kênh", "outro: Subscribe").
+  const outro =
+    /(?:thẻ kết|màn kết|lời kêu gọi|kết video|outro|end ?card|call to action|cta)\s*(?:là|:|=|["“'])?\s*["“']?([^"”'\n,;.]{2,100})/i.exec(
+      t,
+    )
+  if (outro) push({ kind: 'outro', text: outro[1]!.trim(), ms: 4000, template: 'title' })
+  // Phụ đề in hoa / cả dòng (một lệnh captionsLook gộp cả hai).
+  const look = compact({
+    kind: 'captionsLook' as const,
+    uppercase:
+      /(?:phụ đề|captions?|subtitles?)[^,.;]{0,24}(?:in hoa|viết hoa|uppercase|all caps)/i.test(t)
+        ? true
+        : undefined,
+    style: /(?:phụ đề|captions?|subtitles?)[^,.;]{0,24}(?:cả dòng|classic|không tô từ)/i.test(t)
+      ? ('classic' as const)
+      : undefined,
+  })
+  if (Object.keys(look).length > 1) push(look)
+
   if (/xuất|export|render|lưu video|save video/i.test(t)) {
     const res = /(2160|4k|1440|1080|720)/i.exec(t)?.[1]?.toLowerCase()
     push({
@@ -880,6 +1026,18 @@ export function parseAssistantRequest(text: string): AssistantCommand[] {
   return normalizeAssistantCommands(out)
 }
 
+const RECIPE_WORDS: [RegExp, RecipeStyle][] = [
+  [
+    /(?:kiểu|phong cách|style|như|theo|chuẩn|dựng|edit|làm)\s+(?:một\s+|video\s+|clip\s+)?(?:tiktok|shorts?|reels?)|(?:tiktok|shorts?|reels?)\s+(?:style|chuyên nghiệp|pro\b|viral|hoàn chỉnh|complete|full)/i,
+    'shorts',
+  ],
+  [
+    /(?:kiểu|phong cách|style|như|theo|chuẩn|dựng|edit|làm)\s+(?:một\s+|video\s+|clip\s+)?youtube|youtube\s+(?:style|tutorial|chuyên nghiệp|pro\b|hoàn chỉnh|complete|full)|hướng dẫn chuyên nghiệp|professional tutorial/i,
+    'youtube',
+  ],
+  [/\bvlogs?\b|talking.?head|nói trước (?:camera|máy quay)/i, 'vlog'],
+  [/tối giản|sạch sẽ|gọn gàng|minimal(?:ist)?\b|clean (?:style|look|cut|edit)/i, 'clean'],
+]
 const EFFECT_WORDS: [RegExp, EffectKind][] = [
   [/rung lắc|rung|shake/i, 'shake'],
   [/glitch|nhiễu số/i, 'glitch'],

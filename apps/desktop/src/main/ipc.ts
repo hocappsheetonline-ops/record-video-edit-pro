@@ -619,6 +619,12 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
       projects: names(c.projects),
       memory: typeof c.memory === 'string' ? c.memory : '',
       history,
+      // Ngữ cảnh thời gian thật (1.9.0); dịch vụ AI cắt gọn thêm trước khi đưa vào lời nhắc.
+      transcript: typeof c.transcript === 'string' ? c.transcript : '',
+      clicks: Array.isArray(c.clicks)
+        ? c.clicks.filter((n): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 0)
+        : [],
+      edit: typeof c.edit === 'string' ? c.edit : '',
     })
   })
   ipcMain.handle(IPC.aiLocalModels, (_event, baseUrl: unknown) => {

@@ -2,6 +2,12 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.9.0
+
+- **Đạo diễn AI dựng video như biên tập viên chuyên nghiệp**: lời nhắc hệ thống có **sổ tay dựng YouTube / TikTok** rút từ cách làm của các kênh hướng dẫn và short-form (hook 3–5 giây đầu nói thẳng kết quả, đổi hình mỗi 10–20 giây bằng zoom / chữ / mũi tên / hiệu ứng, cắt khoảng lặng > 0,5 giây và từ thừa, tua nhanh đoạn chờ, zoom đúng lúc lời thoại nhắc tới chi tiết nhỏ và giữ qua lúc bấm, phụ đề ngắn 2–3 từ cho video dọc / cả dòng cho hướng dẫn, giọng sạch khoảng −14 LUFS và nhạc nền nhỏ tự giảm khi nói, hiệu ứng âm thanh tiết chế, che thông tin riêng tư, thẻ kết CTA 3–5 giây cuối, thứ tự lệnh chuẩn). AI còn nhận **lời thoại có mốc thời gian trên video xuất**, **thời điểm bấm chuột** và **tóm tắt bản dựng hiện tại** để đặt chữ, zoom, mốc đúng chỗ và không làm trùng.
+- **Bốn công thức dựng một chạm** (`recipe`): **YouTube** (hướng dẫn dài 16:9: cắt lặng / từ thừa, giọng sạch, zoom theo chuột mượt, hiện phím tắt, phụ đề hộp, nhạc nhỏ tự giảm, mốc chương), **TikTok / Shorts** (dọc 9:16, nhịp nhanh, phụ đề TikTok to, chuyển cảnh zoom ngắn, nhạc tự giảm), **Vlog** (phụ đề karaoke, tông ấm, nhạc nhẹ) và **Tối giản**. Lệnh nêu rõ trong cùng kế hoạch thắng lệnh của công thức; bộ hiểu từ khóa (không có AI) nhận "dựng kiểu YouTube", "video TikTok hoàn chỉnh", "kiểu vlog", "tối giản". Ba nút gợi ý mới trong bảng AI.
+- **Bảy lệnh mới cho AI**: hiệu ứng tại một thời điểm (`effectAt`), đổi tốc độ một đoạn (`speedRange`: tua nhanh phần chờ / chậm lại chỗ quan trọng), đường cong tốc độ kiểu CapCut cho clip (`speedCurve`), chuyển cảnh tại một chỗ nối (`transitionAt`), kiểu chữ phụ đề (`captionsLook`: phông, màu, màu nhấn, in hoa, số từ, tô từng từ / cả dòng), **thẻ kết luôn bám cuối video** (`outro`, đúng chỗ dù đã cắt lặng); `transitions` nhận độ dài và `export` nhận nâng cao chất lượng HD.
+
 ## 1.8.0
 
 - **Che vùng riêng tư** (Thư viện → Hiệu ứng → Che vùng riêng tư): thêm vùng **Làm mờ** hoặc **Khảm ô (mosaic)** lên video như CapCut để giấu mật khẩu, email, tên người; kéo trên khung xem trước để đặt, kéo góc để đổi cả chiều rộng lẫn chiều cao, chỉnh độ mạnh, dùng **keyframe** để vùng che đi theo cửa sổ. Xuất giống hệt xem trước.

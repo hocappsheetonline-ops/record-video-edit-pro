@@ -1179,6 +1179,11 @@ export const en: Messages = {
       },
       examples: {
         full: 'Make a full TikTok video: trim silences, captions, lofi music, export 9:16',
+        youtube:
+          'Edit like a pro YouTube tutorial: hook, silence cuts, timed zooms, captions, quiet music, end card',
+        shorts:
+          'Edit TikTok / Shorts style: vertical 9:16, fast pacing, big captions, ducked music',
+        vlog: 'Vlog style: silence cuts, karaoke captions, warm look, soft music',
         silences: 'Trim silences and remove filler words',
         captions: 'Add captions and clean up audio',
         vertical: 'Make it vertical 9:16 for TikTok',
@@ -1230,6 +1235,13 @@ export const en: Messages = {
         track: 'Timeline row',
         clear: 'Clear',
         shorts: 'Split into shorts',
+        recipe: 'Editing recipe',
+        effectAt: 'Effect at a time',
+        speedRange: 'Speed of a span',
+        speedCurve: 'Speed curve',
+        transitionAt: 'Transition at a cut',
+        captionsLook: 'Caption typography',
+        outro: 'End card',
       },
     },
     shorts: {
