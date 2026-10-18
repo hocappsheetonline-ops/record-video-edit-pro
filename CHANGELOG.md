@@ -2,7 +2,7 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
-## 1.13.0
+## 1.14.0
 
 - **Chỉnh sửa video bằng văn bản (kiểu Descript)** (Thư viện → **Lời thoại**): lời thoại hiện thành chữ (nhận dạng nếu chưa có), **xóa chữ nào thì đoạn video + tiếng tương ứng bị cắt**. Bấm một từ để đưa đầu phát tới đó; Shift+bấm hoặc bôi đen để chọn nhiều từ rồi bấm **Delete** (hoặc nút Cắt chữ đã chọn). Phần đã cắt hiện **gạch ngang**, bấm để khôi phục (có ô ẩn / hiện phần đã cắt); mọi bước đều hoàn tác được. Hợp cho video hướng dẫn kiểu quay màn hình + nói.
 - **Từ đệm và khoảng lặng hiện ngay trong văn bản**: "ờ", "à", "ừm", "ơ", "hừm", um / uh / erm… được **tô vàng**; khoảng nghỉ dài hơn 0,7 giây hiện thành ô **⋯ 1,5 s** bấm để rút ngắn (chừa lại 0,35 giây cho tự nhiên). Hai nút một chạm: **Bỏ mọi từ đệm (N)** và **Rút ngắn mọi khoảng lặng (N)**; dòng thống kê số từ / từ đệm / khoảng lặng còn lại cập nhật theo timeline. Ô **Cắt theo cụm từ**: gõ câu cần bỏ, các từ khớp được tô hồng, **Cắt mọi lần**.
