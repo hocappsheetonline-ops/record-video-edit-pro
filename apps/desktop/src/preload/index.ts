@@ -119,8 +119,7 @@ const api: LumoraApi = {
   editCaptions: (lines, instruction, language) =>
     ipcRenderer.invoke(IPC.aiEditCaptions, lines, instruction, language),
   captionEmojis: (lines, language) => ipcRenderer.invoke(IPC.aiCaptionEmojis, lines, language),
-  captionKeywords: (lines, language) =>
-    ipcRenderer.invoke(IPC.aiCaptionKeywords, lines, language),
+  captionKeywords: (lines, language) => ipcRenderer.invoke(IPC.aiCaptionKeywords, lines, language),
   planZooms: (folder, input) => ipcRenderer.invoke(IPC.aiPlanZooms, folder, input),
   listVoices: () => ipcRenderer.invoke(IPC.aiVoices),
   speak: (folder, text, voiceId, options) =>

@@ -25,8 +25,19 @@ const line = (id: string, words: ReturnType<typeof w>[]): CaptionLine => ({
 })
 
 describe('mẫu phụ đề', () => {
-  it('8 mẫu; đổi mẫu lấy phông / màu của mẫu nhưng giữ vị trí', () => {
-    expect(CAPTION_TEMPLATES).toHaveLength(8)
+  it('14 mẫu; đổi mẫu lấy phông / màu của mẫu nhưng giữ vị trí', () => {
+    expect(CAPTION_TEMPLATES).toHaveLength(14)
+    expect(CAPTION_TEMPLATES).toEqual(
+      expect.arrayContaining(['typewriter', 'wave', 'slideUp', 'shadowPop', 'gradient', 'comic']),
+    )
+    expect(withCaptionTemplate(DEFAULT_CAPTION_LOOK, 'comic')).toMatchObject({
+      font: 'bangers',
+      keywordColor: '#ffffff',
+    })
+    expect(parseCaptionLook({ keywordColor: '#ABC123' }, 'bottom').keywordColor).toBe('#abc123')
+    expect(parseCaptionLook({ keywordColor: 'red' }, 'bottom').keywordColor).toBe(
+      DEFAULT_CAPTION_LOOK.keywordColor,
+    )
     const moved = { ...DEFAULT_CAPTION_LOOK, y: 0.4 }
     const tiktok = withCaptionTemplate(moved, 'tiktok')
     expect(tiktok).toMatchObject({ template: 'tiktok', uppercase: true, maxWords: 3, y: 0.4 })

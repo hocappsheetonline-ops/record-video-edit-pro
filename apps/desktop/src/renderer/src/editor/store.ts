@@ -445,7 +445,7 @@ interface EditorStore {
     language: string
     keepOriginal?: boolean
     /** Id hoặc tên giọng; bỏ trống = giọng đầu tiên trong danh sách. */
-    voice?: string
+    voiceName?: string
     onProgress?: (done: number, total: number) => void
   }): Promise<number>
   splitIntoShorts(
@@ -2615,7 +2615,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             const n = await get().dubCaptions({
               language: c.language,
               keepOriginal: c.keepOriginal,
-              voice: c.voice,
+              voiceName: c.voiceName,
             })
             if (get().folder !== folder) return report
             if (n === 0) skipped('dub', 'too_short')
@@ -2820,7 +2820,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // Giọng: theo id / tên, không thì giọng đầu tiên.
     const voices = await lumora().listVoices()
     if (get().folder !== folder) return 0
-    const wanted = options.voice?.trim().toLowerCase()
+    const wanted = options.voiceName?.trim().toLowerCase()
     const voice =
       (wanted &&
         voices.find((v) => v.id.toLowerCase() === wanted || v.name.toLowerCase() === wanted)) ||

@@ -738,7 +738,10 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
       ),
   )
   ipcMain.handle(IPC.aiCaptionEmojis, (_event, lines: unknown, language: unknown) =>
-    deps.ai.captionEmojis(cleanLines(lines), typeof language === 'string' ? language.slice(0, 8) : ''),
+    deps.ai.captionEmojis(
+      cleanLines(lines),
+      typeof language === 'string' ? language.slice(0, 8) : '',
+    ),
   )
   ipcMain.handle(IPC.aiCaptionKeywords, (_event, lines: unknown, language: unknown) =>
     deps.ai.captionKeywords(

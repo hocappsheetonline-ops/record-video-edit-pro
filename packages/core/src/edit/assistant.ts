@@ -254,9 +254,9 @@ export type AssistantCommand =
   /**
    * Lồng tiếng AI: dịch lời thoại sang `language` (nếu khác ngôn ngữ gốc) rồi đọc bằng giọng AI
    * đúng thời điểm từng dòng; tắt tiếng micro gốc trừ khi `keepOriginal` (giữ nhỏ phía dưới).
-   * `voice` = tên / id giọng (bỏ trống = giọng đầu tiên).
+   * `voiceName` = tên / id giọng (bỏ trống = giọng đầu tiên).
    */
-  | { kind: 'dub'; language: string; keepOriginal: boolean; voice?: string }
+  | { kind: 'dub'; language: string; keepOriginal: boolean; voiceName?: string }
 
 export type AssistantKind = AssistantCommand['kind']
 
@@ -414,8 +414,10 @@ function parseCommand(r: Record<string, unknown>): AssistantCommand | null {
         kind: 'dub' as const,
         language: language.slice(0, 8),
         keepOriginal: r.keepOriginal === true,
-        voice:
-          typeof r.voice === 'string' && r.voice.trim() ? r.voice.trim().slice(0, 80) : undefined,
+        voiceName:
+          typeof r.voiceName === 'string' && r.voiceName.trim()
+            ? r.voiceName.trim().slice(0, 80)
+            : undefined,
       })
     }
     case 'title':

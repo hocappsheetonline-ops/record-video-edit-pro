@@ -515,6 +515,12 @@ export function createFakeApi(
     translateLines: vi.fn<LumoraApi['translateLines']>(async (lines) =>
       lines.map((l) => ({ id: l.id, text: `EN: ${l.text}` })),
     ),
+    captionEmojis: vi.fn<LumoraApi['captionEmojis']>(async (lines) =>
+      lines.map((l) => ({ id: l.id, emoji: '🔥' })),
+    ),
+    captionKeywords: vi.fn<LumoraApi['captionKeywords']>(async (lines) =>
+      lines.map((l) => ({ id: l.id, keywords: l.text.split(/\s+/).slice(0, 1) })),
+    ),
     editCaptions: vi.fn<LumoraApi['editCaptions']>(async (lines) =>
       lines.map((l) => ({ id: l.id, text: l.text.replace(/ ừm/g, '') })),
     ),

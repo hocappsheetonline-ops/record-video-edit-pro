@@ -406,3 +406,44 @@ describe('từ khóa hiệu ứng & chuyển cảnh mới', () => {
     expect(tr('thêm chuyển cảnh')).toEqual({ kind: 'transitions', transition: 'fadeBlack' })
   })
 })
+
+describe('phụ đề kiểu Captions 1.13.0: captionsEmoji, captionsKeywords, dub', () => {
+  it('từ khóa: lồng tiếng (ngôn ngữ, giữ tiếng gốc), emoji, tô từ khóa; "bỏ emoji" không thêm emoji', () => {
+    expect(parseAssistantRequest('lồng tiếng sang tiếng Anh, giữ tiếng gốc nhỏ')).toEqual([
+      { kind: 'dub', language: 'en', keepOriginal: true },
+    ])
+    expect(parseAssistantRequest('dub this in japanese')).toEqual([
+      { kind: 'dub', language: 'ja', keepOriginal: false },
+    ])
+    // Lồng tiếng đã bao gồm dịch: không thêm lệnh translate.
+    expect(parseAssistantRequest('thuyết minh tiếng Anh').some((c) => c.kind === 'translate')).toBe(
+      false,
+    )
+    expect(parseAssistantRequest('thêm emoji và tô từ khóa')).toEqual([
+      { kind: 'captionsEmoji' },
+      { kind: 'captionsKeywords' },
+    ])
+    // Nhắc tới phụ đề: bật phụ đề trước rồi mới tô từ khóa.
+    expect(parseAssistantRequest('highlight keywords in the captions')).toEqual([
+      { kind: 'captions' },
+      { kind: 'captionsKeywords' },
+    ])
+    expect(parseAssistantRequest('bỏ emoji')).toEqual([])
+  })
+
+  it('normalize: dub cần mã ngôn ngữ, voiceName cắt 80 ký tự; lệnh không tham số giữ nguyên', () => {
+    expect(
+      normalizeAssistantCommands([
+        { kind: 'dub', language: 'EN', keepOriginal: true, voiceName: ` ${'a'.repeat(100)} ` },
+        { kind: 'dub', language: 'tiếng việt' },
+        { kind: 'dub' },
+        { kind: 'captionsEmoji', extra: 1 },
+        { kind: 'captionsKeywords' },
+      ]),
+    ).toEqual([
+      { kind: 'dub', language: 'en', keepOriginal: true, voiceName: 'a'.repeat(80) },
+      { kind: 'captionsEmoji' },
+      { kind: 'captionsKeywords' },
+    ])
+  })
+})

@@ -449,6 +449,13 @@ describe('registerIpc', () => {
     await call(IPC.aiEditCaptions, [{ id: 'l0', text: 'a' }, { bad: 1 }], 'viết hoa', 'vi')
     expect(editCaptions).toHaveBeenCalledWith([{ id: 'l0', text: 'a' }], 'viết hoa', 'vi')
     await expect(call(IPC.aiEditCaptions, 'x', '', '')).rejects.toThrow(/không hợp lệ/)
+    expect(
+      await call(IPC.aiCaptionEmojis, [{ id: 'l0', text: 'a' }, { bad: 1 }], 'vi-rất-dài-quá'),
+    ).toEqual([{ id: 'l0', emoji: '🔥' }])
+    expect(await call(IPC.aiCaptionKeywords, [{ id: 'l0', text: 'xin chào' }], 'vi')).toEqual([
+      { id: 'l0', keywords: ['xin'] },
+    ])
+    await expect(call(IPC.aiCaptionEmojis, 'x', 'vi')).rejects.toThrow(/không hợp lệ/)
 
     await call(IPC.aiPlanZooms, 'z.lumora', {
       instruction: 'đặt 2.5×',

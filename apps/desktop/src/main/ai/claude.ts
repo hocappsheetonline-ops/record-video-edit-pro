@@ -395,9 +395,10 @@ const COMMAND_SCHEMA: Schema = {
     },
     keepOriginal: {
       type: 'boolean',
-      description: 'dub: keep the original voice quietly under the AI voice (default false = mute it)',
+      description:
+        'dub: keep the original voice quietly under the AI voice (default false = mute it)',
     },
-    voice: {
+    voiceName: {
       type: 'string',
       description: 'dub: name of the AI voice to use (omit for the default voice)',
     },
@@ -480,7 +481,7 @@ Auto build (1.12.0):
 Captions-app style (1.13.0; all need captions, which the app generates first when missing):
 - captionsEmoji: an AI-picked emoji on the caption lines where one fits the meaning (playful short-form, vlogs).
 - captionsKeywords: AI picks 1-3 key words per caption line and the app draws them in a separate colour (numbers, product names, the point of the sentence) — makes short-form captions pop.
-- dub {language, keepOriginal, voice}: AI dubbing — translate the speech to the language (when it differs from the spoken one), read every caption line with an AI voice at the right time, mute the original microphone (keepOriginal = keep it quietly underneath); captions switch to the dubbed language. Only when the user asks for a voice in another language / dubbing / narration by AI.`
+- dub {language, keepOriginal, voiceName}: AI dubbing — translate the speech to the language (when it differs from the spoken one), read every caption line with an AI voice at the right time, mute the original microphone (keepOriginal = keep it quietly underneath); captions switch to the dubbed language. Only when the user asks for a voice in another language / dubbing / narration by AI.`
 
 export function assistantSystem(context: {
   language: string

@@ -166,6 +166,25 @@ function fakeApis() {
           ],
         })
       }
+      if (system.includes('one emoji')) {
+        const input = JSON.parse(String(body.messages[0].content)) as {
+          lines: { id: string; text: string }[]
+        }
+        return message({
+          lines: input.lines.map((l, i) => ({ id: l.id, emoji: i === 0 ? '👋' : 'not emoji' })),
+        })
+      }
+      if (system.includes('keywords to highlight')) {
+        const input = JSON.parse(String(body.messages[0].content)) as {
+          lines: { id: string; text: string }[]
+        }
+        return message({
+          lines: input.lines.map((l) => ({
+            id: l.id,
+            keywords: [l.text.split(' ')[0]!.toUpperCase(), 'rác', 'xyz'],
+          })),
+        })
+      }
       return message({ lines: [{ id: 'l0', text: 'Hello everyone.' }] })
     }
     return new Response('not found', { status: 404 })
@@ -281,6 +300,28 @@ describe('AiService', () => {
       'Vietnamese',
     )
     expect(await ai.editCaptions([], 'x', 'vi')).toEqual([])
+  })
+
+  it('emoji và từ khóa phụ đề bằng Claude: lọc kết quả, giữ id và thứ tự, rỗng không gọi mạng', async () => {
+    const { calls, fetchImpl } = fakeApis()
+    const ai = service(fetchImpl)
+    const lines = [
+      { id: 'l0', text: 'xin chào các bạn' },
+      { id: 'l1', text: 'bấm lưu' },
+    ]
+    expect(await ai.captionEmojis(lines, 'vi')).toEqual([
+      { id: 'l0', emoji: '👋' },
+      { id: 'l1', emoji: '' },
+    ])
+    expect(await ai.captionKeywords(lines, 'vi')).toEqual([
+      { id: 'l0', keywords: ['xin'] },
+      { id: 'l1', keywords: ['bấm'] },
+    ])
+    expect(calls).toHaveLength(2)
+    expect(String((calls[0]!.body as { system: string }).system)).toContain('Vietnamese')
+    expect(await ai.captionEmojis([], 'vi')).toEqual([])
+    expect(await ai.captionKeywords([], 'vi')).toEqual([])
+    expect(calls).toHaveLength(2)
   })
 
   it('chỉnh zoom bằng Claude: gửi zoom hiện có, click và lời nói; kết quả được kẹp và giữ id', async () => {

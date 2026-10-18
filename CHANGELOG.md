@@ -2,6 +2,13 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.13.0
+
+- **Phụ đề kiểu app Captions** (Thư viện → Phụ đề → AI kiểu Captions): **Thêm emoji (AI)** — Claude / Ollama chọn một emoji hợp nghĩa cho từng dòng, hiện cuối dòng và nảy nhẹ khi dòng vừa hiện; **Tô từ khóa (AI)** — chọn 1–3 từ quan trọng mỗi dòng (số, tên sản phẩm, hành động) và tô bằng **màu từ khóa** riêng (ô màu mới cạnh màu chữ / màu nhấn, mỗi mẫu có màu sẵn). Emoji và từ khóa lưu theo dòng, giữ khi đổi mẫu / tách / gộp dòng, bỏ bằng một nút; không có AI thì chọn theo từ điển tiếng Việt / tiếng Anh có sẵn.
+- **Lồng tiếng AI** (cùng mục; lệnh `dub` cho Đạo diễn AI, từ khóa "lồng tiếng sang tiếng Anh", "thuyết minh tiếng Nhật, giữ giọng gốc"): dịch lời thoại (khi chọn ngôn ngữ khác), đọc từng dòng bằng giọng AI (ElevenLabs hoặc Piper trên máy) **đúng thời điểm dòng trên video xuất**, câu dài hơn chỗ trống tới dòng sau thì đọc lại nhanh hơn tới 1,2× rồi cắt tối đa 15 %; micro gốc tắt (hoặc giữ nhỏ 15 % khi "giữ tiếng gốc"), các đoạn đọc nằm ở hàng Âm thanh (kiểu lồng tiếng, nhạc vẫn tự giảm), phụ đề đổi sang ngôn ngữ lồng tiếng. Cả bản lồng tiếng là một bước hoàn tác.
+- **6 mẫu phụ đề động mới** (tổng 14): **Máy chữ** (gõ dần từng ký tự theo lời, phông Roboto Mono), **Lượn sóng**, **Trượt lên** (dòng mờ dần vào, từ chưa nói mờ), **Bóng đổ** (chữ poster Anton bóng cứng, nảy từ đang nói), **Chuyển màu** (chữ chuyển từ màu chữ sang màu nhấn), **Truyện tranh** (Bangers, viền dày, nảy từ đang nói). Xem trước và video xuất vẽ chung một mã nên giống hệt nhau.
+- **Đạo diễn AI** hiểu thêm `captionsEmoji`, `captionsKeywords`, `dub {language, keepOriginal, voiceName}`; công thức TikTok / Shorts tự tô từ khóa; sổ tay dựng gợi ý mẫu Bóng đổ / Truyện tranh + từ khóa cho video dọc. Phần lời nhắc tĩnh (được cache) chỉ thêm mô tả lệnh, không có nội dung riêng của video.
+
 ## 1.12.0
 
 - **Tự dựng một nút** (Thư viện → AI → Tự dựng một nút): quay xong, chọn định dạng (tự chọn / YouTube / TikTok-Shorts / Vlog / Tối giản) rồi bấm **Tự dựng ngay**. App đọc lời thoại (nhận dạng nếu chưa có) và thao tác chuột, gọi AI **đúng một lần** để lập kế hoạch dựng chuyên nghiệp theo sổ tay (hook, cắt lặng / từ thừa, zoom đúng lúc, phụ đề, nhạc nền, thẻ kết), áp dụng, rồi **tự rà soát theo sổ tay mà không tốn token** (khung đúng định dạng, phụ đề, nhạc tự giảm khi nói, hook, thẻ kết, giọng sạch) và lấp chỗ thiếu. Không có AI (thiếu key Claude / Ollama tắt) thì dựng theo công thức có sẵn, hook lấy từ câu nói đầu. Cả bản dựng là một bước hoàn tác.
