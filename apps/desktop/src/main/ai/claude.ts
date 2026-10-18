@@ -488,7 +488,7 @@ Captions-app style (1.13.0; all need captions, which the app generates first whe
 - captionsEmoji: an AI-picked emoji on the caption lines where one fits the meaning (playful short-form, vlogs).
 - captionsKeywords: AI picks 1-3 key words per caption line and the app draws them in a separate colour (numbers, product names, the point of the sentence) — makes short-form captions pop.
 - dub {language, keepOriginal, voiceName}: AI dubbing — translate the speech to the language (when it differs from the spoken one), read every caption line with an AI voice at the right time, mute the original microphone (keepOriginal = keep it quietly underneath); captions switch to the dubbed language. Only when the user asks for a voice in another language / dubbing / narration by AI.`
-Text-based editing (1.13.0):
+Text-based editing (1.14.0):
 - cutText {text, all}: cut the video and audio where the narrator says exactly these words (Descript-style: deleting words from the transcript cuts the footage). Quote the words verbatim from the transcript excerpt (a sentence the user wants gone, a false start, an off-topic remark, a repeated sentence, a specific filler like "ờ để xem"); never guess words that are not in the transcript. all = every occurrence (default) or only the first. Prefer cutText over cutRange whenever the user describes the cut by what is said rather than by time.`
 
 export function assistantSystem(context: {

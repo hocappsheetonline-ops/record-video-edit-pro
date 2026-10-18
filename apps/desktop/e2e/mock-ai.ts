@@ -169,7 +169,7 @@ export async function startMockAi(): Promise<{
                 ],
               }),
             )
-          // Chỉnh sửa bằng văn bản 1.13.0: cắt đúng câu trích từ lời thoại.
+          // Chỉnh sửa bằng văn bản 1.14.0: cắt đúng câu trích từ lời thoại.
           if (goal.includes('cắt câu'))
             return json(
               200,

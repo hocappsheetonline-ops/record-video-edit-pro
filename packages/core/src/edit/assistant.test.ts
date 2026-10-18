@@ -464,7 +464,7 @@ describe('phụ đề kiểu Captions 1.13.0: captionsEmoji, captionsKeywords, d
   })
 })
 
-describe('chỉnh sửa bằng văn bản 1.13.0: cutText', () => {
+describe('chỉnh sửa bằng văn bản 1.14.0: cutText', () => {
   it('normalize: gọn khoảng trắng, cắt độ dài, mặc định mọi lần; trùng cụm (khác hoa thường) chỉ giữ một', () => {
     expect(
       normalizeAssistantCommands([
