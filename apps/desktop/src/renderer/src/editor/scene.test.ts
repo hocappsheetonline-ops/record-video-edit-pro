@@ -156,8 +156,8 @@ describe('computeScene', () => {
         hasCamera: false,
       }).captions
     expect(at(600)?.words).toEqual([
-      { text: 'Xin', active: false, spoken: true, since: 600 },
-      { text: 'chào', active: true, spoken: true, since: 100 },
+      { text: 'Xin', active: false, spoken: true, since: 600, keyword: false },
+      { text: 'chào', active: true, spoken: true, since: 100, keyword: false },
     ])
     expect(at(600)?.fontSize).toBe(54)
     // Dòng đã sửa: thời gian chia đều cho các từ, vẫn tô sáng từ đang nói.

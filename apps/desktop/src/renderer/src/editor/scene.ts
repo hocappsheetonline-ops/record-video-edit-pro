@@ -2,6 +2,7 @@ import {
   cameraAt,
   captionAt,
   captionChunk,
+  isCaptionKeyword,
   sourceToOutput,
   cameraRect,
   clickAt,
@@ -94,6 +95,8 @@ export interface CaptionWord {
   spoken: boolean
   /** Thời gian từ lúc từ bắt đầu được nói (ms, âm nếu chưa tới). */
   since: number
+  /** Từ khóa do AI chọn: vẽ bằng màu từ khóa (kiểu app Captions). */
+  keyword: boolean
 }
 
 export interface SceneCaptions {
@@ -104,6 +107,10 @@ export interface SceneCaptions {
   fontSize: number
   /** Dòng dịch hiện dưới (phụ đề song ngữ). */
   translation: string | null
+  /** Emoji của dòng (vẽ sau chữ, nảy lúc dòng bắt đầu); null nếu không có. */
+  emoji: string | null
+  /** Thời gian từ lúc dòng bắt đầu (ms) — đồng hồ cho các mẫu động (lượn sóng, nảy emoji). */
+  lineSince: number
 }
 
 export interface SceneInput {
@@ -208,11 +215,15 @@ export function computeScene(input: SceneInput): FrameScene {
           active: highlight && from + k === current,
           spoken: highlight ? from + k <= current : true,
           since: source - w.start,
+          keyword: isCaptionKeyword(w.text, line.keywords),
         })),
         style: cap.style,
         look: cap.look,
         fontSize: Math.round(Math.min(output.width, output.height) * 0.05 * cap.size),
         translation: cap.bilingual && line.translation ? line.translation : null,
+        // Emoji chỉ hiện ở nhóm từ cuối khi dòng chia thành nhiều nhóm (cuối câu).
+        emoji: line.emoji && to >= timed.length ? line.emoji : null,
+        lineSince: source - line.start,
       }
     }
   }

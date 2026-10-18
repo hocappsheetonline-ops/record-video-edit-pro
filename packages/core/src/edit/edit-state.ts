@@ -283,6 +283,17 @@ function parseCaptions(value: unknown, duration: number): CaptionsState {
             ...(typeof l.translation === 'string'
               ? { translation: l.translation.slice(0, 500) }
               : {}),
+            ...(typeof l.emoji === 'string' && l.emoji.trim() && l.emoji.length <= 16
+              ? { emoji: l.emoji.trim() }
+              : {}),
+            ...(Array.isArray(l.keywords) && l.keywords.length > 0
+              ? {
+                  keywords: l.keywords
+                    .filter((k): k is string => typeof k === 'string' && k.trim() !== '')
+                    .map((k) => k.trim().slice(0, 40))
+                    .slice(0, 8),
+                }
+              : {}),
           },
         ]
       })

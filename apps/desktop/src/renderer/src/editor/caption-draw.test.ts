@@ -6,7 +6,7 @@ import type { SceneCaptions } from './scene'
 
 /** Canvas giả: mỗi ký tự rộng 10px; ghi lại chữ vẽ (kèm màu tô) và khung nền. */
 function fakeCtx() {
-  const fills: { text: string; color: string; y: number }[] = []
+  const fills: { text: string; color: string; y: number; alpha: number; shadowX: number }[] = []
   const rects: { x: number; y: number; w: number; h: number; color: string }[] = []
   const ctx = {
     font: '',
@@ -15,7 +15,10 @@ function fakeCtx() {
     lineWidth: 1,
     shadowColor: '',
     shadowBlur: 0,
+    shadowOffsetX: 0,
     shadowOffsetY: 0,
+    globalAlpha: 1,
+    createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn(), gradient: true })),
     save: vi.fn(),
     restore: vi.fn(),
     translate: vi.fn(),
@@ -34,7 +37,13 @@ function fakeCtx() {
     strokeText: vi.fn(),
     measureText: (text: string) => ({ width: [...text].length * 10 }),
     fillText: (text: string, _x: number, y: number) =>
-      fills.push({ text, color: String(ctx.fillStyle), y }),
+      fills.push({
+        text,
+        color: String(ctx.fillStyle),
+        y,
+        alpha: ctx.globalAlpha,
+        shadowX: ctx.shadowOffsetX,
+      }),
   }
   return { ctx: ctx as unknown as Ctx & typeof ctx, fills, rects }
 }
@@ -45,11 +54,14 @@ const caption = (patch: Partial<SceneCaptions> = {}): SceneCaptions => ({
     active: i === 1,
     spoken: i <= 1,
     since: i === 1 ? 50 : 500,
+    keyword: false,
   })),
   style: 'highlight',
   look: DEFAULT_CAPTION_LOOK,
   fontSize: 40,
   translation: null,
+  emoji: null,
+  lineSince: 600,
   ...patch,
 })
 
@@ -118,7 +130,95 @@ describe('vẽ phụ đề theo mẫu', () => {
         1000,
         600,
       )
-      expect(fills.length).toBe(template === 'popWord' ? 2 : 3)
+      expect(fills.length).toBe(template === 'popWord' || template === 'typewriter' ? 2 : 3)
     }
+  })
+
+  it('từ khóa AI tô màu từ khóa (từ đang nói vẫn màu nhấn); emoji vẽ cuối dòng bằng phông emoji', () => {
+    const { ctx, fills } = fakeCtx()
+    const words = caption().words.map((w, i) => ({ ...w, keyword: i !== 1 }))
+    drawCaptionBlock(
+      ctx,
+      caption({ words, emoji: '🔥', look: { ...DEFAULT_CAPTION_LOOK, keywordColor: '#fb923c' } }),
+      1000,
+      600,
+    )
+    expect(fills.map((f) => [f.text, f.color])).toEqual([
+      ['một', '#fb923c'],
+      ['hai', '#facc15'],
+      ['ba', '#fb923c'],
+      ['🔥', '#ffffff'],
+    ])
+    expect(ctx.font).not.toContain('Emoji')
+  })
+
+  it('máy chữ gõ dần từng ký tự của các từ đã nói theo thời gian dòng', () => {
+    const look = withCaptionTemplate(DEFAULT_CAPTION_LOOK, 'typewriter')
+    const early = fakeCtx()
+    drawCaptionBlock(early.ctx, caption({ look, lineSince: 2 * 45 }), 1000, 600)
+    expect(early.fills.map((f) => f.text)).toEqual(['mộ'])
+    const mid = fakeCtx()
+    drawCaptionBlock(mid.ctx, caption({ look, lineSince: 5 * 45 }), 1000, 600)
+    expect(mid.fills.map((f) => f.text)).toEqual(['một', 'h'])
+    const late = fakeCtx()
+    drawCaptionBlock(late.ctx, caption({ look, lineSince: 5000 }), 1000, 600)
+    expect(late.fills.map((f) => f.text)).toEqual(['một', 'hai'])
+  })
+
+  it('trượt lên: dòng mờ dần vào trong 220ms, từ chưa nói mờ 30%; sóng lệch dọc từng từ', () => {
+    const { ctx, fills } = fakeCtx()
+    drawCaptionBlock(
+      ctx,
+      caption({ look: withCaptionTemplate(DEFAULT_CAPTION_LOOK, 'slideUp'), lineSince: 110 }),
+      1000,
+      600,
+    )
+    expect(fills.map((f) => Math.round(f.alpha * 100))).toEqual([50, 50, 15])
+    expect(ctx.globalAlpha).toBe(1)
+
+    const w = fakeCtx()
+    drawCaptionBlock(
+      w.ctx,
+      caption({ look: withCaptionTemplate(DEFAULT_CAPTION_LOOK, 'wave'), lineSince: 300 }),
+      1000,
+      600,
+    )
+    const ys = w.fills.map((f) => f.y)
+    expect(new Set(ys.map((y) => Math.round(y))).size).toBeGreaterThan(1)
+    expect(fills.length).toBe(3)
+  })
+
+  it('shadowPop có bóng cứng lệch; gradient tô bằng dải màu; comic viền dày và nảy từ đang nói', () => {
+    const s = fakeCtx()
+    drawCaptionBlock(
+      s.ctx,
+      caption({ look: withCaptionTemplate(DEFAULT_CAPTION_LOOK, 'shadowPop') }),
+      1000,
+      600,
+    )
+    expect(s.fills.every((f) => f.shadowX > 0)).toBe(true)
+    expect(s.ctx.shadowOffsetX).toBe(0)
+
+    const g = fakeCtx()
+    drawCaptionBlock(
+      g.ctx,
+      caption({ look: withCaptionTemplate(DEFAULT_CAPTION_LOOK, 'gradient') }),
+      1000,
+      600,
+    )
+    expect(g.ctx.createLinearGradient).toHaveBeenCalledTimes(2)
+    expect(g.fills[1]!.color).toBe(
+      withCaptionTemplate(DEFAULT_CAPTION_LOOK, 'gradient').highlightColor,
+    )
+
+    const c = fakeCtx()
+    drawCaptionBlock(
+      c.ctx,
+      caption({ look: withCaptionTemplate(DEFAULT_CAPTION_LOOK, 'comic') }),
+      1000,
+      600,
+    )
+    expect(c.ctx.scale).toHaveBeenCalled()
+    expect(c.ctx.lineWidth).toBeCloseTo(40 * 0.2)
   })
 })

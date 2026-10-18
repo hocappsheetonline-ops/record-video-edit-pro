@@ -108,6 +108,8 @@ export const IPC = {
   aiHighlights: 'ai:highlights',
   aiTranslate: 'ai:translate',
   aiEditCaptions: 'ai:edit-captions',
+  aiCaptionEmojis: 'ai:caption-emojis',
+  aiCaptionKeywords: 'ai:caption-keywords',
   aiPlanZooms: 'ai:plan-zooms',
   aiVoices: 'ai:voices',
   aiSpeak: 'ai:speak',
@@ -637,6 +639,16 @@ export interface LumoraApi {
     instruction: string,
     language: string,
   ): Promise<{ id: string; text: string }[]>
+  /** AI chọn một emoji hợp nghĩa cho từng dòng phụ đề ("" = không). */
+  captionEmojis(
+    lines: { id: string; text: string }[],
+    language: string,
+  ): Promise<{ id: string; emoji: string }[]>
+  /** AI chọn 1–3 từ khóa mỗi dòng phụ đề để tô màu riêng. */
+  captionKeywords(
+    lines: { id: string; text: string }[],
+    language: string,
+  ): Promise<{ id: string; keywords: string[] }[]>
   /** Lập lại các đoạn zoom bằng Claude theo yêu cầu; trả về danh sách zoom mới (đã hợp lệ). */
   planZooms(folder: string, input: ZoomPlanInput): Promise<ZoomRegion[]>
   /** Lưu file văn bản (phụ đề SRT/VTT, mô tả...) vào thư mục exports của dự án. */

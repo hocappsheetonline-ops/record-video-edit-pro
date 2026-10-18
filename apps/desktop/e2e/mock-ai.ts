@@ -137,6 +137,16 @@ export async function startMockAi(): Promise<{
         }
         if (system.includes('AI director')) {
           const goal = String(request.messages[0].content)
+          // Phụ đề kiểu Captions 1.13.0: lồng tiếng AI sang tiếng Anh.
+          if (goal.includes('lồng tiếng'))
+            return json(
+              200,
+              anthropicMessage({
+                summary: 'Lồng tiếng Anh bằng giọng AI',
+                questions: [],
+                commands: [{ kind: 'dub', language: 'en', keepOriginal: false, voiceName: 'Bao' }],
+              }),
+            )
           // Tự dựng một nút 1.12.0: công thức + hook + tự tìm nhạc + thẻ kết, không câu hỏi.
           if (goal.startsWith('AUTO BUILD'))
             return json(
@@ -235,6 +245,27 @@ export async function startMockAi(): Promise<{
             200,
             anthropicMessage({
               lines: input.map((l) => ({ id: l.id, text: l.text.replace(/ ừm/g, '') })),
+            }),
+          )
+        }
+        if (system.includes('one emoji')) {
+          const input = JSON.parse(request.messages[0].content).lines as { id: string }[]
+          return json(
+            200,
+            anthropicMessage({
+              lines: input.map((l, i) => ({ id: l.id, emoji: i === 0 ? '👋' : '🎬' })),
+            }),
+          )
+        }
+        if (system.includes('keywords to highlight')) {
+          const input = JSON.parse(request.messages[0].content).lines as {
+            id: string
+            text: string
+          }[]
+          return json(
+            200,
+            anthropicMessage({
+              lines: input.map((l) => ({ id: l.id, keywords: [l.text.split(' ')[0], 'rác'] })),
             }),
           )
         }

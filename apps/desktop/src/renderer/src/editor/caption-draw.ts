@@ -5,6 +5,31 @@ import type { CaptionWord, SceneCaptions } from './scene'
 /** Phông chỉ có một độ đậm (vẽ đậm hơn sẽ bị giả đậm, xấu). */
 const SINGLE_WEIGHT: readonly FontId[] = ['anton', 'bangers', 'lobster', 'pacifico']
 
+/** Phông màu cho emoji (Windows / macOS / Linux). */
+export const EMOJI_FONT = '"Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif'
+/** Mẫu máy chữ: mỗi ký tự hiện sau chừng này ms kể từ khi dòng bắt đầu. */
+export const TYPEWRITER_MS_PER_CHAR = 45
+/** Mẫu trượt lên: thời gian dòng trượt vào (ms). */
+const SLIDE_MS = 220
+
+/**
+ * Mẫu máy chữ: số ký tự (kể cả khoảng trắng) đã "gõ" ra của dòng sau `lineSince` ms.
+ * Chỉ các từ đã nói mới được gõ, nên chữ không bao giờ chạy trước lời.
+ */
+export function typewriterChars(lineSince: number): number {
+  return Math.max(0, Math.floor(lineSince / TYPEWRITER_MS_PER_CHAR))
+}
+
+/** Mẫu lượn sóng: độ lệch dọc (tỷ lệ cỡ chữ) của từ thứ `index` tại thời điểm `lineSince`. */
+export function waveOffset(lineSince: number, index: number): number {
+  return Math.sin((lineSince / 1000) * Math.PI * 2 * 1.2 + index * 0.8) * 0.12
+}
+
+/** Mẫu trượt lên: độ hiện (0-1) của dòng sau `lineSince` ms. */
+export function slideProgress(lineSince: number): number {
+  return Math.min(1, Math.max(0, lineSince) / SLIDE_MS)
+}
+
 interface Placed {
   word: CaptionWord
   x: number
@@ -55,7 +80,11 @@ export function drawCaptionBlock(ctx: Ctx, cap: SceneCaptions, width: number, he
   const { look } = cap
   const px = cap.fontSize
   const t = look.template
-  const weight = SINGLE_WEIGHT.includes(look.font) ? 400 : t === 'tiktok' ? 900 : 800
+  const weight = SINGLE_WEIGHT.includes(look.font)
+    ? 400
+    : t === 'tiktok' || t === 'shadowPop'
+      ? 900
+      : 800
   const family = fontFamily(look.font)
   ctx.save()
   ctx.font = `${weight} ${px}px ${family}`
@@ -78,7 +107,8 @@ export function drawCaptionBlock(ctx: Ctx, cap: SceneCaptions, width: number, he
   const boxH = textH + padY * 2
   const margin = height * 0.04
   const top = Math.min(height - margin - boxH, Math.max(margin, look.y * height - boxH / 2))
-  const widths = lines.map(lineWidth)
+  const emojiW = cap.emoji ? px * 1.15 : 0
+  const widths = lines.map((line, i) => lineWidth(line) + (i === lines.length - 1 ? emojiW : 0))
   ctx.font = `600 ${subPx}px ${family}`
   const subWidths = sub.map((l) => ctx.measureText(l).width)
   ctx.font = `${weight} ${px}px ${family}`
@@ -94,15 +124,31 @@ export function drawCaptionBlock(ctx: Ctx, cap: SceneCaptions, width: number, he
   const stroke =
     t === 'outline'
       ? 0.22
-      : t === 'karaoke' || t === 'popWord'
-        ? 0.16
-        : t === 'box' || t === 'neon' || t === 'underline'
-          ? 0
-          : 0.13
-  const paint = (text: string, x: number, y: number, fill: string, glow = false) => {
+      : t === 'comic'
+        ? 0.2
+        : t === 'karaoke' || t === 'popWord'
+          ? 0.16
+          : t === 'box' || t === 'neon' || t === 'underline' || t === 'shadowPop'
+            ? 0
+            : 0.13
+  const slide = t === 'slideUp' ? slideProgress(cap.lineSince) : 1
+  const typed = t === 'typewriter' ? typewriterChars(cap.lineSince) : Infinity
+  const paint = (
+    text: string,
+    x: number,
+    y: number,
+    fill: string | CanvasGradient,
+    glow = false,
+  ) => {
     if (glow) {
       ctx.shadowColor = look.highlightColor
       ctx.shadowBlur = px * 0.55
+    } else if (t === 'shadowPop') {
+      // Bóng cứng lệch xuống phải kiểu poster.
+      ctx.shadowColor = '#000000'
+      ctx.shadowBlur = 0
+      ctx.shadowOffsetX = px * 0.08
+      ctx.shadowOffsetY = px * 0.08
     } else if (t === 'underline') {
       ctx.shadowColor = 'rgba(0,0,0,0.6)'
       ctx.shadowBlur = px * 0.18
@@ -117,27 +163,52 @@ export function drawCaptionBlock(ctx: Ctx, cap: SceneCaptions, width: number, he
     ctx.fillText(text, x, y)
     ctx.shadowColor = 'transparent'
     ctx.shadowBlur = 0
+    ctx.shadowOffsetX = 0
     ctx.shadowOffsetY = 0
   }
+  /** Màu tô một từ: đang nói > từ khóa > karaoke đã nói > màu thường. */
+  const fillFor = (word: CaptionWord): string => {
+    if (t === 'karaoke')
+      return word.spoken && cap.style === 'highlight'
+        ? look.highlightColor
+        : word.keyword
+          ? look.keywordColor
+          : look.color
+    if (word.active) return t === 'tiktok' ? look.color : look.highlightColor
+    return word.keyword ? look.keywordColor : look.color
+  }
 
+  let charCursor = 0
   lines.forEach((line, i) => {
     const x0 = (width - widths[i]!) / 2
-    const y = top + padY + lineH * (i + 0.5)
-    for (const { word, x, width: w } of line) {
+    const baseY = top + padY + lineH * (i + 0.5)
+    line.forEach(({ word, x, width: w }, j) => {
       const left = x0 + x
-      if (t === 'popWord' && !word.spoken) continue
-      const fill =
-        t === 'karaoke'
-          ? word.spoken && cap.style === 'highlight'
-            ? look.highlightColor
-            : look.color
-          : word.active
-            ? t === 'tiktok'
-              ? look.color
-              : look.highlightColor
-            : look.color
+      let text = word.text
+      if (t === 'popWord' && !word.spoken) return
+      if (t === 'typewriter') {
+        // Gõ dần từng ký tự; từ chưa nói chưa gõ.
+        const from = charCursor
+        charCursor += [...word.text].length + 1
+        if (!word.spoken || typed <= from) return
+        text = [...word.text].slice(0, typed - from).join('')
+      }
+      const y =
+        baseY +
+        (t === 'wave' ? waveOffset(cap.lineSince, j) * px : 0) +
+        (t === 'slideUp' ? (1 - slide) * px * 0.5 : 0)
+      if (t === 'slideUp') ctx.globalAlpha = slide * (word.spoken ? 1 : 0.3)
+      let fill: string | CanvasGradient = fillFor(word)
+      if (t === 'gradient' && !word.active) {
+        const g = ctx.createLinearGradient(left, 0, left + w, 0)
+        g.addColorStop(0, word.keyword ? look.keywordColor : look.color)
+        g.addColorStop(1, look.highlightColor)
+        fill = g
+      }
       const scale =
-        (t === 'bounceWord' || t === 'popWord') && word.active ? wordBounce(word.since) : 1
+        (t === 'bounceWord' || t === 'popWord' || t === 'shadowPop' || t === 'comic') && word.active
+          ? wordBounce(word.since)
+          : 1
       if (t === 'tiktok' && word.active) {
         const pad = px * 0.14
         ctx.beginPath()
@@ -153,11 +224,29 @@ export function drawCaptionBlock(ctx: Ctx, cap: SceneCaptions, width: number, he
         ctx.save()
         ctx.translate(left + w / 2, y)
         ctx.scale(scale, scale)
-        paint(word.text, -w / 2, 0, fill)
+        paint(text, -w / 2, 0, fill)
         ctx.restore()
-      } else paint(word.text, left, y, fill, t === 'neon')
-    }
+      } else paint(text, left, y, fill, t === 'neon')
+      ctx.globalAlpha = 1
+    })
   })
+
+  // Emoji AI: cuối dòng cuối, nảy nhẹ khi dòng vừa hiện.
+  if (cap.emoji && emojiW > 0) {
+    const last = lines.length - 1
+    const x0 = (width - widths[last]!) / 2
+    const y = top + padY + lineH * (last + 0.5)
+    const left = x0 + lineWidth(lines[last]!) + space * 0.5
+    const scale = wordBounce(cap.lineSince)
+    ctx.save()
+    ctx.font = `${px}px ${EMOJI_FONT}`
+    ctx.translate(left + emojiW / 2, y)
+    ctx.scale(scale, scale)
+    ctx.fillStyle = '#ffffff'
+    ctx.fillText(cap.emoji, -emojiW / 2 + space * 0.25, 0)
+    ctx.restore()
+    ctx.font = `${weight} ${px}px ${family}`
+  }
 
   if (sub.length > 0) {
     ctx.font = `600 ${subPx}px ${family}`

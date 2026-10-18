@@ -2,6 +2,13 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.13.0
+
+- **Phụ đề kiểu app Captions** (Thư viện → Phụ đề → AI kiểu Captions): **Thêm emoji (AI)** — Claude / Ollama chọn một emoji hợp nghĩa cho từng dòng, hiện cuối dòng và nảy nhẹ khi dòng vừa hiện; **Tô từ khóa (AI)** — chọn 1–3 từ quan trọng mỗi dòng (số, tên sản phẩm, hành động) và tô bằng **màu từ khóa** riêng (ô màu mới cạnh màu chữ / màu nhấn, mỗi mẫu có màu sẵn). Emoji và từ khóa lưu theo dòng, giữ khi đổi mẫu / tách / gộp dòng, bỏ bằng một nút; không có AI thì chọn theo từ điển tiếng Việt / tiếng Anh có sẵn.
+- **Lồng tiếng AI** (cùng mục; lệnh `dub` cho Đạo diễn AI, từ khóa "lồng tiếng sang tiếng Anh", "thuyết minh tiếng Nhật, giữ giọng gốc"): dịch lời thoại (khi chọn ngôn ngữ khác), đọc từng dòng bằng giọng AI (ElevenLabs hoặc Piper trên máy) **đúng thời điểm dòng trên video xuất**, câu dài hơn chỗ trống tới dòng sau thì đọc lại nhanh hơn tới 1,2× rồi cắt tối đa 15 %; micro gốc tắt (hoặc giữ nhỏ 15 % khi "giữ tiếng gốc"), các đoạn đọc nằm ở hàng Âm thanh (kiểu lồng tiếng, nhạc vẫn tự giảm), phụ đề đổi sang ngôn ngữ lồng tiếng. Cả bản lồng tiếng là một bước hoàn tác.
+- **6 mẫu phụ đề động mới** (tổng 14): **Máy chữ** (gõ dần từng ký tự theo lời, phông Roboto Mono), **Lượn sóng**, **Trượt lên** (dòng mờ dần vào, từ chưa nói mờ), **Bóng đổ** (chữ poster Anton bóng cứng, nảy từ đang nói), **Chuyển màu** (chữ chuyển từ màu chữ sang màu nhấn), **Truyện tranh** (Bangers, viền dày, nảy từ đang nói). Xem trước và video xuất vẽ chung một mã nên giống hệt nhau.
+- **Đạo diễn AI** hiểu thêm `captionsEmoji`, `captionsKeywords`, `dub {language, keepOriginal, voiceName}`; công thức TikTok / Shorts tự tô từ khóa; sổ tay dựng gợi ý mẫu Bóng đổ / Truyện tranh + từ khóa cho video dọc. Phần lời nhắc tĩnh (được cache) chỉ thêm mô tả lệnh, không có nội dung riêng của video.
+
 ## 1.12.2
 
 - **Sửa lỗi kéo chọn hàng loạt trên timeline.** Khung kéo chọn trước đây chỉ nhận lớp phủ, hiệu ứng và âm thanh, nên kéo bao qua các clip trong hàng cắt hay các đoạn zoom không chọn được gì và không xóa được. Giờ khung chọn bao cả **clip và đoạn zoom** (hàng clip không có chỗ trống nên bắt đầu kéo ngay từ một clip cũng được), **Ctrl+click** thêm / bỏ từng clip hoặc zoom khỏi nhóm, menu chuột phải lên mục đang trong nhóm giữ nguyên nhóm, và **Delete / Shift+Delete / nút Xóa** xóa cả nhóm trong một bước hoàn tác (luôn giữ lại ít nhất một clip). Ctrl+A vẫn như cũ.

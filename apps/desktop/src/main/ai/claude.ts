@@ -391,10 +391,22 @@ const COMMAND_SCHEMA: Schema = {
       type: 'number',
       description: 'adjust: -1..1 (sharpen, vignette, grain: 0..1); 0 = unchanged',
     },
-    language: { type: 'string', description: 'translate: target language code (en, vi, ja…)' },
+    language: {
+      type: 'string',
+      description: 'translate / dub: target language code (en, vi, ja…)',
+    },
     bilingual: {
       type: 'boolean',
       description: 'translate: true = show the translation under the original line',
+    },
+    keepOriginal: {
+      type: 'boolean',
+      description:
+        'dub: keep the original voice quietly under the AI voice (default false = mute it)',
+    },
+    voiceName: {
+      type: 'string',
+      description: 'dub: name of the AI voice to use (omit for the default voice)',
     },
     label: { type: 'string', description: 'marker: short label' },
     row: { type: 'string', enum: [...TIMELINE_ROWS], description: 'track: timeline row' },
@@ -471,7 +483,11 @@ ${TRANSITION_KINDS.map((k) => `  ${k}: ${TRANSITION_INFO[k]}`).join('\n')}
 - outro {text, ms, template}: an end card shown during the last ms of the video (call to action: subscribe / follow / next video); always anchored to the end, even after cuts.
 Auto build (1.12.0):
 - findMusic {mood, tempo, volume}: the app searches a royalty-free music catalogue (Jamendo, Creative Commons licences that allow commercial use), downloads the best match for the mood (2-4 English words) and tempo (${MUSIC_TEMPOS.join(' / ')}), adds it as background music at volume and ducks it under speech. Prefer it over music when the user has no suitable track in the library or asks the AI to find / pick music. Mood by content: tutorial / demo = "calm corporate" or "soft lofi"; energetic short-form = "upbeat pop" or "electronic"; vlog = "warm acoustic"; reveal / launch = "epic cinematic".
-- broll {query, atMs, ms}: cover the frame with a stock video clip (Pixabay, free licence) from atMs for ms (3-6 s); query = 2-4 English keywords ("typing on laptop", "city traffic", "team meeting"). Use only while the narration is generic (an intro, a concept, a conclusion) and nothing on screen matters; never over a click, a demo step or a zoom.`
+- broll {query, atMs, ms}: cover the frame with a stock video clip (Pixabay, free licence) from atMs for ms (3-6 s); query = 2-4 English keywords ("typing on laptop", "city traffic", "team meeting"). Use only while the narration is generic (an intro, a concept, a conclusion) and nothing on screen matters; never over a click, a demo step or a zoom.
+Captions-app style (1.13.0; all need captions, which the app generates first when missing):
+- captionsEmoji: an AI-picked emoji on the caption lines where one fits the meaning (playful short-form, vlogs).
+- captionsKeywords: AI picks 1-3 key words per caption line and the app draws them in a separate colour (numbers, product names, the point of the sentence) — makes short-form captions pop.
+- dub {language, keepOriginal, voiceName}: AI dubbing — translate the speech to the language (when it differs from the spoken one), read every caption line with an AI voice at the right time, mute the original microphone (keepOriginal = keep it quietly underneath); captions switch to the dubbed language. Only when the user asks for a voice in another language / dubbing / narration by AI.`
 
 export function assistantSystem(context: {
   language: string
@@ -514,7 +530,7 @@ export const EDITING_PLAYBOOK = `Professional editing playbook (follow it whenev
 2. Hook (first 3-5 s): never open with a slow intro. Put a text hook at atMs 0 for 2-3 s that states the result or promise ("Làm X trong 30 giây", "3 lỗi khiến…"); add a quick effectAt flash/pulse or a sound at 0 if the style is energetic. Trim dead time before the first spoken words (trimStart) when the transcript shows a late start.
 3. Pacing: remove silences (>0.5 s) and filler words, then make something change on screen every 10-20 s (zoomAt on the UI detail being explained, a text label for a key step or setting, a shape arrow at a click, a sticker, a short effectAt). Speed up waiting / loading / typing spans with speedRange 2-4×; slow a key moment to 0.5× only when it matters. Hard cuts are the default everywhere: never a transition at every cut. Short-form: cuts every 2-4 s, a zoom transition 200-300 ms only at scene changes; long-form: a transition (fadeBlack / slide 400-600 ms) only at section changes (transitions, or transitionAt for one cut).
 4. Zoom and cursor: autoZoom for screen recordings with mouse data; punch in (zoomAt 1.6-2.5×, 2-4 s) where small UI details are mentioned, starting just before the narration names the target and holding through the click; keep the cursor visible with click ripples; show pressed shortcuts when the tutorial uses them. Never zoom on talking-head only footage.
-5. Captions: always on for short-form and recommended for tutorials. Short-form: tiktok / popWord template, highlight style, 2-3 words, large, slightly below centre. Long-form: box / outline template, classic style, bottom. Keep the caption language = spoken language; translate / bilingual only when asked. Add chapters for long-form videos over about 60 s.
+5. Captions: always on for short-form and recommended for tutorials. Short-form: tiktok / popWord / shadowPop / comic template, highlight style, 2-3 words, large, slightly below centre, plus captionsKeywords (and captionsEmoji when the tone is playful) so the key words pop like in the Captions app. Long-form: box / outline template, classic style, bottom. Keep the caption language = spoken language; translate / bilingual only when asked; dub only when the user wants the voice itself in another language.
 6. Audio: cleanAudio first (noise reduction, voice enhance, loudness about -14 LUFS). Background music from the library at 0.15-0.3, ducked under speech (duck level 0.2-0.3), fade in/out 1-2 s; mute the music entirely for calm tutorials if the user hints at it. Sound effects sparingly (a pop / whoosh on a reveal or key step, a success chime at the end), never over every cut.
 7. Look: a light filter (cinematic / warm / tealOrange at 0.4-0.7) for vlogs; keep screen recordings neutral (no filter, maybe small contrast / sharpen adjust). Frame: 16:9 with padding 0.04-0.08, radius, shadow and a gradient background for long-form; 9:16 fill for short-form.
 8. Privacy: blur / pixelate emails, passwords, names or tokens visible in the transcript or the goal (blur command at that time span).
@@ -671,6 +687,75 @@ If the instruction asks to replace a word, change all its occurrences, matching 
 
 export const CAPTION_FIX_INSTRUCTION =
   'Fix spelling, punctuation, capitalisation and obvious speech-to-text mistakes. Keep the wording otherwise.'
+
+export interface CaptionEmojiResponse {
+  lines: { id: string; emoji: string }[]
+}
+
+export const CAPTION_EMOJI_SCHEMA: Schema = {
+  type: 'object',
+  properties: {
+    lines: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          emoji: {
+            type: 'string',
+            description: 'One emoji that fits the line, or "" when none fits',
+          },
+        },
+        required: ['id', 'emoji'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['lines'],
+  additionalProperties: false,
+}
+
+/** Lời nhắc chọn emoji cho từng dòng phụ đề (kiểu app Captions). */
+export function captionEmojiSystem(language: string): string {
+  return `You add one emoji to subtitle lines of a short video, like the Captions app does.
+The lines are in ${languageName(language)}. Return every id in the same order with the emoji for that line, or "" (empty) when no emoji genuinely fits.
+Rules: exactly one emoji per line at most (no text, no two emoji); pick emoji that reinforce the meaning or emotion of that sentence (🔥 for something impressive, 💡 for a tip, ⚠️ for a warning, 💰 for money, 👆 for "click here", 🎯 for a goal…); leave about half of the lines empty so the emoji stay meaningful; never add emoji to lines that only connect sentences ("and then", "so") or to very technical lines where an emoji would look silly.`
+}
+
+export interface CaptionKeywordsResponse {
+  lines: { id: string; keywords: string[] }[]
+}
+
+export const CAPTION_KEYWORDS_SCHEMA: Schema = {
+  type: 'object',
+  properties: {
+    lines: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          keywords: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Up to 3 single words copied exactly from the line; [] when none',
+          },
+        },
+        required: ['id', 'keywords'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['lines'],
+  additionalProperties: false,
+}
+
+/** Lời nhắc chọn từ khóa cần tô màu trong từng dòng phụ đề (kiểu app Captions). */
+export function captionKeywordsSystem(language: string): string {
+  return `You pick the keywords to highlight in subtitle lines of a short video, like the Captions app does (key words drawn in a different colour).
+The lines are in ${languageName(language)}. Return every id in the same order with 1-3 keywords for that line, or [] when nothing stands out.
+Rules: each keyword is ONE word copied exactly as written in the line (same spelling and diacritics, punctuation may be dropped); prefer numbers, prices, product / feature names, verbs that carry the action and the word the sentence is about; never highlight filler words, pronouns or connectors; at most 3 per line and usually 1-2, so the highlight keeps its meaning.`
+}
 
 export interface ZoomPlanResponse {
   zooms: {

@@ -182,6 +182,7 @@ describe('dựng chuyên nghiệp 1.9.0: công thức, lời thoại có mốc, 
     const shorts = expandRecipe('shorts', { hasCursor: true, hasMusic: true, durationMs: 40_000 })
     expect(shorts).toContainEqual({ kind: 'aspect', aspect: '9:16' })
     expect(shorts).toContainEqual({ kind: 'captionsStyle', template: 'tiktok' })
+    expect(shorts).toContainEqual({ kind: 'captionsKeywords' })
     expect(shorts).toContainEqual({ kind: 'transitions', transition: 'zoom', ms: 300 })
     expect(shorts).toContainEqual({ kind: 'duck', enabled: true, level: 0.2 })
     expect(
@@ -280,6 +281,44 @@ describe('dựng chuyên nghiệp 1.9.0: công thức, lời thoại có mốc, 
       audio: { ...edit.audio, duck: { enabled: true, level: 0.3 } },
     }
     expect(editSummary(rich)).toContain('filter warm; 1 marker(s); music ducking on')
+    const dubbed: EditState = {
+      ...edit,
+      audioClips: [
+        {
+          id: 'v1',
+          file: 'tts.mp3',
+          name: 'Hello',
+          kind: 'voice',
+          start: 0,
+          offset: 0,
+          duration: 900,
+          sourceDuration: 900,
+          volume: 1,
+          fadeIn: 0,
+          fadeOut: 0,
+          loop: false,
+        },
+      ],
+      captions: {
+        ...edit.captions,
+        enabled: true,
+        lines: [
+          {
+            id: 'l',
+            start: 0,
+            end: 800,
+            text: 'Hello',
+            words: [],
+            edited: false,
+            emoji: '👋',
+            keywords: ['Hello'],
+          },
+        ],
+      },
+    }
+    const summary = editSummary(dubbed)
+    expect(summary).toContain('1 voice-over / dubbing clip(s)')
+    expect(summary).toContain('emoji + keywords')
   })
 })
 

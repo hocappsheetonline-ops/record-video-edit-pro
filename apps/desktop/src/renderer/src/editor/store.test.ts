@@ -616,6 +616,116 @@ describe('lệnh mở rộng của Đạo diễn AI (timeline, âm thanh, khung,
     expect(s().edit!.captions).toMatchObject({ enabled: false, lines: [] })
   })
 
+  it('captionsEmoji / captionsKeywords: chưa có phụ đề thì bỏ qua; có thì AI gắn emoji và từ khóa, không AI thì dùng từ điển', async () => {
+    expect(
+      await s().applyAssistantCommands([{ kind: 'captionsEmoji' }, { kind: 'captionsKeywords' }]),
+    ).toEqual([
+      { step: 'captionsEmoji', status: 'skipped', detail: 'no_captions' },
+      { step: 'captionsKeywords', status: 'skipped', detail: 'no_captions' },
+    ])
+    s().change((e) => ({
+      ...e,
+      captions: {
+        ...e.captions,
+        enabled: true,
+        lines: [
+          { id: 'l1', start: 1500, end: 2300, text: 'Xin chào các bạn', words: [], edited: false },
+          { id: 'l2', start: 3500, end: 4300, text: 'Bấm Lưu nhé', words: [], edited: false },
+        ],
+      },
+    }))
+    expect(
+      await s().applyAssistantCommands([{ kind: 'captionsEmoji' }, { kind: 'captionsKeywords' }]),
+    ).toEqual([
+      { step: 'captionsEmoji', status: 'done', detail: 2 },
+      { step: 'captionsKeywords', status: 'done', detail: 2 },
+    ])
+    expect(s().edit!.captions.lines.map((l) => [l.emoji, l.keywords])).toEqual([
+      ['🔥', ['Xin']],
+      ['🔥', ['Bấm']],
+    ])
+    // Không có AI (lỗi key): từ điển emoji / quy tắc từ khóa cục bộ.
+    api.captionEmojis.mockRejectedValue(new Error('no_api_key'))
+    api.captionKeywords.mockRejectedValue(new Error('no_api_key'))
+    expect(await s().addCaptionEmojis()).toBe(2)
+    expect(await s().addCaptionKeywords()).toBe(1)
+    expect(s().edit!.captions.lines.map((l) => [l.emoji, l.keywords])).toEqual([
+      ['👋', undefined],
+      ['👆', ['Lưu']],
+    ])
+    s().undo()
+    expect(s().edit!.captions.lines[1]!.keywords).toEqual(['Bấm'])
+  })
+
+  it('dub: đọc từng dòng đúng thời điểm, đọc nhanh hơn khi câu dài, tắt mic, phụ đề sang ngôn ngữ đích', async () => {
+    expect(
+      await s().applyAssistantCommands([{ kind: 'dub', language: 'en', keepOriginal: false }]),
+    ).toEqual([{ step: 'dub', status: 'skipped', detail: 'no_captions' }])
+    s().change((e) => ({
+      ...e,
+      captions: {
+        ...e.captions,
+        enabled: true,
+        language: 'vi',
+        lines: [
+          { id: 'l1', start: 1500, end: 2300, text: 'câu dài', words: [], edited: false },
+          { id: 'l2', start: 3500, end: 4300, text: 'câu ngắn', words: [], edited: false },
+        ],
+      },
+    }))
+    // Câu đầu đọc hết 2400 ms ở tốc độ 1 nhưng chỗ trống tới dòng sau chỉ 2000 ms.
+    api.speak.mockImplementation(async (_folder, text, _voice, options) => ({
+      file: `tts-${text.replace(/\W+/g, '-')}.mp3`,
+      name: text,
+      durationMs: Math.round((text.includes('dài') ? 2400 : 900) / (options?.speed ?? 1)),
+    }))
+    expect(
+      await s().applyAssistantCommands([
+        { kind: 'dub', language: 'en', keepOriginal: false, voiceName: 'bao' },
+      ]),
+    ).toEqual([{ step: 'dub', status: 'done', detail: 2 }])
+    expect(api.translateLines).toHaveBeenCalledWith(
+      [
+        { id: 'l1', text: 'câu dài' },
+        { id: 'l2', text: 'câu ngắn' },
+      ],
+      'en',
+    )
+    // 2 câu + 1 lần đọc lại nhanh hơn (1.2×) cho câu dài, bằng giọng "Bao".
+    expect(api.speak).toHaveBeenCalledTimes(3)
+    expect(api.speak.mock.calls.every((c) => c[2] === 'voice-bao')).toBe(true)
+    expect(api.speak.mock.calls[1]![3]).toMatchObject({ speed: 1.2 })
+    const voice = s().edit!.audioClips.filter((c) => c.kind === 'voice')
+    expect(voice.map((c) => [c.start, c.duration, c.sourceDuration])).toEqual([
+      [1500, 2000, 2000],
+      [3500, 900, 900],
+    ])
+    expect(s().edit!.audio.mic).toBe(0)
+    expect(s().edit!.captions).toMatchObject({
+      language: 'en',
+      lines: [
+        { text: 'EN: câu dài', edited: true },
+        { text: 'EN: câu ngắn', edited: true },
+      ],
+    })
+    // Một bước hoàn tác trả lại tất cả.
+    s().undo()
+    expect(s().edit!.audioClips.filter((c) => c.kind === 'voice')).toHaveLength(0)
+    expect(s().edit!.captions.language).toBe('vi')
+    expect(s().edit!.audio.mic).toBeGreaterThan(0)
+    // Giữ tiếng gốc: mic nhỏ lại chứ không tắt; cùng ngôn ngữ thì không dịch.
+    api.translateLines.mockClear()
+    await s().dubCaptions({ language: 'vi', keepOriginal: true })
+    expect(api.translateLines).not.toHaveBeenCalled()
+    expect(s().edit!.audio.mic).toBeCloseTo(0.15)
+    expect(s().edit!.captions.lines[0]!.text).toBe('câu dài')
+    // Giọng không có: báo lỗi rõ.
+    api.listVoices.mockResolvedValue([])
+    expect(
+      await s().applyAssistantCommands([{ kind: 'dub', language: 'en', keepOriginal: false }]),
+    ).toEqual([{ step: 'dub', status: 'error', detail: 'no_voice' }])
+  })
+
   it('marker / chapters thêm mốc; track ẩn hàng; clear theo loại và khôi phục bản quay', async () => {
     s().setTime(2000)
     s().splitAtPlayhead()
