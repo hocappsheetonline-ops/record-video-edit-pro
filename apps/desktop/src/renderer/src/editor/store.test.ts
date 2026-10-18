@@ -67,6 +67,46 @@ describe('editor store', () => {
     expect(s().edit!.clips).toHaveLength(1)
   })
 
+  it('chọn nhiều clip và zoom (kéo khung / Ctrl+click): Delete xóa cả nhóm, giữ lại ít nhất một clip', () => {
+    const s = useEditorStore.getState
+    s().setTime(2000)
+    s().splitAtPlayhead()
+    s().setTime(4000)
+    s().splitAtPlayhead()
+    const clips = s().edit!.clips
+    expect(clips).toHaveLength(4)
+    const zoomId = s().edit!.zooms[0]!.id
+    // Chọn clip bằng click rồi Ctrl+click thêm clip và zoom.
+    s().select({ kind: 'clip', id: clips[0]!.id })
+    expect(s().selected).toEqual([{ kind: 'clip', id: clips[0]!.id }])
+    s().toggleSelect({ kind: 'clip', id: clips[1]!.id })
+    s().toggleSelect({ kind: 'zoom', id: zoomId })
+    expect(s().selected).toHaveLength(3)
+    expect(s().isSelected('zoom', zoomId)).toBe(true)
+    s().deleteSelection()
+    expect(s().edit!.clips.map((c) => c.id)).toEqual([clips[2]!.id, clips[3]!.id])
+    expect(s().edit!.zooms).toHaveLength(0)
+    expect(s().selected).toHaveLength(0)
+    expect(s().selection).toBeNull()
+    // Một bước hoàn tác trả lại cả nhóm.
+    s().undo()
+    expect(s().edit!.clips).toHaveLength(4)
+    expect(s().edit!.zooms).toHaveLength(1)
+    // Kéo khung chọn hết mọi clip: xóa vẫn giữ lại clip đầu.
+    s().selectMany(s().edit!.clips.map((c) => ({ kind: 'clip' as const, id: c.id })))
+    s().deleteSelection()
+    expect(s().edit!.clips).toHaveLength(1)
+    expect(s().edit!.clips[0]!.id).toBe(clips[0]!.id)
+    // Shift+Delete với nhóm clip cũng xóa (clip không có khoảng trống để dồn).
+    s().undo()
+    s().selectMany([
+      { kind: 'clip', id: clips[1]!.id },
+      { kind: 'clip', id: clips[2]!.id },
+    ])
+    s().rippleDeleteSelection()
+    expect(s().edit!.clips.map((c) => c.id)).toEqual([clips[0]!.id, clips[3]!.id])
+  })
+
   it('kéo thanh trượt liên tục chỉ tính một bước hoàn tác', () => {
     const s = useEditorStore.getState
     for (const padding of [0.1, 0.12, 0.15])
