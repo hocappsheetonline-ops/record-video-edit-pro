@@ -2,6 +2,10 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.12.2
+
+- **Sửa lỗi kéo chọn hàng loạt trên timeline.** Khung kéo chọn trước đây chỉ nhận lớp phủ, hiệu ứng và âm thanh, nên kéo bao qua các clip trong hàng cắt hay các đoạn zoom không chọn được gì và không xóa được. Giờ khung chọn bao cả **clip và đoạn zoom** (hàng clip không có chỗ trống nên bắt đầu kéo ngay từ một clip cũng được), **Ctrl+click** thêm / bỏ từng clip hoặc zoom khỏi nhóm, menu chuột phải lên mục đang trong nhóm giữ nguyên nhóm, và **Delete / Shift+Delete / nút Xóa** xóa cả nhóm trong một bước hoàn tác (luôn giữ lại ít nhất một clip). Ctrl+A vẫn như cũ.
+
 ## 1.12.1
 
 - **Sửa lỗi mất hình (đen màn hình) ở mỗi đoạn cắt.** Lệnh "thêm chuyển cảnh" (trợ lý từ khóa, Đạo diễn AI, công thức TikTok / Shorts, nút trong Thư viện) trước đây đặt chuyển cảnh — mặc định là Mờ qua đen 600 ms — ở **mọi** chỗ nối, kể cả hàng chục chỗ cắt khoảng lặng và chỗ tách clip tại chỗ, nên video cứ vài giây lại tối đen một nhịp. Giờ chuyển cảnh chỉ đặt ở **chỗ đổi cảnh**: giữa hai đoạn quay khác nhau hoặc nơi bỏ đi một đoạn dài (từ 3 giây); chỗ cắt lặng, cắt từ thừa, tách tại chỗ hay khung đứng yên thì hình vẫn liền nên cắt thẳng. Muốn đặt ở mọi chỗ nối thì nói rõ ("chuyển cảnh zoom ở mọi chỗ nối", Đạo diễn AI dùng `transitions {all: true}`) hoặc bấm **Đặt ở cả … chỗ nối** trong Thư viện → Chuyển cảnh, cạnh nút mới **Đặt ở … chỗ đổi cảnh**. Không có chỗ đổi cảnh thì lệnh báo bỏ qua thay vì bôi đen cả video. Chuyển cảnh đã đặt trong dự án cũ không tự đổi: bấm **Xóa chuyển cảnh** (hoặc nói "bỏ chuyển cảnh") rồi đặt lại.
