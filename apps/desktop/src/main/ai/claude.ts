@@ -12,10 +12,12 @@ import {
   EFFECT_INFO,
   EFFECT_KINDS,
   FONT_IDS,
+  MUSIC_TEMPOS,
   OVERLAY_POSITIONS,
   RECIPE_STYLES,
   RESOLUTIONS,
   SHAPES,
+  SHORTS_MODES,
   SOUND_EFFECT_IDS,
   SPEED_CURVE_PRESETS,
   TEXT_TEMPLATE_IDS,
@@ -46,19 +48,51 @@ export function createClaude(apiKey: string, fetchImpl?: FetchLike): Anthropic {
 type Schema = Record<string, unknown>
 
 /**
+ * Lời nhắc hệ thống hai phần để tiết kiệm token: `static` giống hệt nhau giữa các lần gọi (vai
+ * trò, tập lệnh, sổ tay dựng) được Claude cache (prompt caching, rẻ hơn ~90% từ lần thứ hai);
+ * `dynamic` là ngữ cảnh riêng của video (lời thoại, bấm chuột, kho nhạc…).
+ */
+export interface SplitSystem {
+  static: string
+  dynamic: string
+}
+export type SystemPrompt = string | SplitSystem
+
+/** Lời nhắc hệ thống dạng một chuỗi (Ollama, test, log). */
+export function systemText(system: SystemPrompt): string {
+  return typeof system === 'string' ? system : `${system.static}\n\n${system.dynamic}`
+}
+
+/** Khối lời nhắc hệ thống gửi Claude: phần tĩnh gắn `cache_control` để được cache. */
+export function systemBlocks(
+  system: SystemPrompt,
+): string | { type: 'text'; text: string; cache_control?: { type: 'ephemeral' } }[] {
+  if (typeof system === 'string') return system
+  return [
+    { type: 'text', text: system.static, cache_control: { type: 'ephemeral' } },
+    { type: 'text', text: system.dynamic },
+  ]
+}
+
+/**
  * Gọi Claude và nhận kết quả JSON đúng schema (structured outputs).
  * Bật `fallbacks: "default"`: nếu bộ lọc an toàn từ chối, máy chủ tự chạy lại trên model dự phòng phù hợp.
  */
 export async function askJson<T>(
   client: Anthropic,
-  options: { system: string; user: string; schema: Schema; effort?: 'low' | 'medium' | 'high' },
+  options: {
+    system: SystemPrompt
+    user: string
+    schema: Schema
+    effort?: 'low' | 'medium' | 'high'
+  },
 ): Promise<T> {
   const response = await client.beta.messages.create({
     model: CLAUDE_MODEL,
     max_tokens: 16000,
     betas: [FALLBACK_BETA],
     fallbacks: 'default',
-    system: options.system,
+    system: systemBlocks(options.system),
     messages: [{ role: 'user', content: options.user }],
     output_config: {
       effort: options.effort ?? 'medium',
@@ -242,9 +276,25 @@ const COMMAND_SCHEMA: Schema = {
     },
     query: {
       type: 'string',
-      description: 'music: words from the name of a track in the user music library',
+      description:
+        'music: words from the name of a track in the user music library; broll: short English stock-video keywords',
     },
-    volume: { type: 'number', description: 'music: background music volume 0.05-1 (0.4 default)' },
+    volume: {
+      type: 'number',
+      description:
+        'music / findMusic: background music volume 0.05-1 (0.4 default; 0.2-0.25 under speech)',
+    },
+    mood: {
+      type: 'string',
+      description:
+        'findMusic: 2-4 English words for the mood / genre of the background music (e.g. "upbeat corporate", "calm lofi", "epic cinematic")',
+    },
+    tempo: {
+      type: 'string',
+      enum: [...MUSIC_TEMPOS],
+      description: 'findMusic: tempo of the background music',
+    },
+    count: { type: 'integer', description: 'shorts (highlights): how many shorts to make, 1-5' },
     template: {
       type: 'string',
       enum: [...new Set<string>([...CAPTION_TEMPLATES, ...TEXT_TEMPLATE_IDS])],
@@ -347,8 +397,9 @@ const COMMAND_SCHEMA: Schema = {
     locked: { type: 'boolean', description: 'track: lock the row' },
     mode: {
       type: 'string',
-      enum: ['fixed', 'chapters', ...BLUR_MODES],
-      description: 'shorts: how to split (fixed / chapters); blur: blur or pixelate (mosaic)',
+      enum: [...SHORTS_MODES, ...BLUR_MODES],
+      description:
+        'shorts: how to split (fixed / chapters / highlights = AI picks the best self-contained moments); blur: blur or pixelate (mosaic)',
     },
     seconds: { type: 'integer', description: 'shorts: length of each short in seconds (fixed)' },
     vertical: { type: 'boolean', description: 'shorts: 9:16 frame for each short' },
@@ -399,7 +450,7 @@ Markers & rows:
 - marker {atMs, label}: a timeline marker. chapters: create chapter markers from the transcript (needs captions / transcript).
 - track {row, hidden, muted, locked}: hide / mute / lock a timeline row (${TIMELINE_ROWS.join(', ')}).
 - clear {target}: remove every item of one kind (${CLEAR_TARGETS.join(', ')}); "cuts" restores the full recording; "captions" turns captions off; "filter" / "adjust" reset the colour look.
-- shorts {mode, seconds, vertical}: split the video into short clips, each becoming its own project (mode fixed = every N seconds, chapters = by AI chapters).
+- shorts {mode, seconds, vertical, count}: split the video into short clips, each becoming its own project (mode fixed = every N seconds, chapters = by AI chapters, highlights = AI picks the count best self-contained moments of 15-90 s, each with a hook, vertical TikTok captions and the same look).
 Pro editing (1.9.0):
 - recipe {style}: a whole professional recipe in one command (${RECIPE_STYLES.join(' / ')}): youtube = long-form 16:9 tutorial (silence + filler cuts, clean voice, smooth cursor zoom, pressed keys, box captions, quiet ducked music, chapters); shorts = vertical TikTok / Shorts / Reels (9:16, fast pacing, big TikTok captions, zoom transitions, ducked music); vlog = talking head (karaoke captions, warm look, soft music); clean = minimal (silence cuts, clean voice, outline captions). Explicit commands in the same plan override the recipe's.
 - effectAt {effect, atMs, ms, intensity}: one visual effect at a time (a pattern interrupt: flash / shake / zoomPunch on a reveal, confetti / sparkle on a success, bw / vintage for a flashback, spotlight to focus one spot). Keep most effects 0.5-3 s; strobe / shake under 1 s; colour tints (warm, cool, bw, letterbox, grain) may run over a whole segment.
@@ -411,7 +462,10 @@ ${EFFECT_KINDS.map((k) => `  ${k}: ${EFFECT_INFO[k]}`).join('\n')}
 Transition catalogue (name: look; when to use):
 ${TRANSITION_KINDS.map((k) => `  ${k}: ${TRANSITION_INFO[k]}`).join('\n')}
 - captionsLook {font, color, highlightColor, uppercase, maxWords, style}: caption typography; style highlight = word by word (short-form), classic = whole line (long-form, tutorials).
-- outro {text, ms, template}: an end card shown during the last ms of the video (call to action: subscribe / follow / next video); always anchored to the end, even after cuts.`
+- outro {text, ms, template}: an end card shown during the last ms of the video (call to action: subscribe / follow / next video); always anchored to the end, even after cuts.
+Auto build (1.12.0):
+- findMusic {mood, tempo, volume}: the app searches a royalty-free music catalogue (Jamendo, Creative Commons licences that allow commercial use), downloads the best match for the mood (2-4 English words) and tempo (${MUSIC_TEMPOS.join(' / ')}), adds it as background music at volume and ducks it under speech. Prefer it over music when the user has no suitable track in the library or asks the AI to find / pick music. Mood by content: tutorial / demo = "calm corporate" or "soft lofi"; energetic short-form = "upbeat pop" or "electronic"; vlog = "warm acoustic"; reveal / launch = "epic cinematic".
+- broll {query, atMs, ms}: cover the frame with a stock video clip (Pixabay, free licence) from atMs for ms (3-6 s); query = 2-4 English keywords ("typing on laptop", "city traffic", "team meeting"). Use only while the narration is generic (an intro, a concept, a conclusion) and nothing on screen matters; never over a click, a demo step or a zoom.`
 
 export function assistantSystem(context: {
   language: string
@@ -460,7 +514,8 @@ export const EDITING_PLAYBOOK = `Professional editing playbook (follow it whenev
 8. Privacy: blur / pixelate emails, passwords, names or tokens visible in the transcript or the goal (blur command at that time span).
 9. Ending: a short outro / CTA card in the last 3-5 s (subscribe, follow, next video, link in description), optionally a marker at the CTA; fade the music out. Short-form: end right after the payoff, no long goodbye (trimEnd if needed).
 10. Order of commands: cuts (cutSilences, removeFillers, trimStart/End, cutRange, speedRange) → audio (cleanAudio, music, duck, fade) → zoom & motion → frame & look → captions → overlays (text, sticker, shape, blur, effectAt, outro) → markers / chapters → export last. The app runs the AI steps (silence / filler cuts, autoZoom, captions, cleanAudio) first, so every atMs / fromMs / toMs you give must already be on the cut video: when you also cut silences, prefer times from the transcript excerpt at the start of the video, use outro for the ending, and avoid exact times late in the video.
-11. Say what you did in the summary in the user's language, briefly; do not ask questions when a sensible professional default exists.`
+11. Say what you did in the summary in the user's language, briefly; do not ask questions when a sensible professional default exists.
+12. AUTO BUILD (the user pressed one button after recording): deliver the whole edit in one plan with no questions, in this order: recipe for the format → trimStart if the transcript starts late → text hook at 0 (from the first thing the transcript promises) → 2-4 zoomAt / text labels / shape arrows at real clicks and transcript moments → speedRange over obvious waiting → findMusic (mood + tempo by content) with duck → optional broll in generic narration → blur for any secret visible in the transcript → outro CTA. Keep it to about 8-15 commands; the app reviews the result against this playbook afterwards and fills what is missing.`
 
 /**
  * Lời nhắc hệ thống của đạo diễn AI: giải thích tập lệnh, sổ tay dựng chuyên nghiệp và toàn bộ ngữ
@@ -468,6 +523,15 @@ export const EDITING_PLAYBOOK = `Professional editing playbook (follow it whenev
  * thói quen + quy tắc đã dặn, hội thoại gần đây); câu yêu cầu đi riêng ở lượt người dùng.
  */
 export function directorSystem(context: DirectorContext): string {
+  return systemText(directorPrompt(context))
+}
+
+/**
+ * Lời nhắc đạo diễn tách hai phần: `static` (vai trò, cách trả lời, tập lệnh, sổ tay; không chứa
+ * gì của video nên giống hệt nhau giữa mọi lần gọi → được cache) và `dynamic` (ngôn ngữ, thời
+ * lượng, lời thoại, bấm chuột, kho nhạc, dự án, trí nhớ, hội thoại).
+ */
+export function directorPrompt(context: DirectorContext): SplitSystem {
   const language = languageName(context.language)
   const list = (items: string[], empty: string) =>
     items.length > 0 ? items.map((name) => `- ${name}`).join('\n') : empty
@@ -481,19 +545,20 @@ export function directorSystem(context: DirectorContext): string {
     context.clicks && context.clicks.length > 0
       ? context.clicks.map((ms) => (ms / 1000).toFixed(1) + ' s').join(', ')
       : '(none)'
-  return `You are the AI director of a screen-recording video editor. The user states a goal for their video, in ${language} or English; you turn it into a plan the app executes, editing like a professional YouTube / TikTok editor.
-Video: duration ${Math.round(context.durationMs / 1000)} s; transcript ${context.hasTranscript ? 'available' : 'not available yet (the app transcribes first when captions, cutSilences or removeFillers are requested)'}; mouse / cursor data ${context.hasCursor ? 'available' : 'not available (autoZoom will do nothing)'}.
-Current edit: ${context.edit?.trim() || '(fresh recording, nothing edited yet)'}
+  const staticPart = `You are the AI director of a screen-recording video editor. The user states a goal for their video, in their own language or English; you turn it into a plan the app executes, editing like a professional YouTube / TikTok editor.
 
 Reply with:
-- summary: one short sentence in ${language} restating what you are going to do (the user confirms it before anything runs).
-- questions: at most 2 clarifying questions, in ${language}, ONLY when the request is genuinely ambiguous (e.g. the user wants background music but the music library is empty). Otherwise an empty list: while there are questions nothing runs, so never ask when a sensible default exists.
+- summary: one short sentence in the user's language restating what you are going to do (the user confirms it before anything runs).
+- questions: at most 2 clarifying questions, in the user's language, ONLY when the request is genuinely ambiguous (e.g. the user wants a specific library track but the music library is empty). Otherwise an empty list: while there are questions nothing runs, so never ask when a sensible default exists.
 - commands: editing commands from the fixed set below, in the order they should run. Include what the user asked for, what the user's standing rules imply, and, when the user asks for a complete / professional edit or gives only a goal, the steps of the playbook that fit this video. Empty list if nothing applies.
 
 Commands:
 ${COMMAND_GUIDE}
 
-${EDITING_PLAYBOOK}
+${EDITING_PLAYBOOK}`
+  const dynamicPart = `User language: ${language}.
+Video: duration ${Math.round(context.durationMs / 1000)} s; transcript ${context.hasTranscript ? 'available' : 'not available yet (the app transcribes first when captions, cutSilences or removeFillers are requested)'}; mouse / cursor data ${context.hasCursor ? 'available' : 'not available (autoZoom will do nothing)'}.
+Current edit: ${context.edit?.trim() || '(fresh recording, nothing edited yet)'}
 
 Transcript with output-video timestamps [m:ss.s] (place hooks, labels, zooms, markers and blur at the real moments; empty when not transcribed yet):
 ${context.transcript?.trim() || '(none)'}
@@ -512,6 +577,48 @@ ${context.memory.trim() || '(none)'}
 
 Recent conversation about this project (the new goal may continue it):
 ${history}`
+  return { static: staticPart, dynamic: dynamicPart }
+}
+
+/** Các đoạn hay nhất để tách thành video ngắn (xem `normalizeHighlights` trong core). */
+export interface HighlightsResponse {
+  segments: { start_seconds: number; end_seconds: number; hook: string; title: string }[]
+}
+
+export const HIGHLIGHTS_SCHEMA: Schema = {
+  type: 'object',
+  properties: {
+    segments: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          start_seconds: { type: 'number', description: 'Start of the segment (seconds)' },
+          end_seconds: { type: 'number', description: 'End of the segment (seconds)' },
+          hook: {
+            type: 'string',
+            description:
+              'A 3-8 word hook shown at the start of the short, in the transcript language',
+          },
+          title: { type: 'string', description: 'A short title for the short (max 60 characters)' },
+        },
+        required: ['start_seconds', 'end_seconds', 'hook', 'title'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['segments'],
+  additionalProperties: false,
+}
+
+export function highlightsSystem(language: string, count: number): string {
+  return `You pick the best moments of a screen-recorded / talking video to publish as vertical shorts (TikTok / Shorts / Reels).
+The transcript has [m:ss] timestamps every few seconds. Choose up to ${count} self-contained segments:
+- each 20-60 seconds long (never under 15 or over 90), starting at the beginning of a sentence and ending at the end of one, with a clear payoff (a tip, a result, a surprising point, a complete step);
+- segments must not overlap and should be spread over the video; prefer moments with concrete value over introductions and goodbyes;
+- hook: a 3-8 word line in ${languageName(language)} that makes the viewer stay (state the result or the problem, no clickbait);
+- title: a short title in ${languageName(language)}.
+Return the segments in chronological order.`
 }
 
 export interface TranslateResponse {

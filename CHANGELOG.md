@@ -2,6 +2,14 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.12.0
+
+- **Tự dựng một nút** (Thư viện → AI → Tự dựng một nút): quay xong, chọn định dạng (tự chọn / YouTube / TikTok-Shorts / Vlog / Tối giản) rồi bấm **Tự dựng ngay**. App đọc lời thoại (nhận dạng nếu chưa có) và thao tác chuột, gọi AI **đúng một lần** để lập kế hoạch dựng chuyên nghiệp theo sổ tay (hook, cắt lặng / từ thừa, zoom đúng lúc, phụ đề, nhạc nền, thẻ kết), áp dụng, rồi **tự rà soát theo sổ tay mà không tốn token** (khung đúng định dạng, phụ đề, nhạc tự giảm khi nói, hook, thẻ kết, giọng sạch) và lấp chỗ thiếu. Không có AI (thiếu key Claude / Ollama tắt) thì dựng theo công thức có sẵn, hook lấy từ câu nói đầu. Cả bản dựng là một bước hoàn tác.
+- **Tiết kiệm token**: lời nhắc Đạo diễn AI tách làm hai khối — phần tĩnh (vai trò, tập lệnh, sổ tay; ≈ 3 000 token, giống hệt nhau giữa mọi lần gọi) gắn `cache_control` để Claude **cache** (từ lần thứ hai chỉ trả ≈ 10 % giá), phần động chỉ còn ngữ cảnh của video; tự dựng không gửi hội thoại cũ; chọn đoạn hay cho shorts chạy với effort thấp.
+- **AI tự tìm nhạc nền miễn phí bản quyền** (lệnh `findMusic` cho Đạo diễn AI, từ khóa "tự tìm nhạc nền vui"): tìm trên **Jamendo** theo tâm trạng + nhịp, **chỉ lấy bài Creative Commons cho phép dùng thương mại** (loại NC) và cho tải về, ưu tiên không lời và dài tương đương video, tải vào kho nhạc kèm **dòng ghi nguồn** ("Tên bài" by Nghệ sĩ — CC BY 3.0, Jamendo) hiện sau khi dựng với nút sao chép để dán vào mô tả video. Cần **key Jamendo** (Client ID miễn phí ở devportal.jamendo.com, nhập ở Cài đặt → API key); không có key thì dùng kho nhạc của bạn. Hai video liền nhau không trùng bài.
+- **Chèn tư liệu (b-roll)** (lệnh `broll`): AI chọn thời điểm lời thoại nói chung chung, app tìm video stock trên **Pixabay**, tải về và phủ kín khung trong 3–6 giây, không tiếng (cần key Pixabay). Tự dựng có ô bật / tắt.
+- **Chia video dài thành 2–3 video ngắn hay nhất** (`shorts` chế độ `highlights`; "chia video này ra làm 2-3 video short"): AI đọc lời thoại, chọn các đoạn trọn ý 15–90 giây có kết quả rõ, mỗi đoạn thành một dự án riêng **dọc 9:16**, **phụ đề TikTok**, **hook** do AI viết hiện 2,5 giây đầu, tên dự án theo tên đoạn. Tự dựng có ô "Tách thêm N video ngắn hay nhất".
+
 ## 1.11.0
 
 - **Thư viện hiệu ứng 27 kiểu, chia 5 nhóm** (Thư viện → Hiệu ứng): thêm 17 hiệu ứng mới kiểu CapCut — **Chuyển động**: Phóng nhấn, Nhảy nhún, Gương đối xứng; **Glitch & retro**: Tách màu RGB, Khảm ô, Hạt phim; **Màu sắc**: Đảo màu, Hai tông màu, Tông ấm, Tông lạnh; **Ánh sáng & khung**: Nhấp nháy nhanh, Tỏa sáng, Lọt sáng, Đèn rọi, Dải điện ảnh; **Hạt bay**: Lấp lánh, Tuyết rơi. Mọi hiệu ứng tính theo thời gian trên cùng một canvas nên tua tới đâu cũng đúng và **video xuất giống hệt xem trước**.

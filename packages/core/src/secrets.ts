@@ -1,5 +1,8 @@
-/** API key người dùng tự nhập: AI (ElevenLabs, Claude) và kho nội dung (Pixabay). */
-export const SECRET_KEYS = ['elevenlabs', 'anthropic', 'pixabay'] as const
+/**
+ * API key người dùng tự nhập: AI (ElevenLabs, Claude), kho nội dung (Pixabay: video / ảnh) và kho
+ * nhạc miễn phí bản quyền (Jamendo: client_id của ứng dụng, 8 ký tự).
+ */
+export const SECRET_KEYS = ['elevenlabs', 'anthropic', 'pixabay', 'jamendo'] as const
 export type SecretKey = (typeof SECRET_KEYS)[number]
 
 export function isSecretKey(value: unknown): value is SecretKey {
@@ -19,7 +22,8 @@ export type KeyFormatError = 'empty' | 'whitespace' | 'too_short' | 'wrong_prefi
 export function checkKeyFormat(key: SecretKey, secret: string): KeyFormatError | null {
   if (secret.length === 0) return 'empty'
   if (/\s/.test(secret)) return 'whitespace'
-  if (secret.length < 20) return 'too_short'
+  // Jamendo client_id chỉ 8 ký tự hex; các key khác đều dài hơn 20.
+  if (secret.length < (key === 'jamendo' ? 6 : 20)) return 'too_short'
   if (key === 'anthropic' && !secret.startsWith('sk-ant-')) return 'wrong_prefix'
   return null
 }

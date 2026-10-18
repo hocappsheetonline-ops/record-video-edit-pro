@@ -282,3 +282,172 @@ describe('dựng chuyên nghiệp 1.9.0: công thức, lời thoại có mốc, 
     expect(editSummary(rich)).toContain('filter warm; 1 marker(s); music ducking on')
   })
 })
+
+describe('tự dựng một nút 1.12.0', async () => {
+  const {
+    autoBuildGoal,
+    normalizeAutoBuildOptions,
+    normalizeHighlights,
+    pickAutoFormat,
+    planAutoBuildLocally,
+    reviewBuild,
+    DEFAULT_AUTO_BUILD,
+  } = await import('./director')
+  const project = {
+    id: 'p',
+    name: 'p',
+    createdAt: 0,
+    segments: [],
+  } as unknown as Project
+
+  it('tùy chọn: mặc định tự chọn định dạng + nhạc; kẹp số shorts 1-5', () => {
+    expect(normalizeAutoBuildOptions(undefined)).toEqual(DEFAULT_AUTO_BUILD)
+    expect(
+      normalizeAutoBuildOptions({
+        format: 'shorts',
+        music: false,
+        broll: true,
+        shorts: true,
+        shortsCount: 9,
+      }),
+    ).toEqual({ format: 'shorts', music: false, broll: true, shorts: true, shortsCount: 5 })
+    expect(normalizeAutoBuildOptions({ format: 'bogus' }).format).toBe('auto')
+  })
+
+  it('pickAutoFormat: ngắn → shorts, có chuột → youtube, không chuột → vlog', () => {
+    expect(pickAutoFormat({ durationMs: 40_000, hasCursor: true })).toBe('shorts')
+    expect(pickAutoFormat({ durationMs: 300_000, hasCursor: true })).toBe('youtube')
+    expect(pickAutoFormat({ durationMs: 300_000, hasCursor: false })).toBe('vlog')
+  })
+
+  it('autoBuildGoal: câu yêu cầu ngắn, cố định, nêu định dạng và tùy chọn', () => {
+    const goal = autoBuildGoal({ ...DEFAULT_AUTO_BUILD, broll: true }, 'youtube')
+    expect(goal).toContain('AUTO BUILD. Format: youtube (chosen automatically).')
+    expect(goal).toContain('findMusic')
+    expect(goal).toContain('broll')
+    expect(goal.length).toBeLessThan(600)
+    const quiet = autoBuildGoal({ ...DEFAULT_AUTO_BUILD, format: 'vlog', music: false }, 'vlog')
+    expect(quiet).toContain('Format: vlog.')
+    expect(quiet).toContain('No background music.')
+    expect(quiet).toContain('No b-roll.')
+  })
+
+  it('planAutoBuildLocally: công thức + tự tìm nhạc theo định dạng + thẻ kết', () => {
+    expect(planAutoBuildLocally(DEFAULT_AUTO_BUILD, 'shorts').map((c) => c.kind)).toEqual([
+      'recipe',
+      'findMusic',
+      'outro',
+    ])
+    expect(planAutoBuildLocally(DEFAULT_AUTO_BUILD, 'shorts')[1]).toMatchObject({
+      mood: 'upbeat energetic',
+      tempo: 'fast',
+    })
+    expect(
+      planAutoBuildLocally({ ...DEFAULT_AUTO_BUILD, music: false }, 'youtube').map((c) => c.kind),
+    ).toEqual(['recipe', 'outro'])
+  })
+
+  it('reviewBuild: báo thiếu phụ đề / nhạc / hook, tự sửa khung, duck, âm lượng, thẻ kết, âm thanh', () => {
+    const base = createDefaultEdit(project)
+    const edit: EditState = {
+      ...base,
+      clips: [
+        { id: 'c', sourceStart: 0, sourceEnd: 30_000, speed: 1 } as EditState['clips'][number],
+      ],
+      frame: { ...base.frame, aspect: '9:16' },
+      audioClips: [
+        {
+          id: 'm',
+          kind: 'music',
+          name: 'Bright Day',
+          file: 'a.mp3',
+          start: 0,
+          duration: 30_000,
+          offset: 0,
+          volume: 0.5,
+          fadeIn: 0,
+          fadeOut: 0,
+          loop: true,
+        } as EditState['audioClips'][number],
+      ],
+    }
+    const r = reviewBuild(edit, 'youtube', { music: true })
+    expect(r.issues).toEqual(['captions', 'hook'])
+    expect(r.fixes.map((c) => c.kind)).toEqual(['aspect', 'duck', 'volume', 'outro', 'cleanAudio'])
+    expect(r.fixes[0]).toEqual({ kind: 'aspect', aspect: '16:9' })
+    expect(r.passed).toContain('music')
+
+    const good: EditState = {
+      ...edit,
+      frame: { ...base.frame, aspect: '16:9' },
+      audio: {
+        ...base.audio,
+        duck: { ...base.audio.duck, enabled: true },
+        micFx: { ...base.audio.micFx, enhance: true },
+      },
+      audioClips: [{ ...edit.audioClips[0]!, volume: 0.2 }],
+      captions: {
+        ...base.captions,
+        enabled: true,
+        lines: [
+          { id: 'l', start: 0, end: 1000, text: 'x' } as EditState['captions']['lines'][number],
+        ],
+      },
+      overlays: [
+        {
+          ...base.overlays[0],
+          id: 'h',
+          kind: 'text',
+          start: 0,
+          end: 2000,
+        } as EditState['overlays'][number],
+        { id: 'o', kind: 'text', start: 27_000, end: 30_000 } as EditState['overlays'][number],
+      ],
+    }
+    const ok = reviewBuild(good, 'youtube', { music: true })
+    expect(ok.issues).toEqual([])
+    expect(ok.fixes).toEqual([])
+    expect(ok.passed).toEqual([
+      'aspect',
+      'captions',
+      'music',
+      'duck',
+      'hook',
+      'outro',
+      'cleanAudio',
+    ])
+    // Không yêu cầu nhạc thì không báo thiếu nhạc.
+    expect(reviewBuild(edit, 'vlog', { music: false }).issues).toEqual(['captions', 'hook'])
+  })
+
+  it('normalizeHighlights: trong thời lượng, 15-90 s, không chồng, tối đa count, theo thứ tự', () => {
+    const out = normalizeHighlights(
+      {
+        segments: [
+          { start_seconds: 100, end_seconds: 130, hook: 'B', title: 'b' },
+          { start_seconds: 0, end_seconds: 5, hook: 'ngắn', title: '' },
+          { start_seconds: 10, end_seconds: 40, hook: 'A', title: 'a' },
+          { start_seconds: 20, end_seconds: 50, hook: 'chồng', title: '' },
+          { start_seconds: 0, end_seconds: 200, hook: 'dài', title: '' },
+          { start_seconds: 150, end_seconds: 400, hook: 'vượt', title: '' },
+          { start_seconds: 'x', end_seconds: 1 },
+        ],
+      },
+      180_000,
+      2,
+    )
+    expect(out).toEqual([
+      { start: 10_000, end: 40_000, hook: 'A', title: 'a' },
+      { start: 100_000, end: 130_000, hook: 'B', title: 'b' },
+    ])
+    expect(normalizeHighlights(null, 1000, 3)).toEqual([])
+    // Không biết thời lượng (0): không kẹp.
+    expect(
+      normalizeHighlights(
+        { segments: [{ start_seconds: 0, end_seconds: 30, hook: '', title: '' }] },
+        0,
+        1,
+      ),
+    ).toHaveLength(1)
+  })
+})

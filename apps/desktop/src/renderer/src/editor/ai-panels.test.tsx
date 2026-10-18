@@ -529,6 +529,7 @@ describe('AiPanel: trạng thái AI và nút làm nhanh', () => {
         elevenlabs: { state: 'missing' },
         anthropic: { state: 'missing' },
         pixabay: { state: 'missing' },
+        jamendo: { state: 'missing' },
       },
     })
     render(<AiPanel />)
@@ -553,6 +554,7 @@ describe('AiPanel: trạng thái AI và nút làm nhanh', () => {
         elevenlabs: { state: 'saved', masked: 'el…' },
         anthropic: { state: 'missing' },
         pixabay: { state: 'missing' },
+        jamendo: { state: 'missing' },
       },
     })
     render(<AiPanel />)

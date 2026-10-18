@@ -87,8 +87,10 @@ beforeEach(async () => {
     elevenlabs: vi.fn<Validators['elevenlabs']>(async () => ({ ok: true })),
     anthropic: vi.fn<Validators['anthropic']>(async () => ({ ok: true })),
     pixabay: vi.fn<Validators['pixabay']>(async () => ({ ok: true })),
+    jamendo: vi.fn<Validators['jamendo']>(async () => ({ ok: true })),
   }
   ai = {
+    highlights: vi.fn(async () => [{ start: 1000, end: 21_000, hook: 'Mẹo hay', title: 'Mẹo' }]),
     transcribe: vi.fn(async () => ({ language: 'vi', words: [] })),
     getTranscript: vi.fn(async () => null),
     suggestCuts: vi.fn(async () => []),
@@ -130,6 +132,15 @@ beforeEach(async () => {
       validators,
       recording,
       music: {
+        find: vi.fn(async (q: { mood: string }) => ({
+          file: 'music-jam.mp3',
+          name: `Found ${q.mood}`,
+          durationMs: 90_000,
+          addedAt: 1,
+          source: 'jamendo' as const,
+          credit: '"Found" by Artist — CC BY 3.0 (Jamendo)',
+          origin: { source: 'jamendo' as const, id: '1' },
+        })),
         list: vi.fn(async () => []),
         pickAndAdd: vi.fn(async () => []),
         add: vi.fn(async (paths: string[], source: 'youtube' | 'file') =>

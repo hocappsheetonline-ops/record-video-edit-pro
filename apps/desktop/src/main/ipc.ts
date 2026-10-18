@@ -31,6 +31,7 @@ import {
   type SegmentStart,
   ONLINE_SOURCES,
   type OnlineSource,
+  type MusicFindQuery,
   type MusicTrack,
   type RecentDownload,
   type LocalAiProgress,
@@ -126,6 +127,8 @@ export interface MusicIpc {
   useInProject(file: string, projectDir: string): Promise<AudioAsset>
   recentDownloads(): Promise<RecentDownload[]>
   openYouTube(): Promise<void>
+  /** AI tự tìm nhạc nền miễn phí bản quyền (Jamendo) và tải vào kho. */
+  find(query: MusicFindQuery): Promise<MusicTrack>
 }
 
 export interface IpcDeps {
@@ -144,6 +147,7 @@ export interface IpcDeps {
     | 'summarize'
     | 'plan'
     | 'direct'
+    | 'highlights'
     | 'listLocalModels'
     | 'pullLocalModel'
     | 'benchmarkLocalModel'
@@ -453,6 +457,16 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
   })
   ipcMain.handle(IPC.musicRecentDownloads, () => deps.music.recentDownloads())
   ipcMain.handle(IPC.musicOpenYouTube, () => deps.music.openYouTube())
+  ipcMain.handle(IPC.musicFind, (_event, query: unknown) => {
+    const q = typeof query === 'object' && query !== null ? (query as Record<string, unknown>) : {}
+    const mood = typeof q.mood === 'string' ? q.mood.trim().slice(0, 60) : ''
+    const tempo = q.tempo === 'slow' || q.tempo === 'fast' ? q.tempo : 'medium'
+    const durationMs =
+      typeof q.durationMs === 'number' && Number.isFinite(q.durationMs)
+        ? Math.max(0, q.durationMs)
+        : 0
+    return deps.music.find({ mood, tempo, durationMs })
+  })
   ipcMain.handle(IPC.assetsPeaks, async (_event, folder: unknown, file: unknown) => {
     if (typeof file !== 'string') throw new Error('Tên file không hợp lệ')
     return projects.assetPeaks(await projectDir(folder), file)
@@ -626,6 +640,10 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
         : [],
       edit: typeof c.edit === 'string' ? c.edit : '',
     })
+  })
+  ipcMain.handle(IPC.aiHighlights, async (_event, folder: unknown, count: unknown) => {
+    const n = typeof count === 'number' && Number.isFinite(count) ? count : 3
+    return deps.ai.highlights((await projectPath(folder)).path, n)
   })
   ipcMain.handle(IPC.aiLocalModels, (_event, baseUrl: unknown) => {
     const url = normalizeLocalAi({ baseUrl }).baseUrl

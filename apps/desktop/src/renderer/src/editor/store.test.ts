@@ -584,7 +584,7 @@ describe('lệnh mở rộng của Đạo diễn AI (timeline, âm thanh, khung,
 
   it('shorts: video 7 giây không chia được (đoạn tối thiểu 5 giây) thì báo too_short; export đặt fps', async () => {
     const report = await s().applyAssistantCommands([
-      { kind: 'shorts', mode: 'fixed', seconds: 5, vertical: true },
+      { kind: 'shorts', mode: 'fixed', seconds: 5, vertical: true, count: 3 },
     ])
     expect(report).toEqual([{ step: 'shorts', status: 'skipped', detail: 'too_short' }])
     expect(api.duplicateProject).not.toHaveBeenCalled()
@@ -917,5 +917,159 @@ describe('lệnh AI 1.9.0: công thức dựng, hiệu ứng / tốc độ / chu
     expect(s().edit!.captions.look.template).toBe('box')
     expect(s().edit!.cursor.showKeys).toBe(true)
     expect(s().edit!.audioClips).toEqual([])
+  })
+})
+
+describe('tự dựng một nút 1.12.0', () => {
+  const s = useEditorStore.getState
+
+  it('findMusic: tải bài Jamendo vào kho, chèn làm nhạc nền đúng âm lượng và bật tự giảm khi nói', async () => {
+    const report = await s().applyAssistantCommands([
+      { kind: 'findMusic', mood: 'upbeat corporate', tempo: 'fast', volume: 0.2 },
+    ])
+    expect(report).toEqual([{ step: 'findMusic', status: 'done', detail: 1 }])
+    expect(api.findMusic).toHaveBeenCalledWith({
+      mood: 'upbeat corporate',
+      tempo: 'fast',
+      durationMs: 7000,
+    })
+    const music = s().edit!.audioClips.filter((a) => a.kind === 'music')
+    expect(music).toHaveLength(1)
+    expect(music[0]).toMatchObject({ name: 'Found upbeat corporate – Artist', volume: 0.2 })
+    expect(s().edit!.audio.duck.enabled).toBe(true)
+  })
+
+  it('findMusic không có key Jamendo: dùng kho nhạc; kho trống thì bỏ qua với lý do no_music_key', async () => {
+    api.findMusic.mockRejectedValue(new Error('key_missing'))
+    api.listMusic.mockResolvedValueOnce([])
+    expect(
+      await s().applyAssistantCommands([
+        { kind: 'findMusic', mood: 'calm', tempo: 'slow', volume: 0.25 },
+      ]),
+    ).toEqual([{ step: 'findMusic', status: 'skipped', detail: 'no_music_key' }])
+    await api.addMusicPaths(['C:\\nhac\\Kho của tôi.mp3'], 'file')
+    expect(
+      await s().applyAssistantCommands([
+        { kind: 'findMusic', mood: 'calm', tempo: 'slow', volume: 0.25 },
+      ]),
+    ).toEqual([{ step: 'findMusic', status: 'done', detail: 1 }])
+    expect(s().edit!.audioClips[0]!.name).toBe('Kho của tôi')
+  })
+
+  it('broll: tìm video Pixabay, tải về, phủ kín khung tại thời điểm, tắt tiếng; thiếu key thì bỏ qua', async () => {
+    const report = await s().applyAssistantCommands([
+      { kind: 'broll', query: 'typing on laptop', atMs: 1000, ms: 3000 },
+      { kind: 'broll', query: 'city', atMs: 9000, ms: 3000 },
+    ])
+    expect(report).toEqual([
+      { step: 'broll', status: 'done', detail: 1 },
+      { step: 'broll', status: 'skipped', detail: 'too_short' },
+    ])
+    expect(api.onlineSearch).toHaveBeenCalledWith('pixabayVideo', 'typing on laptop', null)
+    expect(api.onlineDownload).toHaveBeenCalledWith('pixabay', '0')
+    const o = s().edit!.overlays.find((x) => x.kind === 'video')!
+    // Lớp dài bằng tư liệu (2,5 giây) khi tư liệu ngắn hơn yêu cầu; cỡ ≥ 1 để phủ kín khung; không tiếng.
+    expect(o).toMatchObject({ start: 1000, end: 3500, x: 0.5, y: 0.5, volume: 0 })
+    expect(o.size).toBeGreaterThanOrEqual(1)
+    api.onlineSearch.mockRejectedValueOnce(new Error('key_missing'))
+    expect(
+      await s().applyAssistantCommands([{ kind: 'broll', query: 'x', atMs: 0, ms: 2000 }]),
+    ).toEqual([{ step: 'broll', status: 'skipped', detail: 'no_pixabay_key' }])
+  })
+
+  it('shorts highlights: AI chọn đoạn, mỗi đoạn thành dự án dọc có hook và phụ đề TikTok; đoạn ngoài video bỏ', async () => {
+    const made = await s().splitIntoShorts({ mode: 'highlights', count: 3, vertical: true })
+    // Video mẫu 7 giây: đoạn 0-20 s kẹp còn 7 s (đủ 5 s), hai đoạn sau nằm ngoài video.
+    expect(made).toBe(1)
+    expect(api.transcribe).toHaveBeenCalled()
+    expect(api.highlights).toHaveBeenCalledWith(sampleSummary.folder, 3)
+    expect(api.duplicateProject).toHaveBeenCalledWith(sampleSummary.folder, '(short 1: Mở đầu)')
+    const saved = api.saveEdit.mock.calls.at(-1)![1]
+    expect(saved.frame).toMatchObject({ aspect: '9:16', fill: true })
+    expect(saved.captions.look.template).toBe('tiktok')
+    expect(saved.overlays).toHaveLength(1)
+    expect(saved.overlays[0]).toMatchObject({ kind: 'text', text: 'Mẹo 1', start: 0, end: 2500 })
+    expect(saved.audioClips).toEqual([])
+  })
+
+  it('autoBuild với AI: một lần gọi đạo diễn (không gửi hội thoại), áp kế hoạch, rà soát lấp chỗ thiếu, một bước hoàn tác, ghi nguồn nhạc', async () => {
+    api.directEdits.mockResolvedValueOnce({
+      summary: 'Dựng kiểu YouTube hoàn chỉnh',
+      questions: [],
+      commands: [
+        { kind: 'recipe', style: 'youtube' },
+        {
+          kind: 'text',
+          text: 'Mẹo Excel 30 giây',
+          atMs: 0,
+          ms: 2000,
+          template: 'title',
+          position: 'top',
+        },
+        { kind: 'findMusic', mood: 'calm corporate', tempo: 'medium', volume: 0.2 },
+        { kind: 'export', resolution: 1080, format: 'mp4', fps: 30 },
+      ],
+    })
+    const steps: string[] = []
+    const r = await s().autoBuild({ format: 'youtube' }, (_d, _t, step) => steps.push(step))
+    expect(steps).toEqual(['prepare', 'plan', 'apply', 'review'])
+    expect(r.ai).toBe(true)
+    expect(r.format).toBe('youtube')
+    expect(api.directEdits).toHaveBeenCalledTimes(1)
+    const [goal, context] = api.directEdits.mock.calls[0]!
+    expect(goal).toContain('AUTO BUILD. Format: youtube.')
+    expect(context.history).toEqual([])
+    expect(context.transcript).toContain('[0:00.0]')
+    // Không xuất trong lúc tự dựng; nhạc đã chèn và tự giảm; rà soát không còn gì thiếu (video 7 s
+    // quá ngắn cho thẻ kết).
+    expect(r.commands.map((c) => c.kind)).not.toContain('export')
+    expect(r.commands.map((c) => c.kind)).toContain('findMusic')
+    expect(r.review.fixes).toEqual([])
+    expect(r.review.issues).toEqual([])
+    expect(r.review.passed).toEqual(
+      expect.arrayContaining(['aspect', 'captions', 'music', 'duck', 'hook', 'cleanAudio']),
+    )
+    expect(r.report.find((x) => x.step === 'findMusic')).toMatchObject({ status: 'done' })
+    expect(r.report.find((x) => x.step === 'captions')).toMatchObject({ status: 'done' })
+    expect(r.credits).toEqual(['"Found calm corporate" by Artist — CC BY 3.0 (Jamendo)'])
+    expect(r.shorts).toBe(0)
+    const edit = s().edit!
+    expect(edit.audio.duck.enabled).toBe(true)
+    expect(edit.audioClips.filter((a) => a.kind === 'music')).toHaveLength(1)
+    expect(edit.overlays.filter((o) => o.kind === 'text').map((o) => o.text)).toEqual([
+      'Mẹo Excel 30 giây',
+    ])
+    expect(edit.captions.enabled).toBe(true)
+    // Một bước hoàn tác, lịch sử đạo diễn ghi lại.
+    expect(s().past).toHaveLength(1)
+    expect(s().directorBusy).toBe(false)
+    expect(s().directorMessages.map((m) => m.role)).toEqual(['user', 'ai'])
+    expect(s().directorMessages[1]!.text).toBe('Dựng kiểu YouTube hoàn chỉnh')
+    s().undo()
+    expect(s().edit!.audioClips).toEqual([])
+    expect(s().edit!.overlays).toEqual([])
+  })
+
+  it('autoBuild không có AI: công thức có sẵn theo định dạng tự chọn; tắt nhạc thì không tìm nhạc; shorts bị bỏ vì video ngắn', async () => {
+    api.directEdits.mockRejectedValueOnce(new Error('missing_key:anthropic'))
+    const r = await s().autoBuild({ format: 'auto', music: false, shorts: true, shortsCount: 2 })
+    expect(r.ai).toBe(false)
+    // 7 giây, có chuột → shorts.
+    expect(r.format).toBe('shorts')
+    // Hook mở đầu lấy từ câu nói đầu tiên khi không có AI.
+    expect(r.commands.map((c) => c.kind)).toEqual(['recipe', 'outro', 'text'])
+    expect(r.commands[2]).toMatchObject({ text: 'Xin chào ừm các bạn. Hôm nay', atMs: 0 })
+    expect(r.report.find((x) => x.step === 'audio')).toMatchObject({ status: 'done' })
+    expect(r.report.find((x) => x.step === 'outro')).toMatchObject({ status: 'done' })
+    expect(s().edit!.overlays.map((o) => o.text)).toEqual([
+      'Đăng ký kênh để xem thêm',
+      'Xin chào ừm các bạn. Hôm nay',
+    ])
+    expect(r.commands.some((c) => c.kind === 'findMusic' || c.kind === 'music')).toBe(false)
+    expect(api.findMusic).not.toHaveBeenCalled()
+    expect(r.report.at(-1)).toEqual({ step: 'shorts', status: 'skipped', detail: 'too_short' })
+    expect(r.review.issues).toEqual([])
+    expect(s().edit!.frame.aspect).toBe('9:16')
+    expect(s().edit!.captions.look.template).toBe('tiktok')
   })
 })
