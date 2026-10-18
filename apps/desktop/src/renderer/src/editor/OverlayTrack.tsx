@@ -16,6 +16,7 @@ const KIND_STYLE: Record<OverlayKind, string> = {
   image: 'bg-teal-500/30 text-teal-50',
   video: 'bg-violet-500/40 text-violet-50',
   shape: 'bg-red-500/30 text-red-50',
+  blur: 'bg-slate-500/40 text-slate-50',
 }
 const KIND_ICON: Record<OverlayKind, string> = {
   text: 'T',
@@ -23,6 +24,7 @@ const KIND_ICON: Record<OverlayKind, string> = {
   image: '🖼',
   video: '🎬',
   shape: '➜',
+  blur: '▒',
 }
 
 /** Hàng "Chữ & sticker" trên timeline: kéo để dời, kéo mép để đổi độ dài. */

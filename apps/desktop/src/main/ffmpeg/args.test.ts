@@ -98,6 +98,29 @@ describe('xuất video: ghép âm thanh', () => {
     expect(atempoChain(0.25)).toEqual(['atempo=0.5', 'atempo=0.5'])
   })
 
+  it('nhạc nền tự giảm khi có lời: thêm bộ lọc volume theo biểu thức, đặt trong nháy đơn', async () => {
+    const { buildExportMuxArgs } = await import('./args')
+    const expr = '1-0.7*clip(min((t-(0.2))/0.3,(1.8-t)/0.3),0,1)'
+    const args = buildExportMuxArgs({
+      video: 'v.mp4',
+      durationS: 5,
+      output: 'o.mp4',
+      pieces: [
+        {
+          path: 'song.mp3',
+          mediaStart: 0,
+          duration: 5,
+          outputStart: 0,
+          speed: 1,
+          volume: 0.5,
+          duckExpr: expr,
+        },
+      ],
+    })
+    const graph = args[args.indexOf('-filter_complex') + 1]!
+    expect(graph).toContain(`volume=0.5,volume=volume='${expr}':eval=frame,adelay=0:all=1`)
+  })
+
   it('không có âm thanh thì chỉ chép video', async () => {
     const { buildExportMuxArgs } = await import('./args')
     const args = buildExportMuxArgs({ video: 'v.mp4', pieces: [], durationS: 3, output: 'o.mp4' })

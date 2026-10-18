@@ -24,6 +24,8 @@ type Drag =
       center: Point
       d0: number
       size0: number
+      /** Vùng che: kéo góc đổi cả chiều rộng lẫn chiều cao (không giữ tỉ lệ). */
+      free?: { rotation: number }
     }
   | { kind: 'rotate'; id: string; center: Point }
 
@@ -228,6 +230,7 @@ export function PreviewCanvas({ project, folder }: { project: Project; folder: s
       center,
       d0: Math.max(4, Math.hypot(p.x - center.x, p.y - center.y)),
       size0,
+      ...(target?.kind === 'blur' ? { free: { rotation: target.rotation } } : {}),
     }
   }
 
@@ -264,7 +267,21 @@ export function PreviewCanvas({ project, folder }: { project: Project; folder: s
       )
     } else if (d.kind === 'resize') {
       const ratio = Math.hypot(p.x - d.center.x, p.y - d.center.y) / d.d0
-      if (d.target === 'overlay') {
+      if (d.free) {
+        // Góc kéo tới đâu, vùng che rộng / cao tới đó (tính trong hệ tọa độ đã xoay của lớp).
+        const a = (-d.free.rotation * Math.PI) / 180
+        const dx = p.x - d.center.x
+        const dy = p.y - d.center.y
+        const w = Math.max(8, 2 * Math.abs(dx * Math.cos(a) - dy * Math.sin(a)))
+        const h = Math.max(8, 2 * Math.abs(dx * Math.sin(a) + dy * Math.cos(a)))
+        const size = Math.min(4, Math.max(0.03, h / canvas.height))
+        store.updateOverlayPose(d.id, { size }, `ov-size-${d.id}`)
+        store.updateOverlay(
+          d.id,
+          { aspect: Math.min(20, Math.max(0.05, w / h)) },
+          `ov-size-${d.id}`,
+        )
+      } else if (d.target === 'overlay') {
         const size = Math.min(4, Math.max(0.03, d.size0 * ratio))
         store.updateOverlayPose(d.id, { size }, `ov-size-${d.id}`)
       } else {

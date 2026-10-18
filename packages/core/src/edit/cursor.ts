@@ -22,8 +22,15 @@ export interface CursorTrack {
   clicks: ClickMark[]
   /** Thời điểm nguồn của các lần gõ phím (để zoom khi đang gõ). */
   keys: number[]
+  /** Phím tắt đã bấm (Ctrl+C, Alt+Tab…) theo thời điểm nguồn, để hiện lên video. */
+  combos: KeyCombo[]
   /** Thời điểm chuột di chuyển (để ẩn con trỏ khi đứng yên). */
   moves: number[]
+}
+
+export interface KeyCombo {
+  s: number
+  combo: string
 }
 
 export const CURSOR_STEP_MS = 1000 / 60
@@ -102,7 +109,7 @@ export function buildCursorTrack(
   smoothing: number,
 ): CursorTrack {
   const stepMs = CURSOR_STEP_MS
-  const empty: CursorTrack = { stepMs, samples: [], clicks: [], keys: [], moves: [] }
+  const empty: CursorTrack = { stepMs, samples: [], clicks: [], keys: [], combos: [], moves: [] }
   if (!captureRect || captureRect.width <= 0 || captureRect.height <= 0) return empty
   const list = sourceSegments(segments)
   const norm = (x: number, y: number) => ({
@@ -112,12 +119,14 @@ export function buildCursorTrack(
   const raw: CursorPoint[] = []
   const clicks: ClickMark[] = []
   const keys: number[] = []
+  const combos: KeyCombo[] = []
   const moves: number[] = []
   for (const event of [...events].sort((a, b) => a.t - b.t)) {
     const s = wallToSource(list, event.t)
     if (s === null) continue
     if (event.type === 'key') {
       keys.push(s)
+      if (event.combo) combos.push({ s, combo: event.combo })
       continue
     }
     const p = { s, ...norm(event.x, event.y) }
@@ -125,11 +134,11 @@ export function buildCursorTrack(
     if (event.type === 'move') moves.push(s)
     if (event.type === 'down') clicks.push({ ...p, button: event.button })
   }
-  if (raw.length === 0) return { ...empty, keys }
+  if (raw.length === 0) return { ...empty, keys, combos }
   const duration = sourceDuration(segments)
   const uniform: CursorPoint[] = []
   for (let s = 0; s <= duration; s += stepMs) uniform.push({ s, ...interpolate(raw, s) })
-  return { stepMs, samples: smoothPath(uniform, stepMs, smoothing), clicks, keys, moves }
+  return { stepMs, samples: smoothPath(uniform, stepMs, smoothing), clicks, keys, combos, moves }
 }
 
 export function cursorAt(track: CursorTrack, s: number): { x: number; y: number } | null {
@@ -167,4 +176,44 @@ export function cursorOpacity(track: CursorTrack, s: number, idleMs = 2500, fade
   const idle = s - last
   if (idle <= idleMs) return 1
   return Math.max(0, 1 - (idle - idleMs) / fadeMs)
+}
+
+/** Phím tắt đang hiện trên video tại thời điểm nguồn `s`. */
+export interface KeyCaption {
+  /** Các phím tắt gần nhất (cũ → mới), tối đa `max`. */
+  combos: string[]
+  /** 1 khi vừa bấm, mờ dần về 0 ở cuối `fadeMs`. */
+  opacity: number
+}
+
+/**
+ * Phím tắt vừa bấm để vẽ lên video: giữ `holdMs` sau lần bấm cuối rồi mờ dần trong `fadeMs`;
+ * gộp các phím tắt bấm liên tiếp trong khoảng đó (ví dụ Ctrl+C rồi Ctrl+V) thành một dòng.
+ */
+export function keyCaptionAt(
+  track: Pick<CursorTrack, 'combos'>,
+  s: number,
+  holdMs = 1500,
+  fadeMs = 350,
+  max = 3,
+): KeyCaption | null {
+  const list = track.combos
+  let last = -1
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (list[i]!.s <= s) {
+      last = i
+      break
+    }
+  }
+  if (last < 0) return null
+  const age = s - list[last]!.s
+  if (age > holdMs + fadeMs) return null
+  const combos: string[] = []
+  for (let i = last; i >= 0 && combos.length < max; i--) {
+    const k = list[i]!
+    // Phím bấm trước đó quá lâu (đã kịp biến mất) thì không gộp vào.
+    if (list[last]!.s - k.s > holdMs) break
+    combos.unshift(k.combo)
+  }
+  return { combos, opacity: age <= holdMs ? 1 : 1 - (age - holdMs) / fadeMs }
 }

@@ -16,6 +16,8 @@ import {
   clipDuration,
   cutPoints,
   DEFAULT_CLIP_AUDIO,
+  BLUR_MODES,
+  DEFAULT_BLUR_STRENGTH,
   DEFAULT_TRANSITION_MS,
   EFFECT_KINDS,
   KEY_COLORS,
@@ -443,6 +445,48 @@ export function EffectProps({ effect }: { effect: EffectRegion }) {
   )
 }
 
+/** Vùng che: làm mờ hay khảm ô, độ mạnh và tỉ lệ rộng / cao (kéo góc trên khung xem trước cũng được). */
+function BlurSection({ overlay }: { overlay: Overlay }) {
+  const { t } = useTranslation()
+  const { updateOverlay } = useEditorStore.getState()
+  const update = (patch: Partial<Overlay>, coalesce?: string) =>
+    updateOverlay(overlay.id, patch, coalesce && `${coalesce}-${overlay.id}`)
+  return (
+    <Section title={t('editor.blur.title')} testId="blur-props">
+      <Segmented
+        label={t('editor.blur.mode')}
+        options={BLUR_MODES.map((m) => ({ value: m, label: t(`editor.blur.modes.${m}`) }))}
+        value={overlay.blurMode ?? 'blur'}
+        onChange={(blurMode) => update({ blurMode })}
+        testIdPrefix="blur-mode-"
+      />
+      <SliderRow
+        label={t('editor.blur.strength')}
+        value={overlay.blurStrength ?? DEFAULT_BLUR_STRENGTH}
+        min={0.05}
+        max={1}
+        step={0.01}
+        format={pct}
+        defaultValue={DEFAULT_BLUR_STRENGTH}
+        testId="blur-strength"
+        onChange={(blurStrength) => update({ blurStrength }, 'blur-strength')}
+      />
+      <SliderRow
+        label={t('editor.blur.aspect')}
+        value={overlay.aspect}
+        min={0.2}
+        max={6}
+        step={0.05}
+        format={(v) => `${v.toFixed(2)}:1`}
+        defaultValue={1.6}
+        testId="blur-aspect"
+        onChange={(aspect) => update({ aspect }, 'blur-aspect')}
+      />
+      <p className="text-xs text-muted">{t('editor.blur.hint')}</p>
+    </Section>
+  )
+}
+
 export function OverlayProps({ overlay }: { overlay: Overlay }) {
   const { t } = useTranslation()
   const { updateOverlay, updateOverlayPose } = useEditorStore.getState()
@@ -472,6 +516,7 @@ export function OverlayProps({ overlay }: { overlay: Overlay }) {
       )}
       {overlay.kind === 'text' && <TextStylePanel overlay={overlay} />}
       {overlay.kind === 'shape' && <ShapeSection overlay={overlay} />}
+      {overlay.kind === 'blur' && <BlurSection overlay={overlay} />}
 
       <Section title={t('editor.props.transform')}>
         {overlay.kind === 'video' && (
@@ -514,7 +559,7 @@ export function OverlayProps({ overlay }: { overlay: Overlay }) {
           label={t('editor.stickers.size')}
           value={pose.size}
           min={0.03}
-          max={media ? 2 : 0.8}
+          max={media || overlay.kind === 'blur' ? 2 : 0.8}
           step={0.01}
           format={pct}
           testId="overlay-size"

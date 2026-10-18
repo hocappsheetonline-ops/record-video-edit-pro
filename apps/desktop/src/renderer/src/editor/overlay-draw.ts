@@ -9,7 +9,7 @@ import {
   type Overlay,
   type OverlayMask,
 } from '@lumora/core'
-import type { AnyCanvas, Ctx, FrameSource } from './draw'
+import { snapshot, type AnyCanvas, type Ctx, type FrameSource } from './draw'
 import { applyLookLayers } from './look-draw'
 import { drawShape } from './shape-draw'
 import { drawTextLayer, layoutText } from './text-draw'
@@ -48,7 +48,8 @@ export function overlayBox(ctx: Ctx, o: Overlay, width: number, height: number) 
   const px = o.size * height
   const cx = o.x * width
   const cy = o.y * height
-  if (o.kind === 'image' || o.kind === 'video') return { cx, cy, w: px * o.aspect, h: px }
+  if (o.kind === 'image' || o.kind === 'video' || o.kind === 'blur')
+    return { cx, cy, w: px * o.aspect, h: px }
   if (o.kind === 'emoji') return { cx, cy, w: px * 1.2, h: px * 1.2 }
   if (o.kind === 'shape') return { cx, cy, w: px * SHAPE_ASPECT[o.shape ?? 'arrow'], h: px }
   const layout = layoutText(ctx, o, px)
@@ -75,6 +76,8 @@ export function drawOverlays(
     if (alpha <= 0 || m.scale <= 0 || m.scaleX <= 0.001) continue
     const box = overlayBox(ctx, o, width, height)
     const px = o.size * height
+    // Vùng che: chụp khung hiện tại trước khi biến đổi, để vẽ lại bản mờ đúng chỗ.
+    const base = o.kind === 'blur' ? ctx.getTransform() : null
     ctx.save()
     ctx.globalAlpha = alpha
     ctx.globalCompositeOperation = compositeOf(o.blend)
@@ -91,6 +94,8 @@ export function drawOverlays(
       ctx.textAlign = 'center'
       ctx.textBaseline = 'middle'
       ctx.fillText(o.text, 0, 0)
+    } else if (o.kind === 'blur') {
+      drawBlurRegion(ctx, o, box.w, box.h, width, height, base!)
     } else if (o.kind === 'shape') {
       drawShape(
         ctx,
@@ -104,6 +109,52 @@ export function drawOverlays(
       drawTextLayer(ctx, o, px, layoutText(ctx, o, px), local, m.reveal)
     }
     ctx.restore()
+  }
+}
+
+const pixelScratch = new WeakMap<object, OffscreenCanvas | HTMLCanvasElement>()
+
+/**
+ * Vùng che (như "Mosaic" / "Blur" của CapCut): cắt theo khung lớp (đã xoay), rồi vẽ lại bản làm
+ * mờ / khảm ô của cả khung hình phía dưới trong vùng đó. `base` là phép biến đổi của canvas trước
+ * khi dời / xoay theo lớp, để bản mờ nằm đúng vị trí pixel gốc.
+ */
+function drawBlurRegion(
+  ctx: Ctx,
+  o: Overlay,
+  w: number,
+  h: number,
+  width: number,
+  height: number,
+  base: DOMMatrix,
+) {
+  const strength = o.blurStrength ?? 0.5
+  const copy = snapshot(ctx, width, height)
+  ctx.beginPath()
+  ctx.rect(-w / 2, -h / 2, w, h)
+  ctx.clip()
+  ctx.setTransform(base)
+  ctx.globalCompositeOperation = 'source-over'
+  if (o.blurMode === 'pixelate') {
+    // Ô vuông to dần theo độ mạnh: thu nhỏ cả khung rồi phóng to không làm mượt.
+    const cell = Math.max(2, Math.round((strength * height) / 18))
+    const sw = Math.max(1, Math.ceil(width / cell))
+    const sh = Math.max(1, Math.ceil(height / cell))
+    const small = scratchFor(pixelScratch, ctx.canvas, sw, sh)
+    const sc = small.getContext('2d') as Ctx
+    sc.imageSmoothingEnabled = true
+    sc.clearRect(0, 0, sw, sh)
+    sc.drawImage(copy, 0, 0, width, height, 0, 0, sw, sh)
+    ctx.filter = 'none'
+    ctx.imageSmoothingEnabled = false
+    ctx.drawImage(small, 0, 0, sw, sh, 0, 0, sw * cell, sh * cell)
+    ctx.imageSmoothingEnabled = true
+  } else {
+    ctx.filter = `blur(${((strength * height) / 40).toFixed(2)}px)`
+    // Vẽ hai lần: lần đầu lấp mép (blur làm trong suốt viền), lần sau cho đủ độ mờ.
+    ctx.drawImage(copy, 0, 0)
+    ctx.drawImage(copy, 0, 0)
+    ctx.filter = 'none'
   }
 }
 

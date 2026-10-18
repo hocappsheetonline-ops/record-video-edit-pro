@@ -4,6 +4,7 @@ import {
   audioClipMediaTime,
   clipGain,
   clipSpeedAt,
+  duckGainAt,
   isDefaultFx,
   mediaTime,
   outputDuration,
@@ -18,7 +19,10 @@ import {
   type Size,
   type SourceSegment,
   type TrackKind,
+  type DuckRange,
+  type Waveform,
   applyTrackState,
+  voiceRanges,
 } from '@lumora/core'
 import { mediaUrl } from '../lib/media'
 import { drawScene, videoElementSource, type AnyCanvas } from './draw'
@@ -361,8 +365,22 @@ export class PreviewEngine {
     for (const el of this.revMedia.values()) if (!usedRev.has(el) && !el.paused) el.pause()
   }
 
-  /** Nhạc nền / hiệu ứng: phát đúng đoạn, đúng vị trí trong file, âm lượng theo fade. */
+  /** Khoảng có lời thoại (để tự giảm nhạc), tính lại khi clip / đoạn âm thanh / dạng sóng đổi. */
+  private duckCache: { key: readonly unknown[]; ranges: DuckRange[] } | null = null
+
+  private duckRanges(edit: EditState, wave: Waveform | null): DuckRange[] {
+    const key = [edit.clips, edit.audioClips, wave]
+    const hit = this.duckCache
+    if (hit && hit.key.every((k, i) => k === key[i])) return hit.ranges
+    const ranges = voiceRanges(wave, edit.clips, edit.audioClips, outputDuration(edit.clips))
+    this.duckCache = { key, ranges }
+    return ranges
+  }
+
+  /** Nhạc nền / hiệu ứng: phát đúng đoạn, đúng vị trí trong file, âm lượng theo fade (và tự giảm khi có lời). */
   private syncAudioClips(edit: EditState, time: number, playing: boolean) {
+    const duck = edit.audio.duck
+    const ranges = duck.enabled ? this.duckRanges(edit, useEditorStore.getState().waveform) : null
     const ids = new Set(edit.audioClips.map((c) => c.id))
     for (const [id, el] of this.audioClips) {
       if (ids.has(id)) continue
@@ -383,7 +401,8 @@ export class PreviewEngine {
         if (!el.paused) el.pause()
         continue
       }
-      el.volume = Math.min(1, audioClipGain(clip, time))
+      const ducked = ranges && clip.kind === 'music' ? duckGainAt(ranges, time, duck.level) : 1
+      el.volume = Math.min(1, audioClipGain(clip, time) * ducked)
       const target = at / 1000
       if (Math.abs(el.currentTime - target) > RESYNC_S) el.currentTime = target
       if (el.paused) safePlay(el)

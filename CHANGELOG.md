@@ -2,6 +2,13 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.8.0
+
+- **Che vùng riêng tư** (Thư viện → Hiệu ứng → Che vùng riêng tư): thêm vùng **Làm mờ** hoặc **Khảm ô (mosaic)** lên video như CapCut để giấu mật khẩu, email, tên người; kéo trên khung xem trước để đặt, kéo góc để đổi cả chiều rộng lẫn chiều cao, chỉnh độ mạnh, dùng **keyframe** để vùng che đi theo cửa sổ. Xuất giống hệt xem trước.
+- **Tự giảm nhạc khi có lời** (Cài đặt video → Âm lượng → Nhạc nền): nhạc nền tự nhỏ lại (mức chỉnh được, mặc định 30 %) khi micro có tiếng hoặc ở các đoạn lồng tiếng, to lại khi im lặng — audio ducking như CapCut / Descript / Camtasia. Khoảng có lời lấy từ dạng sóng bản quay nên không cần AI; xem trước và video xuất giảm như nhau.
+- **Hiện phím tắt đã bấm** (Cài đặt video → Con trỏ): phím tắt (Ctrl+C, Alt+Tab, Win+Shift+S…) hiện thành viên thuốc dưới khung hình rồi mờ dần, như Screen Studio / Camtasia; chỉ hiện phím tắt, không ghi chữ bạn gõ (bản quay vốn không lưu).
+- **Chụp khung hình** (nút ảnh cạnh Toàn màn hình dưới khung xem trước): lưu khung đang xem thành PNG trong thư mục `exports` của dự án, có nút mở thư mục — như "Snapshot" của CapCut, tiện làm ảnh bìa / thumbnail.
+
 ## 1.5.1
 
 - **Biết AI đang làm gì**: huy hiệu trạng thái AI trên thanh tiêu đề trình chỉnh sửa và thanh trạng thái ở đầu bảng AI cho biết đang dùng gì (Ollama + model nào / Claude / whisper.cpp + Piper / ElevenLabs), sẵn sàng chưa (lý do cụ thể nếu chưa, kèm nút **Thiết lập** mở đúng mục), và việc AI nào đang chạy được bao lâu (tiến độ, hủy được). Tự kiểm tra lại khi đổi cài đặt hoặc key.

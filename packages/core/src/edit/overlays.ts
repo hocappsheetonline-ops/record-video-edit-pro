@@ -21,9 +21,10 @@ import {
 
 /**
  * Lớp nổi trên video (kiểu CapCut "Văn bản" / "Nhãn dán" / "Lớp phủ"): chữ, emoji, ảnh/GIF và
- * video meme (có tiếng, xóa được phông xanh).
+ * video meme (có tiếng, xóa được phông xanh), và vùng che (`blur`: làm mờ / khảm ô phần video
+ * phía dưới để giấu mật khẩu, email… — dời / đổi cỡ / keyframe như lớp khác).
  */
-export const OVERLAY_KINDS = ['text', 'emoji', 'image', 'video', 'shape'] as const
+export const OVERLAY_KINDS = ['text', 'emoji', 'image', 'video', 'shape', 'blur'] as const
 export type OverlayKind = (typeof OVERLAY_KINDS)[number]
 
 export const TEXT_STYLES = ['meme', 'title', 'bubble', 'neon'] as const
@@ -80,7 +81,14 @@ export interface Overlay {
   shape?: ShapeKind
   /** Độ dày nét của hình (0.02..0.3 theo cạnh nhỏ của lớp). */
   strokeWidth?: number
+  /** Vùng che (kind = blur): làm mờ hay khảm ô, và độ mạnh 0..1. */
+  blurMode?: BlurMode
+  blurStrength?: number
 }
+
+export const BLUR_MODES = ['blur', 'pixelate'] as const
+export type BlurMode = (typeof BLUR_MODES)[number]
+export const DEFAULT_BLUR_STRENGTH = 0.5
 
 /** Kiểu chữ đang dùng của lớp chữ (dự án cũ: suy ra từ `style` + `color`). */
 export function overlayTextStyle(
@@ -275,6 +283,14 @@ export function parseOverlays(value: unknown): Overlay[] {
           : {}),
         ...(kind === 'shape'
           ? { shape: o.shape as ShapeKind, strokeWidth: num(o.strokeWidth, 0.08, 0.02, 0.3) }
+          : {}),
+        ...(kind === 'blur'
+          ? {
+              blurMode: BLUR_MODES.includes(o.blurMode as BlurMode)
+                ? (o.blurMode as BlurMode)
+                : 'blur',
+              blurStrength: num(o.blurStrength, DEFAULT_BLUR_STRENGTH, 0.05, 1),
+            }
           : {}),
         ...(keyframes ? { keyframes } : {}),
       },
