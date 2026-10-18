@@ -1,5 +1,33 @@
 import { describe, expect, it, vi } from 'vitest'
-import { libraryUrl, mediaUrl, pickMimeType, TrackRecorder, type ChunkSink } from './media'
+import {
+  libraryUrl,
+  mediaUrl,
+  micConstraints,
+  pickMimeType,
+  TrackRecorder,
+  type ChunkSink,
+} from './media'
+
+describe('micConstraints', () => {
+  it('quay / lồng tiếng thu thô 48 kHz mono: tắt khử vang, lọc ồn, tự chỉnh gain của Chromium', () => {
+    expect(micConstraints('mic-1', 'raw')).toEqual({
+      deviceId: { exact: 'mic-1' },
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+      sampleRate: { ideal: 48000 },
+      channelCount: { ideal: 1 },
+    })
+  })
+
+  it('livestream vẫn bật xử lý giọng (cần khử vang tiếng loa)', () => {
+    expect(micConstraints('mic-1', 'voice')).toMatchObject({
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    })
+  })
+})
 
 describe('pickMimeType', () => {
   it('ưu tiên H.264 cho video và Opus cho âm thanh', () => {
