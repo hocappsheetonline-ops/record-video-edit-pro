@@ -193,6 +193,8 @@ export function TranscriptPanel() {
   const onKeyDown = (ev: KeyboardEvent<HTMLDivElement>) => {
     if (ev.key !== 'Delete' && ev.key !== 'Backspace') return
     ev.preventDefault()
+    // Không để phím tắt toàn cục của timeline (Delete = xóa mục đang chọn) chạy theo.
+    ev.stopPropagation()
     const dragged = nativeSelection()
     const target = dragged.length > 0 ? dragged : selectedKept
     const keep = target.filter((i) =>
