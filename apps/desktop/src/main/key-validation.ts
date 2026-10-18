@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { anthropicBaseUrl, elevenLabsBaseUrl } from './ai/endpoints'
-import { pixabayBaseUrl } from './content/endpoints'
+import { jamendoBaseUrl, pixabayBaseUrl } from './content/endpoints'
 import { checkKeyFormat, type KeyValidationResult, type SecretKey } from '@lumora/core'
 
 const TIMEOUT_MS = 15_000
@@ -73,12 +73,41 @@ export function validatePixabayKey(apiKey: string, fetchImpl: FetchLike = fetch)
   return probe(`${pixabayBaseUrl()}/api/?${params}`, fetchImpl)
 }
 
+/**
+ * Kiểm tra client_id Jamendo: API luôn trả HTTP 200, sai key thì `headers.status = "failed"`
+ * (mã 2), nên phải đọc JSON thay vì chỉ nhìn mã HTTP.
+ */
+export async function validateJamendoKey(
+  clientId: string,
+  fetchImpl: FetchLike = fetch,
+): Promise<KeyValidationResult> {
+  const params = new URLSearchParams({ client_id: clientId, format: 'json', limit: '1' })
+  let response: Response
+  try {
+    response = await fetchImpl(`${jamendoBaseUrl()}/v3.0/tracks/?${params}`, {
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+  } catch (error) {
+    return { ok: false, reason: 'network', message: errorMessage(error) }
+  }
+  if ([400, 401, 403].includes(response.status)) return { ok: false, reason: 'invalid' }
+  if (!response.ok) return { ok: false, reason: 'unknown', message: `HTTP ${response.status}` }
+  const data = (await response.json().catch(() => null)) as {
+    headers?: { status?: string; code?: number }
+  } | null
+  if (data?.headers?.status === 'failed') return { ok: false, reason: 'invalid' }
+  if (data?.headers?.status !== 'success')
+    return { ok: false, reason: 'unknown', message: 'unexpected response' }
+  return { ok: true }
+}
+
 export type Validators = Record<SecretKey, (apiKey: string) => Promise<KeyValidationResult>>
 
 export const defaultValidators: Validators = {
   elevenlabs: (apiKey) => validateElevenLabsKey(apiKey),
   anthropic: (apiKey) => validateAnthropicKey(apiKey),
   pixabay: (apiKey) => validatePixabayKey(apiKey),
+  jamendo: (apiKey) => validateJamendoKey(apiKey),
 }
 
 export async function validateKey(

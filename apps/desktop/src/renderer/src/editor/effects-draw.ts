@@ -107,6 +107,202 @@ function drawEffect(ctx: Ctx, fx: ActiveEffect, w: number, h: number) {
       ctx.drawImage(copy, -w / 2, -h / 2)
       break
     }
+    case 'zoomPunch': {
+      // Phóng nhanh vào rồi về dần trong 0.6 giây đầu, giữ nguyên sau đó.
+      const k = Math.min(1, fx.local / 600)
+      const scale = 1 + 0.25 * i * (1 - k) ** 2
+      if (scale <= 1.001) break
+      const copy = snapshot(ctx, w, h)
+      ctx.translate(w / 2, h / 2)
+      ctx.scale(scale, scale)
+      ctx.drawImage(copy, -w / 2, -h / 2)
+      break
+    }
+    case 'bounce': {
+      // Nhảy lên xuống theo nhịp 0.5 giây, có phóng nhẹ cho khung không hở mép.
+      const beat = (fx.local % 500) / 500
+      const dy = -Math.abs(Math.sin(beat * Math.PI)) * h * 0.04 * i
+      const copy = snapshot(ctx, w, h)
+      ctx.fillStyle = '#000'
+      ctx.fillRect(0, 0, w, h)
+      const scale = 1 + 0.08 * i
+      ctx.translate(w / 2, h / 2 + dy)
+      ctx.scale(scale, scale)
+      ctx.drawImage(copy, -w / 2, -h / 2)
+      break
+    }
+    case 'mirror': {
+      // Nửa trái giữ nguyên, nửa phải là ảnh gương của nửa trái; độ mạnh pha dần.
+      const copy = snapshot(ctx, w, h)
+      ctx.globalAlpha = Math.min(1, i * 1.4)
+      ctx.translate(w, 0)
+      ctx.scale(-1, 1)
+      ctx.drawImage(copy, 0, 0, w / 2, h, 0, 0, w / 2, h)
+      break
+    }
+    case 'rgbSplit': {
+      // Tách kênh màu: bản đỏ lệch trái, bản xanh lệch phải (sắc sai).
+      const copy = snapshot(ctx, w, h)
+      const off = (w / 120) * i
+      ctx.globalCompositeOperation = 'screen'
+      ctx.globalAlpha = 0.6 * i
+      ctx.filter = 'sepia(1) saturate(8) hue-rotate(-50deg)'
+      ctx.drawImage(copy, -off, 0)
+      ctx.filter = 'sepia(1) saturate(8) hue-rotate(170deg)'
+      ctx.drawImage(copy, off, 0)
+      break
+    }
+    case 'pixelate': {
+      const copy = snapshot(ctx, w, h)
+      const block = Math.max(2, Math.round((w / 40) * i))
+      const sw = Math.max(1, Math.round(w / block))
+      const sh = Math.max(1, Math.round(h / block))
+      ctx.imageSmoothingEnabled = false
+      ctx.drawImage(copy, 0, 0, w, h, 0, 0, sw, sh)
+      ctx.drawImage(ctx.canvas, 0, 0, sw, sh, 0, 0, w, h)
+      ctx.imageSmoothingEnabled = true
+      break
+    }
+    case 'grain': {
+      // Hạt phim đổi theo từng khung; hạt nhỏ, nhiều.
+      const rand = seeded(Math.floor(fx.local / 33) + 17)
+      const count = Math.round(1500 * i)
+      const size = Math.max(1, w / 640)
+      for (let k = 0; k < count; k++) {
+        ctx.globalAlpha = 0.12 + rand() * 0.2 * i
+        ctx.fillStyle = rand() > 0.5 ? '#fff' : '#000'
+        ctx.fillRect(rand() * w, rand() * h, size, size)
+      }
+      break
+    }
+    case 'invert': {
+      const copy = snapshot(ctx, w, h)
+      ctx.filter = `invert(${i})`
+      ctx.drawImage(copy, 0, 0)
+      break
+    }
+    case 'duotone': {
+      // Đen trắng rồi phủ hai màu: vùng tối tím, vùng sáng cam.
+      const copy = snapshot(ctx, w, h)
+      ctx.filter = `grayscale(1) contrast(${1 + 0.3 * i})`
+      ctx.drawImage(copy, 0, 0)
+      ctx.filter = 'none'
+      ctx.globalAlpha = 0.85 * i
+      ctx.globalCompositeOperation = 'multiply'
+      ctx.fillStyle = '#f97316'
+      ctx.fillRect(0, 0, w, h)
+      ctx.globalCompositeOperation = 'lighten'
+      ctx.fillStyle = '#4c1d95'
+      ctx.fillRect(0, 0, w, h)
+      break
+    }
+    case 'warm':
+    case 'cool': {
+      const copy = snapshot(ctx, w, h)
+      ctx.filter =
+        fx.kind === 'warm'
+          ? `sepia(${0.35 * i}) saturate(${1 + 0.2 * i}) brightness(${1 + 0.05 * i})`
+          : `saturate(${1 - 0.15 * i}) hue-rotate(${-12 * i}deg) brightness(${1 - 0.03 * i})`
+      ctx.drawImage(copy, 0, 0)
+      ctx.filter = 'none'
+      ctx.globalCompositeOperation = 'soft-light'
+      ctx.globalAlpha = 0.5 * i
+      ctx.fillStyle = fx.kind === 'warm' ? '#f59e0b' : '#0ea5e9'
+      ctx.fillRect(0, 0, w, h)
+      break
+    }
+    case 'strobe': {
+      // Nhấp nháy nhanh 6 lần / giây: sáng nửa đầu mỗi chu kỳ.
+      const on = (fx.local % 166) / 166 < 0.4
+      if (on) {
+        ctx.fillStyle = `rgba(255,255,255,${0.75 * i})`
+        ctx.fillRect(0, 0, w, h)
+      }
+      break
+    }
+    case 'glow': {
+      // Bloom: bản nhòe sáng cộng lên khung gốc.
+      const copy = snapshot(ctx, w, h)
+      ctx.globalCompositeOperation = 'lighter'
+      ctx.globalAlpha = 0.45 * i
+      ctx.filter = `blur(${(w / 80) * i}px) brightness(1.2)`
+      ctx.drawImage(copy, 0, 0)
+      break
+    }
+    case 'lightLeak': {
+      // Vệt sáng ấm trôi chậm từ góc trên phải, thở nhẹ theo thời gian.
+      const drift = Math.sin(fx.local / 1400) * w * 0.15
+      const cx = w * 0.85 + drift
+      const cy = h * 0.15
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(w, h) * 0.75)
+      g.addColorStop(0, `rgba(255,170,60,${0.7 * i})`)
+      g.addColorStop(0.45, `rgba(255,80,120,${0.3 * i})`)
+      g.addColorStop(1, 'rgba(255,80,120,0)')
+      ctx.globalCompositeOperation = 'screen'
+      ctx.fillStyle = g
+      ctx.fillRect(0, 0, w, h)
+      break
+    }
+    case 'spotlight': {
+      // Tối toàn khung trừ một vòng sáng ở giữa.
+      const r = Math.min(w, h) * (0.5 - 0.2 * i)
+      const g = ctx.createRadialGradient(w / 2, h / 2, r * 0.6, w / 2, h / 2, r * 1.6)
+      g.addColorStop(0, 'rgba(0,0,0,0)')
+      g.addColorStop(1, `rgba(0,0,0,${0.9 * i})`)
+      ctx.fillStyle = g
+      ctx.fillRect(0, 0, w, h)
+      break
+    }
+    case 'letterbox': {
+      // Dải đen điện ảnh trên dưới; độ mạnh 1 ≈ tỉ lệ 2.35:1.
+      const target = w / 2.35
+      const bar = Math.max(0, ((h - target) / 2) * i)
+      if (bar <= 0) break
+      ctx.fillStyle = '#000'
+      ctx.fillRect(0, 0, w, bar)
+      ctx.fillRect(0, h - bar, w, bar)
+      break
+    }
+    case 'sparkle': {
+      // Lấp lánh: các ngôi sao nhỏ sáng lên rồi tắt ở vị trí cố định theo hạt giống.
+      const rand = seeded(99)
+      const count = Math.round(40 * i)
+      const t = fx.local / 1000
+      for (let k = 0; k < count; k++) {
+        const x = rand() * w
+        const y = rand() * h
+        const phase = rand() * Math.PI * 2
+        const speed = 2 + rand() * 3
+        const size = (w / 160) * (0.5 + rand())
+        const a = Math.max(0, Math.sin(t * speed + phase)) ** 3
+        if (a < 0.05) continue
+        ctx.globalAlpha = a
+        ctx.fillStyle = '#fff'
+        ctx.fillRect(x - size / 2, y - size / 8, size, size / 4)
+        ctx.fillRect(x - size / 8, y - size / 2, size / 4, size)
+      }
+      break
+    }
+    case 'snow': {
+      // Bông tuyết rơi chậm, lắc ngang; vị trí tính từ thời gian nên tua tới đâu cũng đúng.
+      const rand = seeded(7)
+      const count = Math.round(160 * i)
+      const t = fx.local / 1000
+      for (let k = 0; k < count; k++) {
+        const x0 = rand() * w
+        const speed = 0.08 + rand() * 0.12
+        const r = (w / 400) * (0.5 + rand())
+        const sway = rand() * Math.PI * 2
+        const y = ((t * speed * h + rand() * h) % (h + r * 4)) - r * 2
+        const x = x0 + Math.sin(t * 1.5 + sway) * w * 0.02
+        ctx.globalAlpha = 0.6 + 0.4 * rand()
+        ctx.fillStyle = '#fff'
+        ctx.beginPath()
+        ctx.arc(x, y, r, 0, Math.PI * 2)
+        ctx.fill()
+      }
+      break
+    }
     case 'confetti': {
       // Pháo giấy rơi: vị trí từng mảnh tính từ thời gian nên tua tới đâu cũng đúng.
       const rand = seeded(42)

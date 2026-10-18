@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { ASSISTANT_KINDS, type DirectorContext } from '@lumora/core'
+import {
+  ASSISTANT_KINDS,
+  EFFECT_INFO,
+  EFFECT_KINDS,
+  TRANSITION_INFO,
+  TRANSITION_KINDS,
+  type DirectorContext,
+} from '@lumora/core'
 import {
   ASSISTANT_SCHEMA,
   assistantSystem,
@@ -47,6 +54,20 @@ describe('lời nhắc đạo diễn AI (1.9.0)', () => {
     ).toEqual([...ASSISTANT_KINDS])
   })
 
+  it('thư viện hiệu ứng và chuyển cảnh: mọi tên có trong schema và được mô tả trong lời nhắc', () => {
+    const props = DIRECTOR_SCHEMA.properties as {
+      commands: {
+        items: { properties: { effect: { enum: string[] }; transition: { enum: string[] } } }
+      }
+    }
+    expect(props.commands.items.properties.effect.enum).toEqual([...EFFECT_KINDS])
+    expect(props.commands.items.properties.transition.enum).toEqual([...TRANSITION_KINDS])
+    const director = directorSystem(base)
+    for (const kind of EFFECT_KINDS) expect(director).toContain(`${kind}: ${EFFECT_INFO[kind]}`)
+    for (const kind of TRANSITION_KINDS)
+      expect(director).toContain(`${kind}: ${TRANSITION_INFO[kind]}`)
+  })
+
   it('đạo diễn nhận sổ tay dựng chuyên nghiệp và ngữ cảnh thời gian thật', () => {
     const system = directorSystem(base)
     expect(system).toContain('AI director')
@@ -83,5 +104,68 @@ describe('lời nhắc đạo diễn AI (1.9.0)', () => {
     expect(system).toMatch(/timestamps[^\n]*\n\(none\)/)
     expect(system).toMatch(/click times[^\n]*\n\(none\)/)
     expect(system).toContain('(empty)')
+  })
+})
+
+describe('tự dựng một nút 1.12.0: lời nhắc tách để cache, lệnh mới, chọn highlights', async () => {
+  const { directorPrompt, HIGHLIGHTS_SCHEMA, highlightsSystem, systemBlocks, systemText } =
+    await import('./claude')
+
+  it('phần tĩnh (tập lệnh + sổ tay) không chứa gì của video và giống hệt nhau giữa hai video', () => {
+    const a = directorPrompt(base)
+    const b = directorPrompt({
+      ...base,
+      language: 'en',
+      durationMs: 5000,
+      transcript: '[0:00.0] Hello',
+      musicTracks: [],
+      memory: '',
+      history: [],
+    })
+    expect(a.static).toBe(b.static)
+    expect(a.static).toContain('AI director')
+    expect(a.static).toContain(EDITING_PLAYBOOK)
+    expect(a.static).not.toContain('Lofi Chill')
+    expect(a.static).not.toContain('Hôm nay mình hướng dẫn')
+    expect(a.dynamic).toContain('User language: Vietnamese')
+    expect(a.dynamic).toContain('[0:03.5] Hôm nay mình hướng dẫn')
+    expect(a.dynamic).toContain('Lofi Chill')
+    expect(b.dynamic).toContain('User language: English')
+    // Phần tĩnh đủ dài để Claude cache (ngưỡng 1024 token ≈ 4 000 ký tự).
+    expect(a.static.length).toBeGreaterThan(8000)
+    expect(systemText(a)).toBe(`${a.static}\n\n${a.dynamic}`)
+    expect(directorSystem(base)).toBe(systemText(a))
+    expect(systemBlocks(a)).toEqual([
+      { type: 'text', text: a.static, cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: a.dynamic },
+    ])
+    expect(systemBlocks('plain')).toBe('plain')
+  })
+
+  it('hướng dẫn lệnh có findMusic, broll, shorts highlights và mục AUTO BUILD trong sổ tay', () => {
+    const { static: s } = directorPrompt(base)
+    expect(s).toContain('findMusic {mood, tempo, volume}')
+    expect(s).toContain('broll {query, atMs, ms}')
+    expect(s).toContain('highlights = AI picks')
+    expect(EDITING_PLAYBOOK).toContain('12. AUTO BUILD')
+    const props = (
+      DIRECTOR_SCHEMA.properties as {
+        commands: { items: { properties: Record<string, { enum?: string[] }> } }
+      }
+    ).commands.items.properties
+    expect(props.mood).toBeDefined()
+    expect(props.tempo!.enum).toEqual(['slow', 'medium', 'fast'])
+    expect(props.mode!.enum).toContain('highlights')
+    expect(props.count).toBeDefined()
+  })
+
+  it('lời nhắc chọn đoạn hay: số đoạn, độ dài, hook theo ngôn ngữ; schema đủ trường', () => {
+    const s = highlightsSystem('vi', 3)
+    expect(s).toContain('up to 3 self-contained segments')
+    expect(s).toContain('hook: a 3-8 word line in Vietnamese')
+    expect(
+      (HIGHLIGHTS_SCHEMA.properties as { segments: { items: { required: string[] } } }).segments
+        .items.required,
+    ).toEqual(['start_seconds', 'end_seconds', 'hook', 'title'])
   })
 })

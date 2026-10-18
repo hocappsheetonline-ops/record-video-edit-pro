@@ -8,6 +8,7 @@ const KEY_URLS: Record<SecretKey, string> = {
   elevenlabs: 'https://elevenlabs.io/app/settings/api-keys',
   anthropic: 'https://console.anthropic.com/settings/keys',
   pixabay: 'https://pixabay.com/api/docs/',
+  jamendo: 'https://devportal.jamendo.com/',
 }
 
 type Feedback = { tone: 'ok' | 'error' | 'info'; text: string } | null

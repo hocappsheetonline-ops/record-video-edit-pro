@@ -130,6 +130,7 @@ describe('validateKey', () => {
     elevenlabs: vi.fn(async () => ({ ok: true as const })),
     anthropic: vi.fn(async () => ({ ok: true as const })),
     pixabay: vi.fn(async () => ({ ok: true as const })),
+    jamendo: vi.fn(async () => ({ ok: true as const })),
   }
 
   it('báo lỗi định dạng mà không gọi API', async () => {

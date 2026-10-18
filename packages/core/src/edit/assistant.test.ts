@@ -129,7 +129,7 @@ describe('lệnh mở rộng (hầu hết tính năng chỉnh sửa)', () => {
       { kind: 'chapters' },
       { kind: 'track', row: 'effects', hidden: true },
       { kind: 'clear', target: 'music' },
-      { kind: 'shorts', mode: 'fixed', seconds: 45, vertical: true },
+      { kind: 'shorts', mode: 'fixed', seconds: 45, vertical: true, count: 3 },
       { kind: 'export', resolution: 720, format: 'mp4', fps: 60 },
     ])
   })
@@ -206,7 +206,7 @@ describe('lệnh mở rộng (hầu hết tính năng chỉnh sửa)', () => {
     ])
     expect(parseAssistantRequest('chia thành các video ngắn mỗi 30 giây, dọc')).toEqual([
       { kind: 'aspect', aspect: '9:16' },
-      { kind: 'shorts', mode: 'fixed', seconds: 30, vertical: true },
+      { kind: 'shorts', mode: 'fixed', seconds: 30, vertical: true, count: 3 },
     ])
     expect(parseAssistantRequest('phụ đề song ngữ tiếng Nhật')).toEqual([
       { kind: 'captions' },
@@ -323,5 +323,86 @@ describe('lệnh AI 1.9.0: công thức dựng, hiệu ứng / tốc độ / chu
       { kind: 'transitions', transition: 'fadeBlack', ms: 3000 },
       { kind: 'export', resolution: 1080, format: 'mp4', enhance: true },
     ])
+  })
+})
+
+describe('tự dựng 1.12.0: findMusic, broll, shorts highlights', () => {
+  it('normalize: findMusic lọc ký tự lạ / kẹp âm lượng, broll cần query + atMs, shorts có mode highlights và count', () => {
+    expect(
+      normalizeAssistantCommands([
+        { kind: 'findMusic', mood: ' Upbeat, corporate!! ', tempo: 'fast', volume: 3 },
+        { kind: 'findMusic', mood: 'x', tempo: 'bogus' },
+        { kind: 'broll', query: ' typing on laptop ', atMs: 2500.4, ms: 100 },
+        { kind: 'broll', query: '', atMs: 0 },
+        { kind: 'broll', query: 'city', atMs: 9000 },
+        { kind: 'shorts', mode: 'highlights', count: 12 },
+        { kind: 'shorts', mode: 'bogus' },
+      ]),
+    ).toEqual([
+      { kind: 'findMusic', mood: 'Upbeat corporate', tempo: 'fast', volume: 1 },
+      { kind: 'broll', query: 'typing on laptop', atMs: 2500, ms: 1000 },
+      { kind: 'broll', query: 'city', atMs: 9000, ms: 4000 },
+      { kind: 'shorts', mode: 'highlights', seconds: 60, vertical: true, count: 10 },
+    ])
+    // findMusic trùng loại chỉ giữ lệnh đầu; mặc định nhịp vừa, âm lượng 0.25.
+    expect(normalizeAssistantCommands([{ kind: 'findMusic' }])).toEqual([
+      { kind: 'findMusic', mood: '', tempo: 'medium', volume: 0.25 },
+    ])
+  })
+
+  it('từ khóa: "tự tìm nhạc nền vui nhanh" → findMusic; "chia ra làm 2-3 video short" → highlights', () => {
+    expect(parseAssistantRequest('tự tìm nhạc nền vui nhanh và nhỏ')).toEqual([
+      { kind: 'findMusic', mood: 'vui', tempo: 'fast', volume: 0.15 },
+    ])
+    expect(parseAssistantRequest('find calm music')).toEqual([
+      { kind: 'findMusic', mood: 'calm', tempo: 'slow', volume: 0.25 },
+    ])
+    expect(parseAssistantRequest('chia video này ra làm 2-3 video short')).toEqual([
+      { kind: 'aspect', aspect: '9:16' },
+      { kind: 'shorts', mode: 'highlights', seconds: 60, vertical: true, count: 3 },
+    ])
+    expect(parseAssistantRequest('cắt thành các đoạn ngắn hay nhất')).toEqual([
+      { kind: 'shorts', mode: 'highlights', seconds: 60, vertical: false, count: 3 },
+    ])
+    // "nhạc lofi" (không có "tìm") vẫn là lệnh music từ kho như trước.
+    expect(parseAssistantRequest('thêm nhạc lofi')).toEqual([
+      { kind: 'music', query: 'lofi', volume: 0.4 },
+    ])
+  })
+})
+
+describe('từ khóa hiệu ứng & chuyển cảnh mới', () => {
+  it('nhận tên các hiệu ứng mới bằng tiếng Việt và tiếng Anh', () => {
+    const effectOf = (text: string) => parseAssistantRequest(text).find((c) => c.kind === 'effect')
+    expect(effectOf('thêm hiệu ứng lấp lánh')).toEqual({ kind: 'effect', effect: 'sparkle' })
+    expect(effectOf('cho tuyết rơi')).toEqual({ kind: 'effect', effect: 'snow' })
+    expect(effectOf('hiệu ứng tách màu RGB')).toEqual({ kind: 'effect', effect: 'rgbSplit' })
+    expect(effectOf('add film grain')).toEqual({ kind: 'effect', effect: 'grain' })
+    expect(effectOf('hiệu ứng phóng nhấn')).toEqual({ kind: 'effect', effect: 'zoomPunch' })
+    expect(effectOf('thêm dải điện ảnh')).toEqual({ kind: 'effect', effect: 'letterbox' })
+    expect(effectOf('hiệu ứng đèn rọi')).toEqual({ kind: 'effect', effect: 'spotlight' })
+  })
+
+  it('hiệu ứng màu chỉ nhận khi có chữ "hiệu ứng"; "bộ lọc cổ điển" vẫn là bộ lọc', () => {
+    const kinds = (text: string) => parseAssistantRequest(text).map((c) => c.kind)
+    expect(kinds('bộ lọc cổ điển')).toEqual(['filter'])
+    expect(parseAssistantRequest('hiệu ứng đen trắng')).toEqual([{ kind: 'effect', effect: 'bw' }])
+    expect(parseAssistantRequest('hiệu ứng tông ấm')).toEqual([{ kind: 'effect', effect: 'warm' }])
+  })
+
+  it('nhận các chuyển cảnh mới', () => {
+    const tr = (text: string) => parseAssistantRequest(text).find((c) => c.kind === 'transitions')
+    expect(tr('chuyển cảnh lia máy')).toEqual({ kind: 'transitions', transition: 'whip' })
+    expect(tr('chuyển cảnh thu nhỏ')).toEqual({ kind: 'transitions', transition: 'zoomOut' })
+    expect(tr('chuyển cảnh lướt lên')).toEqual({ kind: 'transitions', transition: 'slideUp' })
+    expect(tr('chuyển cảnh lướt sang phải')).toEqual({
+      kind: 'transitions',
+      transition: 'slideRight',
+    })
+    expect(tr('transition wipe')).toEqual({ kind: 'transitions', transition: 'wipe' })
+    expect(tr('chuyển cảnh vòng tròn')).toEqual({ kind: 'transitions', transition: 'iris' })
+    expect(tr('chuyển cảnh lật thẻ')).toEqual({ kind: 'transitions', transition: 'flip' })
+    expect(tr('chuyển cảnh xoay')).toEqual({ kind: 'transitions', transition: 'spin' })
+    expect(tr('thêm chuyển cảnh')).toEqual({ kind: 'transitions', transition: 'fadeBlack' })
   })
 })

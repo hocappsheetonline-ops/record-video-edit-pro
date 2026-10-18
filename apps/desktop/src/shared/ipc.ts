@@ -12,6 +12,7 @@ import type {
   CutSuggestion,
   Transcript,
   EditState,
+  HighlightSegment,
   InputEvent,
   KeyStatus,
   KeyValidationResult,
@@ -80,6 +81,7 @@ export const IPC = {
   musicUse: 'music:use',
   musicRecentDownloads: 'music:recent-downloads',
   musicOpenYouTube: 'music:open-youtube',
+  musicFind: 'music:find',
   exportStart: 'export:start',
   exportWrite: 'export:write',
   exportFinish: 'export:finish',
@@ -103,6 +105,7 @@ export const IPC = {
   aiSpeechDownload: 'ai:speech-download',
   aiSpeechRemove: 'ai:speech-remove',
   aiDirect: 'ai:direct',
+  aiHighlights: 'ai:highlights',
   aiTranslate: 'ai:translate',
   aiEditCaptions: 'ai:edit-captions',
   aiCaptionEmojis: 'ai:caption-emojis',
@@ -363,13 +366,27 @@ export interface AudioAsset {
   durationMs: number
 }
 
-/** Một bài trong kho nhạc của người dùng (tải từ Thư viện âm thanh YouTube hoặc file trên máy). */
+/**
+ * Một bài trong kho nhạc của người dùng: tải từ Thư viện âm thanh YouTube, file trên máy, hoặc
+ * AI tự tìm trên Jamendo (nhạc Creative Commons: `credit` là dòng ghi nguồn để dán vào mô tả).
+ */
 export interface MusicTrack {
   file: string
   name: string
   durationMs: number
   addedAt: number
-  source: 'youtube' | 'file'
+  source: 'youtube' | 'file' | 'jamendo'
+  /** Dòng ghi nguồn bắt buộc với nhạc Creative Commons ("Tên bài" by Nghệ sĩ — CC BY 3.0). */
+  credit?: string
+  /** Mã bài trên kho online (để không tải lại). */
+  origin?: { source: 'jamendo'; id: string }
+}
+
+/** Yêu cầu AI tự tìm nhạc nền (Jamendo) theo tâm trạng / nhịp / thời lượng video. */
+export interface MusicFindQuery {
+  mood: string
+  tempo: 'slow' | 'medium' | 'fast'
+  durationMs: number
 }
 
 /** File nhạc vừa xuất hiện trong thư mục Tải về (sau khi tải từ Thư viện âm thanh YouTube). */
@@ -528,6 +545,8 @@ export interface LumoraApi {
   removeMusic(file: string): Promise<MusicTrack[]>
   /** Chép một bài trong kho vào dự án. */
   useMusic(folder: string, file: string): Promise<AudioAsset>
+  /** Tự tìm và tải một bài nhạc nền miễn phí bản quyền (Jamendo) vào kho theo tâm trạng. */
+  findMusic(query: MusicFindQuery): Promise<MusicTrack>
   /** File nhạc mới trong thư mục Tải về (để thêm bài vừa tải từ Thư viện âm thanh YouTube). */
   recentAudioDownloads(): Promise<RecentDownload[]>
   /** Mở Thư viện âm thanh YouTube (YouTube Studio) trong trình duyệt. */
@@ -553,6 +572,8 @@ export interface LumoraApi {
    * câu hỏi làm rõ (nếu cần) và danh sách lệnh. Lỗi khi không có AI (thiếu key / Ollama tắt).
    */
   directEdits(goal: string, context: DirectorContext): Promise<DirectorPlan>
+  /** AI chọn các đoạn hay nhất (thời gian trên bản quay gốc) để tách thành video ngắn. */
+  highlights(folder: string, count: number): Promise<HighlightSegment[]>
   /** Model đã tải trong Ollama tại địa chỉ đó (AI cục bộ). */
   listLocalModels(baseUrl: string): Promise<string[]>
   /** Tải một model về Ollama (tiến độ qua `onLocalAiProgress`). */

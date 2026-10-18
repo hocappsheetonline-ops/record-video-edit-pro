@@ -15,6 +15,8 @@ import {
   wordsToRanges,
   normalizeAssistantCommands,
   normalizeDirectorPlan,
+  normalizeHighlights,
+  type HighlightSegment,
   type AssistantCommand,
   type AssistantContext,
   type CutSuggestion,
@@ -52,7 +54,11 @@ import {
   CUTS_SCHEMA,
   CUTS_SYSTEM,
   DIRECTOR_SCHEMA,
-  directorSystem,
+  directorPrompt,
+  HIGHLIGHTS_SCHEMA,
+  highlightsSystem,
+  systemText,
+  type SystemPrompt,
   SUMMARY_SCHEMA,
   summarySystem,
   TRANSLATE_SCHEMA,
@@ -317,13 +323,15 @@ export class AiService {
    * Claude (cần key). Mọi tính năng văn bản (trợ lý, cắt từ thừa, tóm tắt, dịch) đi qua đây.
    */
   private async askJson<T>(options: {
-    system: string
+    system: SystemPrompt
     user: string
     schema: Record<string, unknown>
     effort?: 'low' | 'medium' | 'high'
   }): Promise<T> {
     const local = await this.deps.getLocalAi?.()
     if (local?.enabled) {
+      // Ollama không cache lời nhắc theo khối: ghép hai phần thành một chuỗi.
+      const text = systemText(options.system)
       const ask = (system: string) =>
         askJsonOllama<T>({
           baseUrl: local.baseUrl,
@@ -334,12 +342,12 @@ export class AiService {
           fetchImpl: this.deps.fetchImpl,
         })
       try {
-        return await ask(options.system)
+        return await ask(text)
       } catch (error) {
         // Model nhỏ thỉnh thoảng trả JSON hỏng: thử lại một lần với lời nhắc nghiêm hơn.
         if (!(error instanceof OllamaError && error.code === 'ollama_bad_json')) throw error
         return ask(
-          `${options.system}\nIMPORTANT: reply with exactly one JSON object matching the schema, no prose, no markdown.`,
+          `${text}\nIMPORTANT: reply with exactly one JSON object matching the schema, no prose, no markdown.`,
         )
       }
     }
@@ -535,13 +543,31 @@ export class AiService {
   async direct(goal: string, context: DirectorContext): Promise<DirectorPlan> {
     const text = goal.trim().slice(0, 2000)
     if (!text) return { summary: '', questions: [], commands: [] }
+    // Phần tĩnh (tập lệnh + sổ tay) được Claude cache; chỉ phần ngữ cảnh video tốn token mỗi lần.
     const answer = await this.askJson<unknown>({
-      system: directorSystem(trimDirectorContext(context)),
+      system: directorPrompt(trimDirectorContext(context)),
       user: text,
       schema: DIRECTOR_SCHEMA,
       effort: 'medium',
     })
     return normalizeDirectorPlan(answer)
+  }
+
+  /**
+   * Chọn các đoạn hay nhất để tách thành video ngắn: lời thoại có mốc (thời gian bản quay gốc)
+   * → tối đa `count` đoạn 15-90 s, mỗi đoạn có hook và tên. Gọi một lần, effort thấp (rẻ).
+   */
+  async highlights(dir: string, count: number): Promise<HighlightSegment[]> {
+    const { words, language } = await this.requireTranscript(dir)
+    const n = Math.round(Math.min(5, Math.max(1, count)))
+    const answer = await this.askJson<unknown>({
+      system: highlightsSystem(language, n),
+      user: timestampedTranscript(words, 5000),
+      schema: HIGHLIGHTS_SCHEMA,
+      effort: 'low',
+    })
+    // Thời lượng video không biết ở đây (lời thoại có thể kết thúc sớm): giao diện kẹp theo bản quay.
+    return normalizeHighlights(answer, 0, n)
   }
 
   async translate(

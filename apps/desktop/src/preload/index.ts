@@ -78,6 +78,7 @@ const api: LumoraApi = {
   removeMusic: (file) => ipcRenderer.invoke(IPC.musicRemove, file),
   useMusic: (folder, file) => ipcRenderer.invoke(IPC.musicUse, folder, file),
   recentAudioDownloads: () => ipcRenderer.invoke(IPC.musicRecentDownloads),
+  findMusic: (query) => ipcRenderer.invoke(IPC.musicFind, query),
   openYouTubeAudioLibrary: () => ipcRenderer.invoke(IPC.musicOpenYouTube),
   pathForFile: (file) => {
     try {
@@ -103,6 +104,7 @@ const api: LumoraApi = {
   summarize: (folder) => ipcRenderer.invoke(IPC.aiSummarize, folder),
   planEdits: (instruction, context) => ipcRenderer.invoke(IPC.aiPlan, instruction, context),
   directEdits: (goal, context) => ipcRenderer.invoke(IPC.aiDirect, goal, context),
+  highlights: (folder, count) => ipcRenderer.invoke(IPC.aiHighlights, folder, count),
   listLocalModels: (baseUrl) => ipcRenderer.invoke(IPC.aiLocalModels, baseUrl),
   pullLocalModel: (baseUrl, model) => ipcRenderer.invoke(IPC.aiPullModel, baseUrl, model),
   installOllama: () => ipcRenderer.invoke(IPC.aiInstallOllama),

@@ -100,6 +100,17 @@ import {
   normalizeDirectorPlan,
   planLocally,
   rememberRule,
+  aspectRatio,
+  autoBuildGoal,
+  MIN_SHORTS_SOURCE_MS,
+  normalizeAutoBuildOptions,
+  pickAutoFormat,
+  planAutoBuildLocally,
+  reviewBuild,
+  type AutoBuildOptions,
+  type BuildReview,
+  type HighlightSegment,
+  type RecipeStyle,
   type DirectorContext,
   type DirectorMessage,
   type DirectorPlan,
@@ -439,12 +450,28 @@ interface EditorStore {
   }): Promise<number>
   splitIntoShorts(
     options: {
-      mode: 'chapters' | 'fixed'
+      mode: 'chapters' | 'fixed' | 'highlights'
       seconds?: number
       vertical?: boolean
+      /** Số đoạn hay nhất muốn tách (mode highlights, mặc định 3). */
+      count?: number
       /** Đoạn ngắn nhất (ms, mặc định 5 giây); đoạn cuối ngắn hơn thì gộp vào đoạn trước. */
       minMs?: number
     },
+    onProgress?: (done: number, total: number) => void,
+  ): Promise<number>
+  /**
+   * Tự dựng một nút: lập kế hoạch (AI, một lần gọi với lời nhắc tĩnh được cache; không có AI
+   * thì công thức có sẵn) → áp dụng → rà soát theo sổ tay và lấp chỗ thiếu (local, không tốn
+   * token) → tuỳ chọn tách 2-3 video ngắn. Tất cả là một bước hoàn tác.
+   */
+  autoBuild(
+    options: Partial<AutoBuildOptions>,
+    onProgress?: (done: number, total: number, step: string) => void,
+  ): Promise<AutoBuildResult>
+  /** (nội bộ) Tách các đoạn AI chọn thành video ngắn dọc có hook; gọi qua `splitIntoShorts`. */
+  splitHighlights(
+    options: { count?: number; vertical?: boolean },
     onProgress?: (done: number, total: number) => void,
   ): Promise<number>
   /** Đổi cùng một thuộc tính (mức zoom, kiểu, tâm) cho mọi đoạn zoom. */
@@ -458,6 +485,21 @@ interface EditorStore {
 
 /** Đoạn ngắn nhất khi chia video (ms); đoạn cuối ngắn hơn thì gộp vào đoạn trước. */
 const MIN_SHORT_MS = 5000
+
+/** Kết quả tự dựng một nút. */
+export interface AutoBuildResult {
+  format: RecipeStyle
+  /** Kế hoạch đã chạy (lệnh của AI + lệnh rà soát bổ sung). */
+  commands: AssistantCommand[]
+  report: AutoEditReport[]
+  review: BuildReview
+  /** Số video ngắn đã tách (0 nếu không yêu cầu / video quá ngắn). */
+  shorts: number
+  /** Dòng ghi nguồn nhạc nền (nhạc Creative Commons) để dán vào mô tả video. */
+  credits: string[]
+  /** Kế hoạch do AI (true) hay công thức có sẵn (false). */
+  ai: boolean
+}
 
 export interface AutoEditOptions {
   silences: boolean
@@ -2426,12 +2468,113 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           done('outro')
           break
         }
+        case 'findMusic': {
+          // AI tự tìm nhạc nền miễn phí bản quyền (Jamendo); không có key thì dùng kho nhạc.
+          let track: MusicTrack | null = null
+          let reason = ''
+          try {
+            track = await lumora().findMusic({
+              mood: c.mood,
+              tempo: c.tempo,
+              durationMs: outputDuration(get().edit!.clips),
+            })
+          } catch (e) {
+            reason = errorCode(e)
+            const tracks = await lumora()
+              .listMusic()
+              .catch(() => [] as MusicTrack[])
+            track = tracks[0] ?? null
+          }
+          if (get().folder !== folder) return report
+          if (!track) {
+            skipped('findMusic', reason === 'key_missing' ? 'no_music_key' : reason || 'no_music')
+            break
+          }
+          try {
+            const count = get().edit!.audioClips.length
+            await get().addMusicFromLibrary(track.file)
+            if (get().folder !== folder) return report
+            const clips = get().edit!.audioClips
+            const clip = clips.length > count ? clips[clips.length - 1] : undefined
+            if (clip) get().updateAudioClip(clip.id, { volume: c.volume })
+            // Nhạc nền dưới giọng nói: tự giảm khi nói (trừ khi kế hoạch đã nêu rõ).
+            if (!has('duck'))
+              get().change((e) => ({
+                ...e,
+                audio: { ...e.audio, duck: { ...e.audio.duck, enabled: true } },
+              }))
+            done('findMusic')
+          } catch (e) {
+            report.push({ step: 'findMusic', status: 'error', detail: errorCode(e) })
+          }
+          break
+        }
+        case 'broll': {
+          // Tư liệu (stock video Pixabay) phủ kín khung tại một thời điểm, không tiếng.
+          try {
+            const total = outputDuration(get().edit!.clips)
+            if (c.atMs >= total) {
+              skipped('broll', 'too_short')
+              break
+            }
+            const found = await lumora().onlineSearch('pixabayVideo', c.query, null)
+            if (get().folder !== folder) return report
+            const item = found.items.find((i) => i.durationMs >= c.ms) ?? found.items[0] ?? null
+            if (!item) {
+              skipped('broll', 'no_results')
+              break
+            }
+            const meme = await lumora().onlineDownload('pixabay', item.id)
+            const asset = await lumora().useMeme(folder, meme.file)
+            if (get().folder !== folder) return report
+            const cur = get().edit!
+            const start = c.atMs
+            const end = Math.min(total, start + Math.min(c.ms, asset.durationMs || c.ms))
+            const frame = aspectRatio(cur.frame.aspect, { width: 16, height: 9 })
+            const aspect = asset.width / Math.max(1, asset.height)
+            const overlay = buildOverlay(
+              {
+                kind: 'video',
+                file: asset.file,
+                text: asset.name,
+                aspect,
+                sourceDuration: asset.durationMs,
+                hasAudio: asset.hasAudio,
+                volume: 0,
+              },
+              start,
+              total,
+            )
+            get().change((e) => ({
+              ...e,
+              overlays: [
+                ...e.overlays,
+                // Cỡ = chiều cao khung; khung rộng hơn tư liệu thì phóng theo chiều rộng để phủ kín.
+                {
+                  ...overlay,
+                  start,
+                  end,
+                  x: 0.5,
+                  y: 0.5,
+                  size: Math.max(1, frame / aspect) * 1.02,
+                },
+              ],
+            }))
+            done('broll')
+          } catch (e) {
+            const code = errorCode(e)
+            if (code === 'key_missing') skipped('broll', 'no_pixabay_key')
+            else report.push({ step: 'broll', status: 'error', detail: code })
+          }
+          break
+        }
         case 'shorts': {
           try {
             const made = await get().splitIntoShorts({
               mode: c.mode,
               seconds: c.seconds,
               vertical: c.vertical,
+              count: c.count,
             })
             if (get().folder !== folder) return report
             if (made === 0) skipped('shorts', 'too_short')
@@ -2768,6 +2911,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!folder || !edit || !project) return 0
     const total = outputDuration(edit.clips)
     const minMs = options.minMs ?? MIN_SHORT_MS
+    if (options.mode === 'highlights') return get().splitHighlights(options, onProgress)
     let bounds: number[]
     if (options.mode === 'chapters') {
       const summary = await lumora().summarize(folder)
@@ -2814,6 +2958,245 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       onProgress?.(i + 1, ranges.length)
     }
     return ranges.length
+  },
+
+  async splitHighlights(options, onProgress) {
+    const { folder, edit, project } = get()
+    if (!folder || !edit || !project) return 0
+    // Cần lời thoại (AI đọc để chọn đoạn); chưa có thì nhận dạng trước.
+    if (!get().transcript) {
+      const transcript = await lumora().transcribe(folder, edit.captions.language || '')
+      if (get().folder !== folder) return 0
+      get().setTranscript(transcript)
+    }
+    const segments: HighlightSegment[] = await lumora().highlights(folder, options.count ?? 3)
+    if (get().folder !== folder || segments.length === 0) return 0
+    const sourceTotal = sourceDuration(project.segments)
+    const vertical = options.vertical !== false
+    const hookStyle = templateStyle('title')
+    let made = 0
+    for (const [i, seg] of segments.entries()) {
+      const a = Math.max(0, Math.min(seg.start, sourceTotal))
+      const b = Math.max(a + 1, Math.min(seg.end, sourceTotal))
+      const clips = removeSourceRanges(edit.clips, [
+        { start: 0, end: a },
+        { start: b, end: sourceTotal },
+      ])
+      const length = outputDuration(clips)
+      if (length < MIN_SHORT_MS) continue
+      const hook = seg.hook
+        ? [
+            {
+              ...buildOverlay(
+                {
+                  kind: 'text',
+                  text: seg.hook,
+                  style: 'title',
+                  color: hookStyle.color,
+                  textStyle: hookStyle,
+                },
+                0,
+                length,
+              ),
+              start: 0,
+              end: Math.min(length, 2500),
+              x: 0.5,
+              y: 0.3,
+            },
+          ]
+        : []
+      const short: EditState = {
+        ...edit,
+        clips,
+        // Các mục tính theo thời gian video xuất không còn đúng chỗ: bỏ; hook ở đầu short.
+        overlays: hook,
+        effects: [],
+        audioClips: [],
+        markers: [],
+        transitions: [],
+        frame: vertical ? { ...edit.frame, aspect: '9:16', fill: true } : edit.frame,
+        captions: vertical
+          ? {
+              ...edit.captions,
+              look: { ...edit.captions.look, template: 'tiktok' },
+              style: 'highlight',
+            }
+          : edit.captions,
+      }
+      const label = seg.title ? `(short ${i + 1}: ${seg.title})` : `(short ${i + 1})`
+      const copy = await lumora().duplicateProject(folder, label)
+      await lumora().saveEdit(copy, short)
+      made++
+      onProgress?.(i + 1, segments.length)
+    }
+    return made
+  },
+
+  async autoBuild(input, onProgress) {
+    const options = normalizeAutoBuildOptions(input)
+    const { folder, edit: before, project, cursor, events } = get()
+    if (!folder || !before || !project) throw new Error('no_project')
+    const steps = ['prepare', 'plan', 'apply', 'review', ...(options.shorts ? ['shorts'] : [])]
+    let n = 0
+    const tick = (step: string) => onProgress?.(++n, steps.length, step)
+    const pastBefore = get().past
+    set({ directorBusy: true, directorPlan: null })
+    try {
+      // 1. Chuẩn bị (local): lời thoại để AI lập kế hoạch đúng mốc thời gian.
+      tick('prepare')
+      let transcript = get().transcript
+      if (!transcript) {
+        try {
+          transcript = await lumora().transcribe(folder, before.captions.language || '')
+          if (get().folder !== folder) throw new Error('project_changed')
+          get().setTranscript(transcript)
+        } catch (e) {
+          if (errorCode(e) === 'project_changed') throw e
+          transcript = null
+        }
+      }
+      const hasCursor = cursor !== null && events.length > 0
+      const durationMs = outputDuration(get().edit!.clips)
+      const format: RecipeStyle =
+        options.format === 'auto' ? pickAutoFormat({ durationMs, hasCursor }) : options.format
+
+      // 2. Lập kế hoạch: một lần gọi AI với câu yêu cầu cố định ngắn; ngữ cảnh video ở phần động
+      // của lời nhắc, phần tĩnh (tập lệnh + sổ tay) được cache. Không có AI: công thức có sẵn.
+      tick('plan')
+      const goal = autoBuildGoal(options, format)
+      const [tracks, projects] = await Promise.all([
+        lumora()
+          .listMusic()
+          .catch(() => [] as MusicTrack[]),
+        lumora()
+          .listProjects()
+          .catch(() => []),
+      ])
+      if (get().folder !== folder) throw new Error('project_changed')
+      const edit = get().edit!
+      const language = edit.captions.language || transcript?.language || ''
+      const context: DirectorContext = {
+        language,
+        durationMs,
+        hasTranscript: transcript !== null,
+        hasCursor,
+        musicTracks: tracks.map((t) => t.name),
+        projects: projects.filter((p) => p.folder !== folder).map((p) => p.name),
+        memory: memorySummary(get().memory, language || 'vi'),
+        // Không gửi hội thoại cũ: tự dựng là một yêu cầu trọn vẹn (tiết kiệm token).
+        history: [],
+        transcript: transcript ? transcriptExcerpt(transcript.words, edit.clips) : '',
+        clicks: cursor ? outputClicks(cursor.clicks, edit.clips) : [],
+        edit: editSummary(edit),
+      }
+      pushDirectorMessage(folder, {
+        role: 'user',
+        text: i18n.t('ai.autoBuild.goal', { format: i18n.t(`ai.autoBuild.formats.${format}`) }),
+        at: Date.now(),
+      })
+      let plan: DirectorPlan | null = null
+      try {
+        plan = normalizeDirectorPlan(await lumora().directEdits(goal, context))
+      } catch {
+        plan = null
+      }
+      if (get().folder !== folder) throw new Error('project_changed')
+      const ai = plan !== null && plan.commands.length > 0
+      let commands: AssistantCommand[] = ai
+        ? plan!.commands
+        : planAutoBuildLocally(options, format, language)
+      // Không có AI: hook mở đầu lấy từ câu nói đầu tiên (vài từ đầu của lời thoại).
+      if (!ai && transcript && transcript.words.length > 0) {
+        const hook = transcript.words
+          .slice(0, 8)
+          .map((w) => w.text)
+          .join(' ')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 40)
+        if (hook)
+          commands.push({
+            kind: 'text',
+            text: hook,
+            atMs: 0,
+            ms: 2500,
+            template: 'title',
+            position: 'top',
+          })
+      }
+      // Bảo đảm xương sống của bản dựng dù AI có bỏ sót: công thức đúng định dạng, nhạc khi được
+      // yêu cầu; bỏ những gì người dùng không chọn; không xuất / không tách ở bước này.
+      if (!commands.some((c) => c.kind === 'recipe'))
+        commands = [{ kind: 'recipe', style: format }, ...commands]
+      if (!options.music)
+        commands = commands.filter((c) => c.kind !== 'findMusic' && c.kind !== 'music')
+      else if (!commands.some((c) => c.kind === 'findMusic' || c.kind === 'music'))
+        commands.push(
+          ...planAutoBuildLocally(options, format, language).filter((c) => c.kind === 'findMusic'),
+        )
+      if (!options.broll) commands = commands.filter((c) => c.kind !== 'broll')
+      commands = normalizeAssistantCommands(
+        commands.filter((c) => c.kind !== 'shorts' && c.kind !== 'export'),
+      )
+
+      // 3. Áp dụng.
+      tick('apply')
+      const report = await get().applyAssistantCommands(commands)
+      if (get().folder !== folder) throw new Error('project_changed')
+
+      // 4. Rà soát theo sổ tay (local, không tốn token) và lấp chỗ thiếu.
+      tick('review')
+      const review = reviewBuild(get().edit!, format, { ...options, language })
+      if (review.fixes.length > 0) {
+        report.push(...(await get().applyAssistantCommands(review.fixes)))
+        if (get().folder !== folder) throw new Error('project_changed')
+      }
+      const all = [...commands, ...review.fixes]
+      const used = new Set(
+        get()
+          .edit!.audioClips.filter((a) => a.kind === 'music')
+          .map((a) => a.name),
+      )
+      const library = await lumora()
+        .listMusic()
+        .catch(() => tracks)
+      const credits = library.filter((t) => t.credit && used.has(t.name)).map((t) => t.credit!)
+
+      // 5. Tách 2-3 video ngắn từ video dài (tuỳ chọn).
+      let shorts = 0
+      if (options.shorts) {
+        tick('shorts')
+        if (outputDuration(get().edit!.clips) >= MIN_SHORTS_SOURCE_MS) {
+          try {
+            shorts = await get().splitIntoShorts({
+              mode: 'highlights',
+              count: options.shortsCount,
+              vertical: true,
+            })
+            report.push(
+              shorts > 0
+                ? { step: 'shorts', status: 'done', detail: shorts }
+                : { step: 'shorts', status: 'skipped', detail: 'no_results' },
+            )
+          } catch (e) {
+            report.push({ step: 'shorts', status: 'error', detail: errorCode(e) })
+          }
+        } else report.push({ step: 'shorts', status: 'skipped', detail: 'too_short' })
+      }
+      if (get().folder !== folder) throw new Error('project_changed')
+      // Một bước hoàn tác cho cả bản dựng.
+      const after = get().edit
+      if (after && after !== before)
+        set({ past: [...pastBefore, before].slice(-HISTORY_LIMIT), future: [] })
+      pushDirectorMessage(folder, {
+        role: 'ai',
+        text: plan?.summary || doneLine(all.length),
+        at: Date.now(),
+      })
+      return { format, commands: all, report, review, shorts, credits, ai }
+    } finally {
+      if (get().folder === folder) set({ directorBusy: false })
+    }
   },
 
   async autoEdit(options, onProgress) {
