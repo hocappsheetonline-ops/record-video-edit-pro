@@ -299,6 +299,14 @@ function dropErrorText(t: (k: string) => string, message: string) {
 
 /** Chiều cao một hàng con (px) của các hàng có thể xếp chồng. */
 const LANE = { effects: 28, overlays: 32, audio: 40 }
+/** Hàng (có nút khóa) của mỗi loại mục chọn được; zoom không có hàng khóa. */
+const SEL_ROW: Record<SelItem['kind'], TimelineRow | null> = {
+  effect: 'effects',
+  overlay: 'overlays',
+  audio: 'audio',
+  clip: 'clips',
+  zoom: null,
+}
 
 function TrackHeader({
   icon: Icon,
@@ -362,6 +370,7 @@ export function Timeline() {
   const time = useEditorStore((s) => s.time)
   const playing = useEditorStore((s) => s.playing)
   const selection = useEditorStore((s) => s.selection)
+  const selectedItems = useEditorStore((s) => s.selected)
   const scrollRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState<Drag | null>(null)
@@ -427,9 +436,13 @@ export function Timeline() {
     store().setTime(timeAt(e.clientX))
   }
 
+  const isSel = (kind: SelItem['kind'], id: string) =>
+    selectedItems.some((x) => x.kind === kind && x.id === id)
+
   /**
-   * Kéo trên chỗ trống: vẽ khung chọn, nhả chuột thì chọn các khối giao với khung
-   * (lớp phủ, hiệu ứng, âm thanh; bỏ qua hàng bị khóa). Giữ Ctrl để chọn thêm.
+   * Kéo trên chỗ trống (hoặc kéo từ một clip): vẽ khung chọn, nhả chuột thì chọn các khối
+   * giao với khung (clip, zoom, lớp phủ, hiệu ứng, âm thanh; bỏ qua hàng bị khóa).
+   * Giữ Ctrl để chọn thêm.
    */
   const startMarquee = (e: ReactPointerEvent) => {
     const content = contentRef.current
@@ -459,14 +472,21 @@ export function Timeline() {
       const hits: SelItem[] = []
       content.querySelectorAll<HTMLElement>('[data-sel-kind]').forEach((el) => {
         const kind = el.dataset.selKind as SelItem['kind']
-        const row = kind === 'overlay' ? 'overlays' : kind === 'effect' ? 'effects' : 'audio'
-        if (tracks?.[row].locked) return
+        const row = SEL_ROW[kind]
+        if (row && tracks?.[row].locked) return
         const r = el.getBoundingClientRect()
         if (r.right >= left && r.left <= right && r.bottom >= top && r.top <= bottom)
           hits.push({ kind, id: el.dataset.selId! })
       })
+      // Một đoạn zoom vắt qua nhiều clip vẽ thành nhiều mảnh cùng id: chỉ lấy một lần.
       const seen = new Set(base.map((x) => `${x.kind}:${x.id}`))
-      store().selectMany([...base, ...hits.filter((h) => !seen.has(`${h.kind}:${h.id}`))])
+      const added = hits.filter((h) => {
+        const key = `${h.kind}:${h.id}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      store().selectMany([...base, ...added])
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
@@ -495,9 +515,17 @@ export function Timeline() {
   }
 
   const onZoomDown = (e: ReactPointerEvent, zoomRegion: ZoomRegion, mode: Drag['mode']) => {
+    if (e.button !== 0) return
     e.stopPropagation()
+    // Ctrl+click: thêm / bỏ khỏi nhóm đang chọn, không kéo.
+    if (e.ctrlKey || e.metaKey) {
+      store().toggleSelect({ kind: 'zoom', id: zoomRegion.id })
+      return
+    }
     ;(e.target as Element).setPointerCapture(e.pointerId)
-    store().select({ kind: 'zoom', id: zoomRegion.id })
+    // Đang nằm trong nhóm chọn nhiều: giữ nguyên nhóm, chỉ kéo đoạn này.
+    if (!store().isSelected('zoom', zoomRegion.id) || store().selected.length <= 1)
+      store().select({ kind: 'zoom', id: zoomRegion.id })
     setDrag({ id: zoomRegion.id, mode, originX: e.clientX, origin: zoomRegion })
   }
 
@@ -666,11 +694,14 @@ export function Timeline() {
               >
                 {edit.zooms.flatMap((zoomRegion) =>
                   zoomOutputIntervals(zoomRegion, edit.clips).map((interval, k) => {
-                    const selected = selection?.kind === 'zoom' && selection.id === zoomRegion.id
+                    const selected = isSel('zoom', zoomRegion.id)
                     return (
                       <div
                         key={`${zoomRegion.id}-${k}`}
                         data-testid="timeline-zoom"
+                        data-selected={selected}
+                        data-sel-kind="zoom"
+                        data-sel-id={zoomRegion.id}
                         onPointerDown={(e) => onZoomDown(e, zoomRegion, 'move')}
                         onContextMenu={(e) => openContextMenu(e, zoomMenu(t, zoomRegion.id))}
                         className={`absolute top-0.5 bottom-0.5 flex cursor-grab items-center justify-center rounded-md border text-[11px] ${
@@ -714,7 +745,7 @@ export function Timeline() {
                   />
                 )}
                 {clipPositions(edit.clips).map(({ clip, outputStart }, i) => {
-                  const selected = selection?.kind === 'clip' && selection.id === clip.id
+                  const selected = isSel('clip', clip.id)
                   // Dải phim hiện đúng màu của bộ lọc (của clip, hoặc của cả video).
                   const tint = lookLayers(clip.look ?? edit.look)?.css
                   return (
@@ -723,13 +754,28 @@ export function Timeline() {
                       type="button"
                       data-testid="timeline-clip"
                       data-selected={selected}
+                      data-sel-kind="clip"
+                      data-sel-id={clip.id}
                       onPointerMove={(e) => setHoverAt(timeAt(e.clientX))}
                       data-freeze={clip.freeze ? true : undefined}
                       onPointerDown={(e) => {
                         if (e.button !== 0) return
                         e.stopPropagation()
-                        if (!clipsLocked) store().select({ kind: 'clip', id: clip.id })
+                        if (clipsLocked) {
+                          seek(e)
+                          return
+                        }
+                        if (e.ctrlKey || e.metaKey) {
+                          // Ctrl+click: thêm / bỏ clip khỏi nhóm đang chọn.
+                          store().toggleSelect({ kind: 'clip', id: clip.id })
+                          return
+                        }
+                        // Hàng clip thường kín, không có chỗ trống: kéo từ một clip
+                        // cũng vẽ khung chọn (nhả chuột không kéo thì chỉ chọn clip này).
+                        if (!store().isSelected('clip', clip.id) || store().selected.length <= 1)
+                          store().select({ kind: 'clip', id: clip.id })
                         seek(e)
+                        startMarquee(e)
                       }}
                       onContextMenu={(e) =>
                         clipsLocked

@@ -218,3 +218,66 @@ test('nhập video ngoài làm clip chính, kéo thẻ hiệu ứng vào timelin
   expect(errors).toEqual([])
   await app.close()
 })
+
+test('timeline: kéo khung chọn nhiều clip và zoom rồi Delete xóa cả nhóm', async () => {
+  const { app, page, errors } = await launchApp(dirs.userData)
+  await openEditor(page)
+  await expect(page.getByTestId('timeline-zoom')).toHaveCount(1)
+
+  // Tách ở giây 1, 2 và 3: bốn clip.
+  await page.getByTestId('editor-canvas').click()
+  for (let i = 0; i < 3; i++) {
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('s')
+  }
+  await expect(page.getByTestId('timeline-clip')).toHaveCount(4)
+  await page.keyboard.press('Escape')
+
+  // Hàng clip kín, không có chỗ trống: kéo từ giữa clip 1 sang giữa clip 3 → chọn 3 clip.
+  const clips = page.getByTestId('timeline-clip')
+  const c0 = (await clips.nth(0).boundingBox())!
+  const c2 = (await clips.nth(2).boundingBox())!
+  await page.mouse.move(c0.x + c0.width / 2, c0.y + c0.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(c2.x + c2.width / 2, c2.y + c2.height / 2, { steps: 8 })
+  await expect(page.getByTestId('marquee')).toBeVisible()
+  await page.mouse.up()
+  await expect(page.locator('[data-testid="timeline-clip"][data-selected="true"]')).toHaveCount(3)
+  await page.locator('[data-testid="timeline-clip"][data-selected="true"]').first().hover()
+
+  // Delete xóa cả ba, chỉ còn clip cuối (1 giây); Ctrl+Z trả lại cả nhóm.
+  await page.keyboard.press('Delete')
+  await expect(clips).toHaveCount(1)
+  await expect(page.getByTestId('timecode')).toContainText('/ 0:01.0')
+  await page.keyboard.press('Control+z')
+  await expect(clips).toHaveCount(4)
+  await expect(page.getByTestId('timecode')).toContainText('/ 0:04.0')
+
+  // Đoạn zoom nằm vắt qua các clip vừa tách nên vẽ thành nhiều mảnh. Kéo khung từ chỗ trống
+  // hàng Zoom (sau mảnh cuối) ngược về bao lấy đoạn zoom → chọn được, Delete xóa.
+  const z = (await page.getByTestId('timeline-zoom').last().boundingBox())!
+  await page.mouse.move(z.x + z.width + 40, z.y + z.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(z.x + z.width / 2, z.y + z.height / 2, { steps: 8 })
+  await expect(page.getByTestId('marquee')).toBeVisible()
+  await page.mouse.up()
+  // Mọi mảnh của đoạn zoom đều sáng lên (cùng một đoạn).
+  const pieces = await page.getByTestId('timeline-zoom').count()
+  await expect(page.locator('[data-testid="timeline-zoom"][data-selected="true"]')).toHaveCount(
+    pieces,
+  )
+  await page.keyboard.press('Delete')
+  await expect(page.getByTestId('timeline-zoom')).toHaveCount(0)
+  await expect.poll(() => saved().zooms?.length).toBe(0)
+
+  // Ctrl+click clip 2 rồi clip 4: hai clip, nút Xóa trên thanh công cụ xóa cả hai.
+  await clips.nth(1).click()
+  await clips.nth(3).click({ modifiers: ['Control'] })
+  await expect(page.locator('[data-testid="timeline-clip"][data-selected="true"]')).toHaveCount(2)
+  await page.getByTestId('delete').click()
+  await expect(clips).toHaveCount(2)
+  await expect.poll(() => saved().clips?.length).toBe(2)
+
+  expect(errors).toEqual([])
+  await app.close()
+})

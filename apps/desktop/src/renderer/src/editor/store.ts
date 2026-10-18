@@ -150,13 +150,19 @@ import {
 } from './try-preview'
 
 /** Mục chọn được nhiều cùng lúc (Ctrl+click, kéo khung chọn, Ctrl+A). */
-export type MultiKind = 'overlay' | 'effect' | 'audio'
+export type MultiKind = 'overlay' | 'effect' | 'audio' | 'clip' | 'zoom'
 export interface SelItem {
   kind: MultiKind
   id: string
 }
 const isMulti = (k: string | undefined): k is MultiKind =>
-  k === 'overlay' || k === 'effect' || k === 'audio'
+  k === 'overlay' || k === 'effect' || k === 'audio' || k === 'clip' || k === 'zoom'
+
+/** Xóa nhiều clip một lúc nhưng luôn giữ lại ít nhất một clip trên timeline. */
+function removeClips(clips: readonly Clip[], ids: Set<string>): Clip[] {
+  const rest = clips.filter((c) => !ids.has(c.id))
+  return rest.length > 0 ? rest : clips.slice(0, 1)
+}
 
 /** `transition`: id là clip đứng trước chỗ nối. `camera`: bong bóng webcam (id rỗng). */
 export type Selection = {
@@ -1142,6 +1148,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       overlays: rippleDelete(e.overlays, ids('overlay')),
       effects: rippleDelete(e.effects, ids('effect')),
       audioClips: rippleDeleteAudio(e.audioClips, ids('audio')),
+      // Clip và zoom không có khoảng trống để dồn: xóa như bình thường.
+      clips: removeClips(e.clips, ids('clip')),
+      zooms: e.zooms.filter((z) => !ids('zoom').has(z.id)),
     }))
     set({ selection: null, selected: [] })
   },
@@ -1252,7 +1261,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
             ? 'effect'
             : row === 'audio'
               ? 'audio'
-              : null
+              : row === 'clips'
+                ? 'clip'
+                : null
       if (kind) {
         const selected = get().selected.filter((x) => x.kind !== kind)
         const selection = get().selection?.kind === kind ? null : get().selection
@@ -1636,6 +1647,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         overlays: e.overlays.filter((o) => !ids('overlay').has(o.id)),
         effects: e.effects.filter((x) => !ids('effect').has(x.id)),
         audioClips: e.audioClips.filter((c) => !ids('audio').has(c.id)),
+        clips: removeClips(e.clips, ids('clip')),
+        zooms: e.zooms.filter((z) => !ids('zoom').has(z.id)),
       }))
       set({ selection: null, selected: [] })
       return

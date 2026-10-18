@@ -7,7 +7,11 @@ const store = useEditorStore.getState
 
 /** Chuột phải trên một mục: chọn nó trước (nếu chưa nằm trong nhóm đang chọn). */
 function ensureSelected(kind: MultiKind, id: string) {
-  if (!store().isSelected(kind, id)) store().select({ kind, id })
+  const s = store()
+  if (!s.isSelected(kind, id)) s.select({ kind, id })
+  // Đã nằm trong nhóm: giữ cả nhóm, nhưng mục vừa bấm thành mục đang mở ở bảng thuộc tính.
+  else if (s.selection?.kind !== kind || s.selection.id !== id)
+    s.selectMany([...s.selected.filter((x) => !(x.kind === kind && x.id === id)), { kind, id }])
 }
 
 /** Menu cho lớp phủ / hiệu ứng / đoạn âm thanh. */
@@ -95,7 +99,8 @@ export function itemMenu(t: TFunction, kind: MultiKind, id: string): MenuEntry[]
 
 /** Menu cho clip video chính. */
 export function clipMenu(t: TFunction, id: string): MenuEntry[] {
-  store().select({ kind: 'clip', id })
+  // Chuột phải lên clip đang nằm trong nhóm chọn nhiều: giữ nhóm để "Xóa" xóa cả nhóm.
+  ensureSelected('clip', id)
   const s = store()
   const clip = s.edit?.clips.find((c) => c.id === id)
   if (!clip || !s.edit) return []
@@ -181,8 +186,8 @@ export function emptyMenu(t: TFunction): MenuEntry[] {
 
 /** Menu cho một đoạn zoom: áp mức này cho tất cả, mở bảng "Tất cả đoạn zoom", xóa. */
 export function zoomMenu(t: TFunction, id: string): MenuEntry[] {
+  ensureSelected('zoom', id)
   const s = store()
-  if (s.selection?.kind !== 'zoom' || s.selection.id !== id) s.select({ kind: 'zoom', id })
   const zoom = s.edit?.zooms.find((z) => z.id === id)
   return [
     {
