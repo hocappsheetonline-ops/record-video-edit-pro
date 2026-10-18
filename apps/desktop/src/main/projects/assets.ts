@@ -9,6 +9,7 @@ import {
   type Waveform,
 } from '@lumora/core'
 import { parseDurationMs } from '../ffmpeg/parse'
+import { AUDIO_TIMESTAMP_FIX } from '../ffmpeg/args'
 import type { FfmpegRunner } from '../ffmpeg/runner'
 import { readJsonFile, writeJsonFile } from '../json-file'
 
@@ -248,8 +249,9 @@ export async function importVoiceover(
         '-i',
         raw,
         '-vn',
-        '-ar',
-        '48000',
+        // Mốc thời gian của MediaRecorder có thể hụt / nhảy: điền im lặng để lời khớp đúng vị trí.
+        '-af',
+        AUDIO_TIMESTAMP_FIX,
         '-c:a',
         'aac',
         '-b:a',
