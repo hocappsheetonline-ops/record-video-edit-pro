@@ -9,6 +9,7 @@ import {
   Clapperboard,
   FileText,
   Loader2,
+  Rocket,
   Scissors,
   Send,
   Sparkle,
@@ -29,7 +30,14 @@ import type { AiSummary } from '@shared/ipc'
 import { lumora } from '../api'
 import { aiErrorText } from './ai-errors'
 import { runJob, useJobs } from './jobs'
-import { AUTO_EDIT_STEPS, useEditorStore, type AutoEditOptions, type AutoEditReport } from './store'
+import {
+  AUTO_EDIT_STEPS,
+  useEditorStore,
+  type AutoBuildResult,
+  type AutoEditOptions,
+  type AutoEditReport,
+} from './store'
+import { DEFAULT_AUTO_BUILD, type AutoBuildOptions } from '@lumora/core'
 import { formatTimecode } from './timeline-math'
 import { ZoomPlan } from './ZoomPlan'
 
@@ -84,6 +92,241 @@ function useDirectorEngine(): 'local' | 'claude' | 'keywords' {
   if (settings?.localAi?.enabled) return 'local'
   if (secrets?.anthropic?.state === 'saved') return 'claude'
   return 'keywords'
+}
+
+/** Chip kết quả từng việc (dùng chung cho đạo diễn và tự dựng). */
+function ReportChips({ report, testId }: { report: AutoEditReport[]; testId: string }) {
+  const { t } = useTranslation()
+  return (
+    <ul className="flex flex-wrap gap-1" data-testid={testId}>
+      {report.map((r, i) => (
+        <li
+          key={i}
+          data-testid="assistant-command"
+          data-kind={r.step}
+          data-status={r.status}
+          title={
+            r.status === 'done'
+              ? t('ai.auto.status.done', { n: r.detail })
+              : r.status === 'skipped'
+                ? t('ai.auto.status.skipped', {
+                    reason: t(`ai.auto.reasons.${r.detail}`, { defaultValue: String(r.detail) }),
+                  })
+                : t('ai.auto.status.error', { message: String(r.detail) })
+          }
+          className={`flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] ${
+            r.status === 'done'
+              ? 'bg-accent/15 text-accent'
+              : r.status === 'skipped'
+                ? 'bg-surface-2 text-muted line-through'
+                : 'bg-danger/10 text-danger'
+          }`}
+        >
+          {t(`ai.assistant.kinds.${r.step}`, {
+            defaultValue: t(`ai.auto.steps.${r.step}`, { defaultValue: r.step }),
+          })}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+/**
+ * Tự dựng một nút (1.10.0): quay xong bấm một nút, AI lập kế hoạch dựng chuyên nghiệp → app làm →
+ * rà soát theo sổ tay; tuỳ chọn tự tìm nhạc nền (Jamendo), chèn tư liệu (Pixabay), tách shorts.
+ */
+function AutoBuild() {
+  const { t } = useTranslation()
+  const engine = useDirectorEngine()
+  const busy = useEditorStore((s) => s.directorBusy)
+  const secrets = useAppStore((s) => s.secrets)
+  const [options, setOptions] = useState<AutoBuildOptions>(DEFAULT_AUTO_BUILD)
+  const [result, setResult] = useState<AutoBuildResult | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  const patch = (p: Partial<AutoBuildOptions>) => setOptions((o) => ({ ...o, ...p }))
+
+  const run = async () => {
+    if (busy) return
+    setError(null)
+    setResult(null)
+    try {
+      const r = await runJob(
+        t('ai.autoBuild.job'),
+        (progress) =>
+          useEditorStore
+            .getState()
+            .autoBuild(options, (done, total, step) =>
+              progress(done / total, t(`ai.autoBuild.steps.${step}`, { defaultValue: step })),
+            ),
+        { kind: 'ai' },
+      )
+      setResult(r)
+      useJobs.getState().toast({
+        kind: 'success',
+        text: t('ai.autoBuild.done', {
+          format: t(`ai.autoBuild.formats.${r.format}`),
+          n: r.report.filter((x) => x.status === 'done').length,
+        }),
+      })
+    } catch (e) {
+      setError(aiErrorText(t, e))
+    }
+  }
+
+  const copyCredits = async () => {
+    if (!result) return
+    try {
+      await navigator.clipboard.writeText(result.credits.join('\n'))
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      // Clipboard bị chặn: bỏ qua, dòng ghi nguồn vẫn hiện để chép tay.
+    }
+  }
+
+  return (
+    <section
+      className="flex flex-col gap-2 rounded-xl border border-accent/40 bg-gradient-to-br from-accent/10 to-transparent p-3"
+      data-testid="auto-build"
+    >
+      <h3 className="flex items-center gap-1.5 text-sm font-semibold">
+        <Rocket size={15} className="text-accent" aria-hidden />
+        {t('ai.autoBuild.title')}
+      </h3>
+      <p className="text-xs text-muted">{t('ai.autoBuild.intro')}</p>
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <label className="flex items-center gap-1.5">
+          <span className="text-muted">{t('ai.autoBuild.format')}</span>
+          <select
+            data-testid="auto-build-format"
+            value={options.format}
+            onChange={(e) => patch({ format: e.target.value as AutoBuildOptions['format'] })}
+            className="rounded-md border border-border bg-surface-2 px-1.5 py-1 text-xs"
+          >
+            {(['auto', 'youtube', 'shorts', 'vlog', 'clean'] as const).map((f) => (
+              <option key={f} value={f}>
+                {t(`ai.autoBuild.formats.${f}`)}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <label className="flex items-center gap-2 text-xs" title={t('ai.autoBuild.musicHint')}>
+        <input
+          type="checkbox"
+          className="size-4 accent-accent"
+          data-testid="auto-build-music"
+          checked={options.music}
+          onChange={(e) => patch({ music: e.target.checked })}
+        />
+        {t('ai.autoBuild.music')}
+        {options.music && secrets?.jamendo?.state !== 'saved' && (
+          <span className="text-[10px] text-muted">({t('ai.autoBuild.musicHint')})</span>
+        )}
+      </label>
+      <label className="flex items-center gap-2 text-xs" title={t('ai.autoBuild.brollHint')}>
+        <input
+          type="checkbox"
+          className="size-4 accent-accent"
+          data-testid="auto-build-broll"
+          checked={options.broll}
+          onChange={(e) => patch({ broll: e.target.checked })}
+        />
+        {t('ai.autoBuild.broll')}
+        {options.broll && secrets?.pixabay?.state !== 'saved' && (
+          <span className="text-[10px] text-muted">({t('ai.autoBuild.brollHint')})</span>
+        )}
+      </label>
+      <label className="flex items-center gap-2 text-xs">
+        <input
+          type="checkbox"
+          className="size-4 accent-accent"
+          data-testid="auto-build-shorts"
+          checked={options.shorts}
+          onChange={(e) => patch({ shorts: e.target.checked })}
+        />
+        {t('ai.autoBuild.shorts', { count: options.shortsCount })}
+        {options.shorts && (
+          <input
+            type="number"
+            min={1}
+            max={5}
+            data-testid="auto-build-shorts-count"
+            aria-label={t('ai.autoBuild.shortsCount')}
+            value={options.shortsCount}
+            onChange={(e) =>
+              patch({ shortsCount: Math.min(5, Math.max(1, Number(e.target.value) || 1)) })
+            }
+            className="w-12 rounded-md border border-border bg-surface-2 px-1.5 py-0.5 text-xs"
+          />
+        )}
+      </label>
+      <button
+        type="button"
+        data-testid="auto-build-run"
+        disabled={busy}
+        onClick={() => void run()}
+        className="flex items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-accent-fg shadow-sm hover:brightness-110 disabled:opacity-50"
+      >
+        {busy ? (
+          <Sparkle size={15} className="animate-pulse" aria-hidden />
+        ) : (
+          <Rocket size={15} aria-hidden />
+        )}
+        {t('ai.autoBuild.run')}
+      </button>
+      {engine === 'keywords' && (
+        <p className="text-[11px] text-muted" data-testid="auto-build-no-ai">
+          {t('ai.autoBuild.byRecipe')}
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="text-xs text-danger" data-testid="auto-build-error">
+          {error}
+        </p>
+      )}
+      {result && (
+        <div className="flex flex-col gap-1.5" data-testid="auto-build-result">
+          <ReportChips report={result.report} testId="auto-build-report" />
+          {result.shorts > 0 && (
+            <p className="text-xs text-success" data-testid="auto-build-shorts-done">
+              {t('ai.autoBuild.doneShorts', { count: result.shorts })}
+            </p>
+          )}
+          {result.review.issues.length > 0 && (
+            <p className="text-[11px] text-muted" data-testid="auto-build-issues">
+              {t('ai.autoBuild.issues')}{' '}
+              {result.review.issues.map((i) => t(`ai.autoBuild.issue.${i}`)).join('; ')}
+            </p>
+          )}
+          {result.credits.length > 0 && (
+            <div
+              className="flex flex-col gap-1 rounded-lg border border-border bg-surface-2/60 p-2 text-[11px]"
+              data-testid="auto-build-credits"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium">{t('ai.autoBuild.credits')}</span>
+                <button
+                  type="button"
+                  data-testid="auto-build-copy-credits"
+                  onClick={() => void copyCredits()}
+                  className="rounded-md border border-border px-2 py-0.5 text-[11px] text-muted hover:text-text"
+                >
+                  {copied ? t('ai.autoBuild.copied') : t('ai.autoBuild.copyCredits')}
+                </button>
+              </div>
+              {result.credits.map((c) => (
+                <p key={c} className="whitespace-pre-wrap text-muted">
+                  {c}
+                </p>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </section>
+  )
 }
 
 /**
@@ -1069,6 +1312,7 @@ export function AiPanel() {
     <div className="flex flex-col gap-5" data-testid="ai-panel">
       <AiStatusBar />
       <QuickActions onSummary={makeSummary} />
+      <AutoBuild />
       <Director />
 
       {summary && (

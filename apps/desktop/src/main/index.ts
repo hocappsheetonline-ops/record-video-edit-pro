@@ -43,6 +43,7 @@ import { clearDirs, dirSize } from './content/cache'
 import { RnnoiseDenoiser } from './audio/denoise'
 import { AudioProcessor } from './audio/process'
 import { ClipReverser } from './clips/reverse'
+import { MusicFinder } from './content/music-finder'
 import { OnlineService } from './content/online'
 import { PACK_EXTENSION } from './projects/share'
 import { loadWaveform } from './projects/waveform'
@@ -249,6 +250,12 @@ if (!app.requestSingleInstanceLock()) {
       library: memes,
       tmpDir: join(userData, 'cache'),
     })
+    // AI tự tìm nhạc nền miễn phí bản quyền (Jamendo) vào kho nhạc.
+    const musicFinder = new MusicFinder({
+      getKey: (name) => secrets.get(name),
+      library: music,
+      tmpDir: join(userData, 'cache'),
+    })
 
     registerIpc(loggingIpc(ipcMain, logger), {
       memes: {
@@ -299,6 +306,7 @@ if (!app.requestSingleInstanceLock()) {
         recentDownloads: () => recentDownloads(app.getPath('downloads')),
         // Thư viện âm thanh YouTube (YouTube Studio): nhạc miễn phí bản quyền, tải về bằng trình duyệt.
         openYouTube: () => shell.openExternal('https://www.youtube.com/audiolibrary'),
+        find: (query) => musicFinder.find(query),
       },
       updates,
       logRendererError: (message: string) => logger.error('renderer', message),

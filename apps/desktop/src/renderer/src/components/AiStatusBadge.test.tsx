@@ -14,6 +14,7 @@ const NO_SECRETS: SecretsStatus = {
   elevenlabs: { state: 'missing' },
   anthropic: { state: 'missing' },
   pixabay: { state: 'missing' },
+  jamendo: { state: 'missing' },
 }
 
 beforeEach(async () => {

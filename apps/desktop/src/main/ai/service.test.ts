@@ -105,7 +105,17 @@ function fakeApis() {
     if (url.includes('/v1/messages')) {
       const body = JSON.parse(String(init!.body))
       calls.push({ url, headers, body })
-      const system = String(body.system)
+      // Lời nhắc hệ thống có thể là chuỗi hoặc các khối (phần tĩnh được cache).
+      const system = Array.isArray(body.system)
+        ? body.system.map((b: { text: string }) => b.text).join('\n\n')
+        : String(body.system)
+      if (system.includes('best moments'))
+        return message({
+          segments: [
+            { start_seconds: 0.1, end_seconds: 1, hook: 'Quá ngắn', title: 'bỏ' },
+            { start_seconds: 0, end_seconds: 20, hook: 'Mẹo hay', title: 'Mẹo 1' },
+          ],
+        })
       if (system.includes('cleaning up'))
         return message({ cuts: [{ from: 1, to: 2, kind: 'repeat', reason: 'Nói lặp' }] })
       if (system.includes('editing assistant'))
@@ -435,16 +445,21 @@ describe('AiService.direct (đạo diễn AI)', () => {
     })
     expect(calls).toHaveLength(1)
     const body = calls[0]!.body as {
-      system: string
+      system: { type: string; text: string; cache_control?: { type: string } }[]
       messages: { content: string }[]
       output_config: { effort: string; format: { schema: { required: string[] } } }
     }
     expect(body.messages[0]!.content).toBe('dọn video rồi thêm phụ đề')
-    expect(body.system).toContain('AI director')
-    expect(body.system).toContain('duration 90 s')
-    expect(body.system).toContain('luôn dùng phụ đề tiktok')
-    expect(body.system).toContain('Lofi Chill Beats')
-    expect(body.system).toContain('Director: Đã thêm nhạc Lofi Chill Beats.')
+    // Hai khối: phần tĩnh (vai trò, lệnh, sổ tay) có cache_control; phần động là ngữ cảnh video.
+    expect(body.system).toHaveLength(2)
+    expect(body.system[0]!.cache_control).toEqual({ type: 'ephemeral' })
+    expect(body.system[0]!.text).toContain('AI director')
+    expect(body.system[1]!.cache_control).toBeUndefined()
+    const dynamic = body.system[1]!.text
+    expect(dynamic).toContain('duration 90 s')
+    expect(dynamic).toContain('luôn dùng phụ đề tiktok')
+    expect(dynamic).toContain('Lofi Chill Beats')
+    expect(dynamic).toContain('Director: Đã thêm nhạc Lofi Chill Beats.')
     expect(body.output_config.effort).toBe('medium')
     expect(body.output_config.format.schema.required).toEqual(['summary', 'questions', 'commands'])
   })
@@ -461,7 +476,7 @@ describe('AiService.direct (đạo diễn AI)', () => {
         at: i,
       })),
     })
-    const system = (calls[0]!.body as { system: string }).system
+    const system = (calls[0]!.body as { system: { text: string }[] }).system[1]!.text
     expect(system).toContain('Track 49')
     expect(system).not.toContain('Track 50')
     expect(system).not.toContain('y'.repeat(81))
@@ -471,6 +486,25 @@ describe('AiService.direct (đạo diễn AI)', () => {
     expect(system).not.toContain('turn 3 ')
     expect(system).not.toContain('z'.repeat(500))
     await expect(service(fetchImpl, {}).direct('x', context)).rejects.toThrow()
+  })
+})
+
+describe('AiService.highlights (chọn đoạn hay để tách shorts)', () => {
+  it('gửi lời thoại có mốc, effort thấp; bỏ đoạn quá ngắn; chưa có lời thoại thì báo no_transcript', async () => {
+    const { calls, fetchImpl } = fakeApis()
+    const ai = service(fetchImpl)
+    await expect(ai.highlights(dir, 3)).rejects.toThrow('no_transcript')
+    await ai.transcribe(project, dir)
+    const segments = await ai.highlights(dir, 3)
+    expect(segments).toEqual([{ start: 0, end: 20_000, hook: 'Mẹo hay', title: 'Mẹo 1' }])
+    const body = calls.at(-1)!.body as {
+      system: string
+      messages: { content: string }[]
+      output_config: { effort: string }
+    }
+    expect(body.system).toContain('best moments')
+    expect(body.messages[0]!.content).toMatch(/^\[0:00\]/)
+    expect(body.output_config.effort).toBe('low')
   })
 })
 

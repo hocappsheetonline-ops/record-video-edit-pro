@@ -111,7 +111,21 @@ export async function startMockAi(): Promise<{
       }
       if (path === '/v1/messages') {
         const request = JSON.parse(body.toString('utf8'))
-        const system = String(request.system)
+        // Lời nhắc hệ thống là chuỗi hoặc các khối (phần tĩnh gắn cache_control từ 1.10.0).
+        const system = Array.isArray(request.system)
+          ? request.system.map((b: { text: string }) => b.text).join('\n\n')
+          : String(request.system)
+        if (system.includes('best moments')) {
+          return json(
+            200,
+            anthropicMessage({
+              segments: [
+                { start_seconds: 0, end_seconds: 0.5, hook: 'quá ngắn', title: 'bỏ' },
+                { start_seconds: 1, end_seconds: 19, hook: 'Mẹo hay nhất', title: 'Mẹo 1' },
+              ],
+            }),
+          )
+        }
         if (system.includes('cleaning up')) {
           return json(
             200,
@@ -123,6 +137,28 @@ export async function startMockAi(): Promise<{
         }
         if (system.includes('AI director')) {
           const goal = String(request.messages[0].content)
+          // Tự dựng một nút 1.10.0: công thức + hook + tự tìm nhạc + thẻ kết, không câu hỏi.
+          if (goal.startsWith('AUTO BUILD'))
+            return json(
+              200,
+              anthropicMessage({
+                summary: 'Dựng YouTube hoàn chỉnh: hook, cắt lặng, phụ đề, nhạc nền, thẻ kết',
+                questions: [],
+                commands: [
+                  { kind: 'recipe', style: 'youtube' },
+                  {
+                    kind: 'text',
+                    text: 'Demo Lumora trong 4 giây',
+                    atMs: 0,
+                    ms: 1500,
+                    template: 'title',
+                    position: 'top',
+                  },
+                  { kind: 'findMusic', mood: 'calm corporate', tempo: 'medium', volume: 0.2 },
+                  { kind: 'outro', text: 'Đăng ký kênh', ms: 1000, template: 'title' },
+                ],
+              }),
+            )
           // Kế hoạch dựng chuyên nghiệp 1.9.0: hiệu ứng tại thời điểm, tua nhanh một đoạn, chuyển
           // cảnh tại chỗ nối vừa tạo, kiểu phụ đề, thẻ kết bám cuối.
           if (goal.includes('chuyên nghiệp'))

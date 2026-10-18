@@ -278,6 +278,19 @@ export function createFakeApi(
     ]),
     importMemes: vi.fn<LumoraApi['importMemes']>(async () => []),
     listMusic: vi.fn<LumoraApi['listMusic']>(async () => music),
+    findMusic: vi.fn<LumoraApi['findMusic']>(async (q) => {
+      const track = {
+        file: `music-jamendo-${music.length + 1}.mp3`,
+        name: `Found ${q.mood || q.tempo} – Artist`,
+        durationMs: 120_000,
+        addedAt: music.length + 1,
+        source: 'jamendo' as const,
+        credit: `"Found ${q.mood || q.tempo}" by Artist — CC BY 3.0 (Jamendo)`,
+        origin: { source: 'jamendo' as const, id: String(music.length + 1) },
+      }
+      music.unshift(track)
+      return track
+    }),
     importMusic: vi.fn<LumoraApi['importMusic']>(async () => music),
     addMusicPaths: vi.fn<LumoraApi['addMusicPaths']>(async (paths, source) => {
       for (const p of paths)
@@ -361,6 +374,13 @@ export function createFakeApi(
       questions: [],
       commands: [],
     })),
+    highlights: vi.fn<LumoraApi['highlights']>(async (_folder, count) =>
+      [
+        { start: 0, end: 20_000, hook: 'Mẹo 1', title: 'Mở đầu' },
+        { start: 30_000, end: 55_000, hook: 'Mẹo 2', title: 'Phần giữa' },
+        { start: 60_000, end: 85_000, hook: 'Mẹo 3', title: 'Kết' },
+      ].slice(0, count),
+    ),
     listLocalModels: vi.fn<LumoraApi['listLocalModels']>(async () => ['llama3.2', 'qwen2.5:7b']),
     pullLocalModel: vi.fn<LumoraApi['pullLocalModel']>(async (_url, model) => {
       localAiListeners.forEach((l) =>

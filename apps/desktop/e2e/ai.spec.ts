@@ -177,8 +177,9 @@ test('Đạo diễn AI: một câu → nhiều lệnh (chữ, nhãn dán, mốc,
   // Lệnh đi qua Claude với lời nhắc đạo diễn có mô tả các lệnh mở rộng.
   const direct = mock.requests.filter((r) => r.path === '/v1/messages').at(-1)!
   const body = JSON.parse(direct.body.toString('utf8'))
-  expect(String(body.system)).toContain('AI director')
-  expect(String(body.system)).toContain('zoomLevel {scale}')
+  const systemText = body.system.map((b: { text: string }) => b.text).join('\n')
+  expect(systemText).toContain('AI director')
+  expect(systemText).toContain('zoomLevel {scale}')
   expect(body.output_config.format.schema.properties.commands.items.properties.kind.enum).toContain(
     'sticker',
   )
@@ -225,7 +226,7 @@ test('Đạo diễn AI 1.9.0: dựng chuyên nghiệp (hiệu ứng, tua nhanh, 
   // Lời nhắc đạo diễn có sổ tay dựng chuyên nghiệp, thời điểm bấm chuột và bản dựng hiện tại.
   const direct = mock.requests.filter((r) => r.path === '/v1/messages').at(-1)!
   const body = JSON.parse(direct.body.toString('utf8'))
-  const system = String(body.system)
+  const system = body.system.map((b: { text: string }) => b.text).join('\n')
   expect(system).toContain('Professional editing playbook')
   expect(system).toContain('recipe {style}')
   expect(system).toContain('Mouse click times')

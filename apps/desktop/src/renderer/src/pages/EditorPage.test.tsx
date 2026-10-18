@@ -41,6 +41,7 @@ const keys = (elevenlabs: boolean) =>
         elevenlabs: elevenlabs ? { state: 'saved', masked: 'el••' } : { state: 'missing' },
         anthropic: { state: 'missing' },
         pixabay: { state: 'missing' },
+        jamendo: { state: 'missing' },
       },
     })
   })
@@ -487,6 +488,7 @@ describe('EditorPage', () => {
           elevenlabs: { state: 'missing' },
           anthropic: { state: 'missing' },
           pixabay: { state: 'saved', masked: '1234••••' },
+          jamendo: { state: 'missing' },
         },
       })
     })

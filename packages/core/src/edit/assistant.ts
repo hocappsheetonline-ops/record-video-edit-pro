@@ -57,6 +57,14 @@ export const TEXT_TEMPLATE_IDS = TEXT_TEMPLATES.map((t) => t.id) as TextTemplate
 export const RECIPE_STYLES = ['youtube', 'shorts', 'vlog', 'clean'] as const
 export type RecipeStyle = (typeof RECIPE_STYLES)[number]
 
+/** Nhịp nhạc nền khi AI tự tìm nhạc (Jamendo `speed`). */
+export const MUSIC_TEMPOS = ['slow', 'medium', 'fast'] as const
+export type MusicTempo = (typeof MUSIC_TEMPOS)[number]
+
+/** Cách chia video ngắn: mỗi N giây, theo chương AI, hoặc AI chọn các đoạn hay nhất (highlights). */
+export const SHORTS_MODES = ['fixed', 'chapters', 'highlights'] as const
+export type ShortsMode = (typeof SHORTS_MODES)[number]
+
 /** Mẫu đường cong tốc độ dùng được qua lệnh `speedCurve`. */
 export type SpeedCurvePresetId = (typeof SPEED_CURVE_PRESETS)[number]
 
@@ -198,8 +206,11 @@ export type AssistantCommand =
   | { kind: 'track'; row: TimelineRow; hidden?: boolean; muted?: boolean; locked?: boolean }
   /** Xóa sạch một loại mục (zoom, hiệu ứng, nhạc, phụ đề…; `cuts` = khôi phục bản quay đầy đủ). */
   | { kind: 'clear'; target: ClearTarget }
-  /** Chia thành video ngắn: mỗi N giây hoặc theo chương AI, tuỳ chọn khung dọc. */
-  | { kind: 'shorts'; mode: 'fixed' | 'chapters'; seconds: number; vertical: boolean }
+  /**
+   * Chia thành video ngắn: mỗi N giây, theo chương AI, hoặc `highlights` = AI chọn `count` đoạn
+   * hay nhất (mỗi đoạn trọn ý, có hook) từ lời thoại; tuỳ chọn khung dọc.
+   */
+  | { kind: 'shorts'; mode: ShortsMode; seconds: number; vertical: boolean; count: number }
   // ---- Dựng chuyên nghiệp (1.9.0) ----
   /** Công thức dựng theo phong cách (mở rộng thành nhiều lệnh trước khi chạy). */
   | { kind: 'recipe'; style: RecipeStyle }
@@ -223,6 +234,18 @@ export type AssistantCommand =
     }
   /** Thẻ kết (CTA: "Đăng ký", "Xem video tiếp") hiện trong `ms` cuối video, luôn bám cuối. */
   | { kind: 'outro'; text: string; ms: number; template: TextTemplateId }
+  // ---- Tự dựng một nút (1.10.0) ----
+  /**
+   * AI tự tìm nhạc nền miễn phí bản quyền (Jamendo, giấy phép Creative Commons cho phép dùng
+   * thương mại) theo tâm trạng (`mood`: vài từ tiếng Anh như "upbeat corporate", "calm lofi") và
+   * nhịp, tải về kho nhạc rồi chèn làm nhạc nền với âm lượng `volume`.
+   */
+  | { kind: 'findMusic'; mood: string; tempo: MusicTempo; volume: number }
+  /**
+   * Chèn tư liệu (b-roll) từ kho video miễn phí (Pixabay) phủ kín khung tại `atMs` trong `ms`;
+   * `query` = từ khóa tiếng Anh ngắn ("typing on laptop", "city traffic").
+   */
+  | { kind: 'broll'; query: string; atMs: number; ms: number }
 
 export type AssistantKind = AssistantCommand['kind']
 
@@ -279,6 +302,8 @@ export const ASSISTANT_KINDS: readonly AssistantKind[] = [
   'transitionAt',
   'captionsLook',
   'outro',
+  'findMusic',
+  'broll',
 ]
 
 /** Thông tin về video gửi kèm yêu cầu để AI ra lệnh phù hợp. */
@@ -343,6 +368,8 @@ export function assistantCommandKey(cmd: AssistantCommand): string {
       return `cutRange:${cmd.fromMs}`
     case 'effectAt':
       return `effectAt:${cmd.atMs}:${cmd.effect}`
+    case 'broll':
+      return `broll:${cmd.atMs}`
     case 'speedRange':
       return `speedRange:${cmd.fromMs}`
     case 'speedCurve':
@@ -620,13 +647,36 @@ function parseCommand(r: Record<string, unknown>): AssistantCommand | null {
       return target ? { kind: 'clear', target } : null
     }
     case 'shorts': {
-      const mode = r.mode === 'chapters' ? 'chapters' : 'fixed'
+      const mode = oneOf(SHORTS_MODES, r.mode) ?? 'fixed'
       return {
         kind: 'shorts',
         mode,
         seconds: isNum(r.seconds) && r.seconds > 0 ? Math.round(clamp(r.seconds, 5, 600)) : 60,
         vertical: r.vertical !== false,
+        count: isNum(r.count) && r.count > 0 ? Math.round(clamp(r.count, 1, 10)) : 3,
       }
+    }
+    case 'findMusic': {
+      const mood =
+        typeof r.mood === 'string'
+          ? r.mood
+              .trim()
+              .replace(/[^\p{L}\p{N}\s-]/gu, '')
+              .replace(/\s+/g, ' ')
+              .slice(0, 40)
+          : ''
+      return {
+        kind: 'findMusic',
+        mood,
+        tempo: oneOf(MUSIC_TEMPOS, r.tempo) ?? 'medium',
+        volume: isNum(r.volume) ? clamp(r.volume, 0.05, 1) : 0.25,
+      }
+    }
+    case 'broll': {
+      const query = typeof r.query === 'string' ? r.query.trim().slice(0, 60) : ''
+      const atMs = timeMs(r.atMs)
+      if (!query || atMs === undefined) return null
+      return { kind: 'broll', query, atMs, ms: durMs(r.ms, 4000, 1000, 30_000) }
     }
     case 'recipe': {
       const style = oneOf(RECIPE_STYLES, r.style)
@@ -864,7 +914,7 @@ export function parseAssistantRequest(text: string): AssistantCommand[] {
   const forAspect = t
     .replace(/(?:phụ đề|caption|subtitle)[^,.;]*/gi, '')
     .replace(/lật\s+(?:ngang|dọc)/gi, '')
-  if (/9\s*:\s*16|dọc|vertical|tiktok|shorts|reels|portrait/i.test(forAspect))
+  if (/9\s*:\s*16|dọc|vertical|tiktok|shorts?\b|reels?\b|portrait/i.test(forAspect))
     push({ kind: 'aspect', aspect: '9:16' })
   else if (/1\s*:\s*1|vuông|square/i.test(forAspect)) push({ kind: 'aspect', aspect: '1:1' })
   else if (/16\s*:\s*9|ngang|landscape|youtube/i.test(forAspect))
@@ -889,7 +939,39 @@ export function parseAssistantRequest(text: string): AssistantCommand[] {
     const transition = TRANSITION_WORDS.find(([re]) => re.test(t))?.[1] ?? 'fadeBlack'
     push({ kind: 'transitions', transition })
   }
-  if (/nhạc|music|soundtrack/i.test(t) && !cleared.has('music')) {
+  // AI tự tìm nhạc nền miễn phí ("tự tìm nhạc nền vui", "find upbeat music").
+  const findMusicMatch =
+    /(?:tự\s+)?(?:tìm|kiếm|chọn|find|search(?: for)?|pick)\s+(?:một\s+|a\s+|some\s+)?(?:bài\s+|bản\s+)?((?:[\p{L}\d-]+\s+){0,3}?)(?:nhạc|music)/iu.exec(
+      t,
+    )
+  const findMusic = findMusicMatch !== null && !cleared.has('music')
+  if (findMusic) {
+    // Tâm trạng: sau "nhạc" ("nhạc nền vui") hoặc trước "music" ("find calm music").
+    const after =
+      /(?:nhạc|music)\s+(?:nền\s+)?(?:kiểu\s+|phong cách\s+|style\s+)?([\p{L}\d][\p{L}\d\s-]{1,24}?)(?=[,.;]|\s+(?:và|rồi|then|and|cho|for)(?=\s|$)|$)/iu.exec(
+        t,
+      )?.[1] ?? ''
+    const mood = after.trim() || (findMusicMatch?.[1] ?? '').trim()
+    const quiet = /nhỏ|nhẹ|quiet|soft|low/i.test(t)
+    push({
+      kind: 'findMusic',
+      mood: mood
+        .split(/\s+/)
+        .filter(
+          (w) =>
+            !/^(nền|nhỏ|nhẹ|to|lớn|quiet|soft|low|loud|background|nhanh|chậm|fast|slow)$/iu.test(w),
+        )
+        .join(' ')
+        .trim(),
+      tempo: /nhanh|sôi động|fast|upbeat|energetic/i.test(t)
+        ? 'fast'
+        : /chậm|nhẹ nhàng|slow|calm|chill/i.test(t)
+          ? 'slow'
+          : 'medium',
+      volume: quiet ? 0.15 : 0.25,
+    })
+  }
+  if (/nhạc|music|soundtrack/i.test(t) && !cleared.has('music') && !findMusic) {
     const query =
       /(?:nhạc nền|nhạc|music)\s+(?:kiểu\s+|nền\s+)?([\p{L}\d][\p{L}\d\s-]{1,24}?)(?=[,.;]|\s+(?:và|rồi|và|then|and)\b|$)/iu.exec(
         t,
@@ -982,17 +1064,24 @@ export function parseAssistantRequest(text: string): AssistantCommand[] {
     push({ kind: 'chapters' })
 
   // Chia thành video ngắn.
+  // "chia thành các video ngắn", "chia video này ra làm 2-3 video short", "split into shorts".
   const shorts =
-    /(?:chia|tách|cắt)\s+(?:nhỏ\s+|thành\s+|ra\s+)?(?:nhiều\s+|các\s+)?(?:video ngắn|clip ngắn|đoạn ngắn|shorts|reels)|split (?:it |the video )?into (?:shorts|clips|parts)/i.test(
+    /(?:chia|tách|cắt)\b[^,.;]{0,30}?(?:video ngắn|clip ngắn|đoạn ngắn|shorts?\b|reels?\b)|split (?:it |the video )?into (?:shorts|clips|parts)/i.test(
       t,
     )
   if (shorts) {
     const every = /(?:mỗi|every)\s+(\d+)\s*(?:giây|s\b|sec|seconds?)/i.exec(t)
+    // "chia làm 2-3 video short", "3 clip ngắn hay nhất": AI chọn các đoạn hay nhất.
+    const count = /(\d+)\s*(?:-\s*(\d+)\s*)?(?:video|clip|đoạn|shorts?|reels?|parts?)/i.exec(t)
+    const highlights =
+      !every &&
+      (count !== null || /hay nhất|nổi bật|highlight|đáng xem|best (?:parts|moments)/i.test(t))
     push({
       kind: 'shorts',
-      mode: /chương|chapter/i.test(t) ? 'chapters' : 'fixed',
+      mode: /chương|chapter/i.test(t) ? 'chapters' : highlights ? 'highlights' : 'fixed',
       seconds: every ? Number(every[1]) : 60,
-      vertical: /dọc|9\s*:\s*16|tiktok|shorts|reels|vertical/i.test(t),
+      vertical: /dọc|9\s*:\s*16|tiktok|shorts?\b|reels?\b|vertical/i.test(t),
+      count: count ? Number(count[2] ?? count[1]) : 3,
     })
   }
 

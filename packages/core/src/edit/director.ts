@@ -1,6 +1,7 @@
 import {
   assistantCommandKey,
   normalizeAssistantCommands,
+  RECIPE_STYLES,
   type AssistantCommand,
   type RecipeStyle,
 } from './assistant'
@@ -360,6 +361,214 @@ export function memorySummary(memory: StyleMemory, language = 'vi'): string {
  * Lập kế hoạch không cần model (hoặc bổ sung cho model): lệnh hiểu theo từ khóa + thói quen đã
  * học (phụ đề thì dùng mẫu quen, nhạc thì âm lượng quen) + câu hỏi làm rõ khi thiếu thông tin.
  */
+// ---------------------------------------------------------------------------------------------
+// Tự dựng một nút (1.10.0): quay xong, bấm một nút, AI tự lập kế hoạch → app làm → rà soát.
+// ---------------------------------------------------------------------------------------------
+
+/** Định dạng đích của bản tự dựng: `auto` = AI chọn theo thời lượng / nội dung. */
+export type AutoBuildFormat = 'auto' | RecipeStyle
+
+export interface AutoBuildOptions {
+  format: AutoBuildFormat
+  /** Tự tìm nhạc nền miễn phí bản quyền (Jamendo) hoặc dùng kho nhạc. */
+  music: boolean
+  /** Chèn tư liệu (b-roll) từ Pixabay ở những chỗ nói về việc chung chung. */
+  broll: boolean
+  /** Sau khi dựng, tách thêm 2-3 video ngắn (highlights) từ video dài. */
+  shorts: boolean
+  /** Số video ngắn muốn tách (1-5). */
+  shortsCount: number
+}
+
+export const DEFAULT_AUTO_BUILD: AutoBuildOptions = {
+  format: 'auto',
+  music: true,
+  broll: false,
+  shorts: false,
+  shortsCount: 3,
+}
+
+export function normalizeAutoBuildOptions(input: unknown): AutoBuildOptions {
+  const r = (typeof input === 'object' && input !== null ? input : {}) as Record<string, unknown>
+  const format =
+    r.format === 'auto' || RECIPE_STYLES.includes(r.format as RecipeStyle)
+      ? (r.format as AutoBuildFormat)
+      : 'auto'
+  const count =
+    typeof r.shortsCount === 'number' && Number.isFinite(r.shortsCount) ? r.shortsCount : 3
+  return {
+    format,
+    music: r.music !== false,
+    broll: r.broll === true,
+    shorts: r.shorts === true,
+    shortsCount: Math.round(Math.min(5, Math.max(1, count))),
+  }
+}
+
+/** Video dài hơn mức này mới đáng tách thành shorts. */
+export const MIN_SHORTS_SOURCE_MS = 45_000
+
+/**
+ * Chọn định dạng khi người dùng để `auto`: có chuột + dài → youtube; ngắn (< 75 s) → shorts;
+ * không có dữ liệu chuột (nói trước camera) → vlog.
+ */
+export function pickAutoFormat(ctx: { durationMs: number; hasCursor: boolean }): RecipeStyle {
+  if (ctx.durationMs > 0 && ctx.durationMs < 75_000) return 'shorts'
+  return ctx.hasCursor ? 'youtube' : 'vlog'
+}
+
+/**
+ * Câu yêu cầu gửi AI cho bước lập kế hoạch tự dựng. Ngắn và cố định (tiếng Anh) để lượt người
+ * dùng chỉ vài chục token; mọi ngữ cảnh đã nằm trong lời nhắc hệ thống (phần tĩnh được cache).
+ */
+export function autoBuildGoal(options: AutoBuildOptions, format: RecipeStyle): string {
+  const parts = [
+    `AUTO BUILD. Format: ${format}${options.format === 'auto' ? ' (chosen automatically)' : ''}.`,
+    'Produce the complete professional edit of this video following the playbook: hook, pacing, zooms, captions, audio, look, privacy, outro.',
+    options.music
+      ? 'Background music: add one findMusic command (mood + tempo fitting the content) with duck.'
+      : 'No background music.',
+    options.broll
+      ? 'B-roll: add 1-3 broll commands only where the narration is generic (no on-screen action to show), 3-6 s each, never over a click or a demo step.'
+      : 'No b-roll.',
+    'Do not ask questions; pick sensible defaults. Do not export.',
+  ]
+  return parts.join(' ')
+}
+
+/** Chữ thẻ kết mặc định (CTA) theo ngôn ngữ khi AI không đưa. */
+export function defaultOutroText(language: string): string {
+  const code = language.toLowerCase().slice(0, 2)
+  if (code === 'vi' || code === '') return 'Đăng ký kênh để xem thêm'
+  if (code === 'ja') return 'チャンネル登録お願いします'
+  if (code === 'ko') return '구독하고 더 보기'
+  return 'Subscribe for more'
+}
+
+/** Kế hoạch tự dựng khi không có AI: công thức + tự tìm nhạc + thẻ kết. */
+export function planAutoBuildLocally(
+  options: AutoBuildOptions,
+  format: RecipeStyle,
+  language = 'vi',
+): AssistantCommand[] {
+  const out: AssistantCommand[] = [{ kind: 'recipe', style: format }]
+  if (options.music)
+    out.push({
+      kind: 'findMusic',
+      mood:
+        format === 'shorts'
+          ? 'upbeat energetic'
+          : format === 'vlog'
+            ? 'warm acoustic'
+            : 'calm corporate',
+      tempo: format === 'shorts' ? 'fast' : 'medium',
+      volume: 0.2,
+    })
+  out.push({ kind: 'outro', text: defaultOutroText(language), ms: 3000, template: 'title' })
+  return normalizeAssistantCommands(out)
+}
+
+export interface BuildReview {
+  /** Lệnh bổ sung để lấp chỗ thiếu (chạy ngay, không tốn token). */
+  fixes: AssistantCommand[]
+  /** Mục còn thiếu mà app không tự lấp được (báo cho người dùng). */
+  issues: string[]
+  /** Mục đã đạt. */
+  passed: string[]
+}
+
+/**
+ * Rà soát bản dựng sau khi áp kế hoạch, đối chiếu với sổ tay dựng (local, không gọi AI):
+ * khung hình đúng định dạng, có phụ đề, nhạc nền tự giảm khi nói, có hook mở đầu, có thẻ kết.
+ * Thiếu gì lấp được thì trả lệnh sửa; không lấp được (nhạc: cần key / kho) thì ghi vào `issues`.
+ */
+export function reviewBuild(
+  edit: EditState,
+  format: RecipeStyle,
+  options: Pick<AutoBuildOptions, 'music'> & { language?: string },
+): BuildReview {
+  const fixes: AssistantCommand[] = []
+  const issues: string[] = []
+  const passed: string[] = []
+  const total = outputDuration(edit.clips)
+  const wantAspect = format === 'shorts' ? '9:16' : format === 'youtube' ? '16:9' : null
+  if (wantAspect && edit.frame.aspect !== wantAspect)
+    fixes.push({ kind: 'aspect', aspect: wantAspect })
+  else passed.push('aspect')
+  if (edit.captions.enabled && edit.captions.lines.length > 0) passed.push('captions')
+  else issues.push('captions')
+  const music = edit.audioClips.filter((c) => c.kind === 'music')
+  if (options.music) {
+    if (music.length === 0) issues.push('music')
+    else {
+      passed.push('music')
+      if (!edit.audio.duck.enabled) fixes.push({ kind: 'duck', enabled: true, level: 0.25 })
+      else passed.push('duck')
+      if (music.some((c) => c.volume > 0.35))
+        fixes.push({ kind: 'volume', target: 'music', level: 0.25 })
+    }
+  }
+  const texts = edit.overlays.filter((o) => o.kind === 'text')
+  if (texts.some((o) => o.start <= 1000)) passed.push('hook')
+  else issues.push('hook')
+  if (total > 0 && texts.some((o) => o.end >= total - 500 && o.start >= total - 8000))
+    passed.push('outro')
+  else if (total >= 8000)
+    fixes.push({
+      kind: 'outro',
+      text: defaultOutroText(options.language ?? edit.captions.language ?? ''),
+      ms: 3000,
+      template: 'title',
+    })
+  if (edit.audio.micFx.noise !== 'off' || edit.audio.micFx.enhance) passed.push('cleanAudio')
+  else fixes.push({ kind: 'cleanAudio' })
+  return { fixes: normalizeAssistantCommands(fixes), issues, passed }
+}
+
+/** Một đoạn hay AI chọn để tách thành video ngắn (thời gian trên bản quay gốc, ms). */
+export interface HighlightSegment {
+  start: number
+  end: number
+  /** Câu hook ngắn hiện ở đầu short (ngôn ngữ của lời thoại). */
+  hook: string
+  /** Tên ngắn (đặt tên dự án). */
+  title: string
+}
+
+export const SHORT_MIN_MS = 15_000
+export const SHORT_MAX_MS = 90_000
+
+/**
+ * Kiểm tra các đoạn AI trả về: trong thời lượng, dài 15-90 s, không chồng nhau, tối đa `count`,
+ * theo thứ tự thời gian.
+ */
+export function normalizeHighlights(
+  input: unknown,
+  durationMs: number,
+  count: number,
+): HighlightSegment[] {
+  const r = (typeof input === 'object' && input !== null ? input : {}) as Record<string, unknown>
+  const raw = Array.isArray(r.segments) ? r.segments : []
+  const out: HighlightSegment[] = []
+  for (const item of raw) {
+    const s = (typeof item === 'object' && item !== null ? item : {}) as Record<string, unknown>
+    const a = typeof s.start_seconds === 'number' ? s.start_seconds * 1000 : NaN
+    const b = typeof s.end_seconds === 'number' ? s.end_seconds * 1000 : NaN
+    if (!Number.isFinite(a) || !Number.isFinite(b)) continue
+    const start = Math.max(0, Math.round(a))
+    const end = Math.min(durationMs > 0 ? durationMs : Infinity, Math.round(b))
+    if (end - start < SHORT_MIN_MS || end - start > SHORT_MAX_MS) continue
+    if (out.some((o) => start < o.end && end > o.start)) continue
+    out.push({
+      start,
+      end,
+      hook: typeof s.hook === 'string' ? s.hook.trim().slice(0, 80) : '',
+      title: typeof s.title === 'string' ? s.title.trim().slice(0, 60) : '',
+    })
+  }
+  return out.sort((x, y) => x.start - y.start).slice(0, Math.max(1, count))
+}
+
 export function planLocally(
   commands: AssistantCommand[],
   context: Pick<DirectorContext, 'musicTracks'> &

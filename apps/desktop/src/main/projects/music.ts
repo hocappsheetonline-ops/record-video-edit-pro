@@ -8,6 +8,7 @@ import { readJsonFile, writeJsonFile } from '../json-file'
 import { AUDIO_EXTENSIONS } from './assets'
 
 const INDEX = 'music.json'
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null
 /** Kho nhạc tối đa 500 bài để file chỉ mục luôn nhỏ. */
 const MAX_TRACKS = 500
 
@@ -50,11 +51,54 @@ export class MusicLibrary {
               name: r.name,
               durationMs: r.durationMs,
               addedAt: typeof r.addedAt === 'number' ? r.addedAt : 0,
-              source: r.source === 'youtube' ? 'youtube' : 'file',
+              source:
+                r.source === 'youtube' ? 'youtube' : r.source === 'jamendo' ? 'jamendo' : 'file',
+              ...(typeof r.credit === 'string' && r.credit ? { credit: r.credit } : {}),
+              ...(isObj(r.origin) &&
+              r.origin.source === 'jamendo' &&
+              typeof r.origin.id === 'string'
+                ? { origin: { source: 'jamendo' as const, id: r.origin.id } }
+                : {}),
             },
           ]
         : [],
     )
+  }
+
+  /** Bài đã tải từ kho online (theo mã bài), nếu còn trên đĩa. */
+  async findByOrigin(source: 'jamendo', id: string): Promise<MusicTrack | null> {
+    const track = (await this.list()).find((t) => t.origin?.source === source && t.origin.id === id)
+    return track ?? null
+  }
+
+  /**
+   * Thêm một file nhạc đã tải từ kho online (AI tự tìm): đặt tên, ghi nguồn và mã bài để lần sau
+   * dùng lại không tải nữa.
+   */
+  async addTrack(
+    sourcePath: string,
+    info: { name: string; credit: string; origin: { source: 'jamendo'; id: string } },
+    now: () => number = Date.now,
+  ): Promise<MusicTrack> {
+    await mkdir(this.dir, { recursive: true })
+    const ext = extname(sourcePath).slice(1).toLowerCase()
+    if (!AUDIO_EXTENSIONS.includes(ext)) throw new Error('audio_unsupported')
+    const durationMs = await probeDuration(sourcePath, this.run)
+    const file = `music-${randomBytes(6).toString('hex')}.${ext}`
+    await copyFile(sourcePath, join(this.dir, file))
+    const track: MusicTrack = {
+      file,
+      name: cleanName(info.name),
+      durationMs,
+      addedAt: now(),
+      source: 'jamendo',
+      credit: info.credit.slice(0, 300),
+      origin: info.origin,
+    }
+    const records = await this.records()
+    records.push(track)
+    await writeJsonFile(join(this.dir, INDEX), records.slice(-MAX_TRACKS))
+    return track
   }
 
   /** Danh sách bài (mới thêm trước), chỉ những file còn trên đĩa. */
