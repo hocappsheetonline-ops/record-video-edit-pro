@@ -554,8 +554,7 @@ export class AiService {
   ): Promise<{ id: string; text: string }[]> {
     if (lines.length === 0) return []
     const ask = instruction.trim().slice(0, MAX_INSTRUCTION_CHARS) || CAPTION_FIX_INSTRUCTION
-    const client = createClaude(await this.key('anthropic'), this.deps.fetchImpl)
-    const answer = await askJson<CaptionEditResponse>(client, {
+    const answer = await this.askJson<CaptionEditResponse>({
       system: captionEditSystem(language),
       user: JSON.stringify({ instruction: ask, lines }),
       schema: CAPTION_EDIT_SCHEMA,
@@ -573,7 +572,6 @@ export class AiService {
     const instruction = input.instruction.trim().slice(0, MAX_INSTRUCTION_CHARS)
     if (!instruction) throw new Error('instruction_empty')
     const transcript = await this.getTranscript(dir)
-    const client = createClaude(await this.key('anthropic'), this.deps.fetchImpl)
     const seconds = (ms: number) => Math.round(ms / 100) / 10
     const current = input.zooms.map((z) => ({
       id: z.id,
@@ -593,7 +591,7 @@ export class AiService {
         ? `Transcript:\n${timestampedTranscript(transcript.words)}`
         : 'Transcript: none',
     ].join('\n')
-    const answer = await askJson<ZoomPlanResponse>(client, {
+    const answer = await this.askJson<ZoomPlanResponse>({
       system: ZOOM_PLAN_SYSTEM,
       user,
       schema: ZOOM_PLAN_SCHEMA,

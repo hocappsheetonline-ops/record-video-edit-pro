@@ -532,6 +532,28 @@ describe('AI cục bộ (Ollama)', () => {
     expect(await ai.listLocalModels('http://127.0.0.1:11434')).toEqual(['llama3.2', 'qwen2.5:7b'])
   })
 
+  it('bật AI cục bộ: sửa phụ đề và chỉnh zoom cũng đi qua Ollama, không cần key Claude', async () => {
+    const { calls, fetchImpl } = ollamaFetch()
+    const ai = new AiService({
+      getKey: async () => undefined,
+      getLocalAi: async () => local(),
+      run: runFfmpeg,
+      fetchImpl,
+    })
+    const lines = [{ id: 'l0', text: 'xin chào' }]
+    // Máy chủ giả trả JSON không có "lines": giữ nguyên nội dung, nhưng phải đã hỏi Ollama.
+    expect(await ai.editCaptions(lines, 'viết hoa', 'vi')).toEqual(lines)
+    expect(
+      await ai.planZooms(dir, { instruction: 'zoom 2x', zooms: [], durationMs: 1000, clicks: [] }),
+    ).toEqual([])
+    const chats = calls.filter((c) => c.url.endsWith('/api/chat'))
+    expect(chats).toHaveLength(2)
+    expect(chats.map((c) => (c.body as { model: string }).model)).toEqual([
+      'qwen2.5:7b',
+      'qwen2.5:7b',
+    ])
+  })
+
   it('model chưa tải hoặc Ollama không chạy: báo mã lỗi rõ; tắt AI cục bộ thì về Claude', async () => {
     const { fetchImpl } = ollamaFetch()
     const ctx = { language: 'vi', durationMs: 1000, hasTranscript: false }
