@@ -14,6 +14,7 @@ import {
 import { RESOLUTIONS, type Resolution } from './layout'
 import { ROTATIONS, type Rotation } from './orient'
 import { SHAPES, type ShapeKind } from './shapes'
+import { BLUR_MODES, DEFAULT_OVERLAY_MS, type BlurMode } from './overlays'
 import { TEXT_TEMPLATES, type TextTemplateId } from './text-style'
 import { TIMELINE_ROWS, type TimelineRow } from './tracks'
 import { TRANSITION_KINDS, type TransitionKind } from './transitions'
@@ -94,6 +95,8 @@ export type AssistantCommand =
   | { kind: 'fade'; ms: number }
   /** Hiệu ứng âm thanh có sẵn tại một thời điểm. */
   | { kind: 'sound'; sound: SoundEffectId; atMs: number }
+  /** Tự giảm nhạc nền khi có lời (audio ducking); `level` = âm lượng nhạc khi có lời 0.05..0.8. */
+  | { kind: 'duck'; enabled: boolean; level?: number }
   // ---- Zoom & chuyển động ----
   /** Đặt mức phóng to cho mọi đoạn zoom hiện có. */
   | { kind: 'zoomLevel'; scale: number }
@@ -107,7 +110,15 @@ export type AssistantCommand =
   /** Nền sau video: một màu, hoặc chuyển màu khi có `color2`. */
   | { kind: 'background'; color: string; color2: string }
   /** Con trỏ chuột vẽ thêm. */
-  | { kind: 'cursor'; visible?: boolean; size?: number; clickEffect?: boolean; hideIdle?: boolean }
+  | {
+      kind: 'cursor'
+      visible?: boolean
+      size?: number
+      clickEffect?: boolean
+      hideIdle?: boolean
+      /** Hiện phím tắt đã bấm dưới khung hình. */
+      showKeys?: boolean
+    }
   /** Bong bóng webcam. */
   | {
       kind: 'camera'
@@ -140,6 +151,16 @@ export type AssistantCommand =
       x: number
       y: number
       color: string
+    }
+  /** Vùng che (làm mờ / khảm ô) tâm (x, y) 0..1, cao `size` theo chiều cao khung (0.05..1). */
+  | {
+      kind: 'blur'
+      mode: BlurMode
+      atMs: number
+      ms: number
+      x: number
+      y: number
+      size: number
     }
   // ---- Màu ----
   /** Một điều chỉnh màu (độ sáng, tương phản…): -1..1 (sharpen / vignette / grain: 0..1). */
@@ -189,6 +210,7 @@ export const ASSISTANT_KINDS: readonly AssistantKind[] = [
   'voiceFx',
   'fade',
   'sound',
+  'duck',
   'zoomLevel',
   'zoomAt',
   'motion',
@@ -199,6 +221,7 @@ export const ASSISTANT_KINDS: readonly AssistantKind[] = [
   'text',
   'sticker',
   'shape',
+  'blur',
   'adjust',
   'captionsLayout',
   'translate',
@@ -259,6 +282,8 @@ export function assistantCommandKey(cmd: AssistantCommand): string {
       return `sticker:${cmd.atMs}:${cmd.emoji}`
     case 'shape':
       return `shape:${cmd.atMs}:${cmd.shape}`
+    case 'blur':
+      return `blur:${cmd.atMs}:${cmd.x}:${cmd.y}`
     case 'sound':
       return `sound:${cmd.atMs}:${cmd.sound}`
     case 'zoomAt':
@@ -370,6 +395,24 @@ function parseCommand(r: Record<string, unknown>): AssistantCommand | null {
     }
     case 'fade':
       return { kind: 'fade', ms: durMs(r.ms, 1500, 0, 10_000) }
+    case 'duck': {
+      const enabled = boolOr(r.enabled)
+      if (enabled === undefined) return null
+      return compact({ kind: 'duck' as const, enabled, level: numOr(r.level, 0.05, 0.8) })
+    }
+    case 'blur': {
+      const atMs = timeMs(r.atMs)
+      if (atMs === undefined) return null
+      return {
+        kind: 'blur',
+        mode: oneOf(BLUR_MODES, r.mode) ?? 'blur',
+        atMs,
+        ms: durMs(r.ms, DEFAULT_OVERLAY_MS),
+        x: numOr(r.x, 0, 1) ?? 0.5,
+        y: numOr(r.y, 0, 1) ?? 0.5,
+        size: numOr(r.size, 0.05, 1) ?? 0.3,
+      }
+    }
     case 'sound': {
       const sound = oneOf(SOUND_EFFECT_IDS, r.sound)
       const atMs = timeMs(r.atMs)
@@ -418,6 +461,7 @@ function parseCommand(r: Record<string, unknown>): AssistantCommand | null {
         size: numOr(r.size, 0.5, 4),
         clickEffect: boolOr(r.clickEffect),
         hideIdle: boolOr(r.hideIdle),
+        showKeys: boolOr(r.showKeys),
       })
       return Object.keys(cmd).length > 1 ? cmd : null
     }
@@ -778,6 +822,33 @@ export function parseAssistantRequest(text: string): AssistantCommand[] {
     push({ kind: 'cursor', visible: false })
   else if (/(?:hiện|bật|show)\s+(?:con\s+)?(?:trỏ|chuột|cursor|mouse)/i.test(t))
     push({ kind: 'cursor', visible: true })
+  // Phím tắt đã bấm.
+  if (/(?:ẩn|tắt|hide)\s+(?:các\s+)?(?:phím tắt|phím bấm|shortcuts?|keystrokes?)/i.test(t))
+    push({ kind: 'cursor', showKeys: false })
+  else if (/(?:hiện|bật|show)\s+(?:các\s+)?(?:phím tắt|phím bấm|shortcuts?|keystrokes?)/i.test(t))
+    push({ kind: 'cursor', showKeys: true })
+  // Tự giảm nhạc khi có lời.
+  if (
+    /(?:giảm|nhỏ|hạ|ngắt)\s+(?:nhạc|music)\s+(?:nền\s+)?(?:khi|lúc|when|while)\s+(?:có\s+)?(?:lời|nói|thoại|speak|talk)|\bduck(?:ing)?\b/i.test(
+      t,
+    )
+  )
+    push({ kind: 'duck', enabled: true })
+  // Che vùng riêng tư (không có AI thì che giữa khung, cả video).
+  if (
+    /(?:làm mờ|che|khảm)\s+(?:vùng|chỗ|phần|khu vực)|\b(?:mosaic|pixelate)\b|blur (?:a |the )?(?:region|area|part)/i.test(
+      t,
+    )
+  )
+    push({
+      kind: 'blur',
+      mode: /khảm|mosaic|pixelate/i.test(t) ? 'pixelate' : 'blur',
+      atMs: 0,
+      ms: 600_000,
+      x: 0.5,
+      y: 0.5,
+      size: 0.3,
+    })
 
   // Chương (mốc đánh dấu từ lời thoại).
   if (/(?:thêm|tạo|đánh dấu|add|create|mark)\s+(?:các\s+|mốc\s+)?(?:chương|chapters?)/i.test(t))

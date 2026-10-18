@@ -1209,6 +1209,8 @@ export const vi = {
         text: 'Chữ',
         sticker: 'Nhãn dán',
         shape: 'Hình vẽ',
+        blur: 'Che vùng riêng tư',
+        duck: 'Tự giảm nhạc khi có lời',
         adjust: 'Điều chỉnh màu',
         captionsLayout: 'Vị trí / cỡ phụ đề',
         translate: 'Dịch phụ đề',

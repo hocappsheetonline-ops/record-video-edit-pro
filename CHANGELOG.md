@@ -8,6 +8,7 @@ Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; a
 - **Tự giảm nhạc khi có lời** (Cài đặt video → Âm lượng → Nhạc nền): nhạc nền tự nhỏ lại (mức chỉnh được, mặc định 30 %) khi micro có tiếng hoặc ở các đoạn lồng tiếng, to lại khi im lặng — audio ducking như CapCut / Descript / Camtasia. Khoảng có lời lấy từ dạng sóng bản quay nên không cần AI; xem trước và video xuất giảm như nhau.
 - **Hiện phím tắt đã bấm** (Cài đặt video → Con trỏ): phím tắt (Ctrl+C, Alt+Tab, Win+Shift+S…) hiện thành viên thuốc dưới khung hình rồi mờ dần, như Screen Studio / Camtasia; chỉ hiện phím tắt, không ghi chữ bạn gõ (bản quay vốn không lưu).
 - **Chụp khung hình** (nút ảnh cạnh Toàn màn hình dưới khung xem trước): lưu khung đang xem thành PNG trong thư mục `exports` của dự án, có nút mở thư mục — như "Snapshot" của CapCut, tiện làm ảnh bìa / thumbnail.
+- **Đạo diễn AI** hiểu thêm ba lệnh: che vùng (`blur`: làm mờ / khảm ô tại vị trí và thời điểm), tự giảm nhạc khi có lời (`duck`) và hiện phím tắt (`cursor.showKeys`); bộ hiểu từ khóa (không có AI) cũng nhận "hiện phím tắt", "giảm nhạc khi nói", "khảm vùng…".
 
 ## 1.7.0
 

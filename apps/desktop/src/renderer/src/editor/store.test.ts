@@ -770,3 +770,36 @@ describe('đạo diễn AI', () => {
     expect(s().memory.counts.filter).toEqual({ warm: 1, cold: 1 })
   })
 })
+
+describe('lệnh AI 1.8.0: che vùng, tự giảm nhạc, hiện phím tắt', () => {
+  it('blur thêm vùng che đúng chỗ / đúng lúc; duck và showKeys đổi cài đặt', async () => {
+    const s = useEditorStore.getState
+    const report = await s().applyAssistantCommands([
+      { kind: 'blur', mode: 'pixelate', atMs: 1000, ms: 2000, x: 0.25, y: 0.75, size: 0.4 },
+      { kind: 'duck', enabled: true, level: 0.2 },
+      { kind: 'cursor', showKeys: true },
+    ])
+    expect(report.map((r) => [r.step, r.status])).toEqual([
+      ['blur', 'done'],
+      ['duck', 'done'],
+      ['cursor', 'done'],
+    ])
+    const edit = s().edit!
+    expect(edit.overlays).toHaveLength(1)
+    expect(edit.overlays[0]).toMatchObject({
+      kind: 'blur',
+      blurMode: 'pixelate',
+      start: 1000,
+      end: 3000,
+      x: 0.25,
+      y: 0.75,
+      size: 0.4,
+    })
+    expect(edit.audio.duck).toEqual({ enabled: true, level: 0.2 })
+    expect(edit.cursor.showKeys).toBe(true)
+    // Một bước hoàn tác cho cả ba lệnh.
+    s().undo()
+    expect(s().edit!.overlays).toEqual([])
+    expect(s().edit!.audio.duck.enabled).toBe(false)
+  })
+})

@@ -1220,6 +1220,8 @@ export const en: Messages = {
         text: 'Text',
         sticker: 'Sticker',
         shape: 'Shape',
+        blur: 'Hide sensitive area',
+        duck: 'Auto-duck music',
         adjust: 'Colour adjustment',
         captionsLayout: 'Caption position / size',
         translate: 'Translate captions',
