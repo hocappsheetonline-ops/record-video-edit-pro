@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import ffmpegPath from 'ffmpeg-static'
@@ -171,11 +171,12 @@ test('Phụ đề kiểu Captions: emoji AI, tô từ khóa, mẫu comic, lồng
   expect(countColor(file, 0.85, band, [244, 63, 94])).toBeGreaterThan(300)
   expect(countColor(file, 0.85, band, [253, 224, 71])).toBeGreaterThan(200)
   // Video xuất có tiếng lồng (hai đoạn 0,8 s) dù mic tắt.
-  const volume = execFileSync(
+  // ffmpeg in volumedetect ra stderr.
+  const volume = spawnSync(
     ffmpegPath as unknown as string,
     ['-hide_banner', '-i', file, '-af', 'volumedetect', '-f', 'null', '-'],
-    { stdio: ['ignore', 'ignore', 'pipe'] },
-  ).toString()
+    { encoding: 'utf8' },
+  ).stderr
   expect(Number(/mean_volume: (-?[\d.]+) dB/.exec(volume)![1])).toBeGreaterThan(-60)
 
   expect(errors).toEqual([])
