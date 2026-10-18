@@ -166,7 +166,12 @@ describe('chuyển tiếp', () => {
     expect(clips).toHaveLength(3)
     expect(s().edit!.transitions[0]!.afterClip).toBe(clips[1]!.id)
 
-    s().applyTransitionToAll('zoom', 800)
+    // Mặc định chỉ ở chỗ đổi cảnh: chỗ tách tại chỗ (2s) hình vẫn liền nên không có; 'all' mới đủ.
+    expect(s().applyTransitionToAll('zoom', 800)).toBe(1)
+    expect(s().edit!.transitions).toEqual([
+      { afterClip: clips[1]!.id, kind: 'zoom', durationMs: 800 },
+    ])
+    expect(s().applyTransitionToAll('zoom', 800, 'all')).toBe(2)
     expect(s().edit!.transitions.map((t) => t.kind)).toEqual(['zoom', 'zoom'])
 
     // Xóa clip cuối: chỗ nối của nó biến mất, chuyển tiếp tương ứng bị bỏ.
@@ -198,6 +203,29 @@ describe('lệnh trợ lý AI (applyAssistantCommands)', () => {
     expect(s().edit!.effects).toHaveLength(2)
     s().undo()
     expect(s().edit!.effects).toEqual([])
+  })
+
+  it('lệnh transitions: chỉ chỗ đổi cảnh; tách tại chỗ thì bỏ qua (no_scene_cuts) trừ khi all', async () => {
+    const s = useEditorStore.getState
+    // Dự án một đoạn quay, tách tại chỗ ở giây 2: hình liền, không phải đổi cảnh.
+    const [a, b] = s().edit!.clips
+    s().select({ kind: 'clip', id: b!.id })
+    s().deleteSelection()
+    s().setTime(2000)
+    s().splitAtPlayhead()
+    expect(s().edit!.clips).toHaveLength(2)
+    expect(
+      await s().applyAssistantCommands([{ kind: 'transitions', transition: 'fadeBlack' }]),
+    ).toEqual([{ step: 'transitions', status: 'skipped', detail: 'no_scene_cuts' }])
+    expect(s().edit!.transitions).toEqual([])
+    expect(
+      await s().applyAssistantCommands([
+        { kind: 'transitions', transition: 'fadeBlack', all: true },
+      ]),
+    ).toEqual([{ step: 'transitions', status: 'done', detail: 1 }])
+    expect(s().edit!.transitions).toEqual([
+      { afterClip: a!.id, kind: 'fadeBlack', durationMs: DEFAULT_TRANSITION_MS },
+    ])
   })
 
   it('chuyển cảnh cho mọi chỗ nối; mẫu phụ đề', async () => {

@@ -181,6 +181,7 @@ export function expandRecipe(style: RecipeStyle, ctx: RecipeContext): AssistantC
       }
       out.push({ kind: 'captions' }, { kind: 'captionsStyle', template: 'tiktok' })
       out.push({ kind: 'captionsLayout', position: 'bottom', size: 1.2 })
+      // Chỉ ở chỗ đổi cảnh (mặc định của lệnh); các chỗ cắt lặng cắt thẳng.
       out.push({ kind: 'transitions', transition: 'zoom', ms: 300 })
       music(0.3, 0.2)
       break
