@@ -1,4 +1,4 @@
-import { clipPositions, clipDuration, type Clip } from './timeline'
+import { clipPositions, clipDuration, segmentAt, type Clip, type SourceSegment } from './timeline'
 
 /**
  * Hiệu ứng chuyển tiếp tại chỗ nối giữa hai clip (kiểu CapCut). Chỉ vẽ lại khung hình quanh chỗ
@@ -111,6 +111,45 @@ export function cutPoints(clips: readonly Clip[]): { afterClip: string; at: numb
   return clipPositions(clips)
     .slice(0, -1)
     .map(({ clip, outputStart }) => ({ afterClip: clip.id, at: outputStart + clipDuration(clip) }))
+}
+
+/**
+ * Chỗ nối được coi là "đổi cảnh" khi hai bên không liền mạch: bỏ đi ít nhất chừng này ms nguồn
+ * (cắt khoảng lặng / từ đệm chỉ bỏ vài trăm ms tới ~2 s, không tính).
+ */
+export const SCENE_JUMP_MS = 3000
+
+/** Thời điểm nguồn mà clip kết thúc / bắt đầu theo chiều phát. */
+function sourceEdge(clip: Clip, edge: 'start' | 'end'): number {
+  if (clip.freeze) return clip.sourceStart
+  if (edge === 'start') return clip.reversed ? clip.sourceEnd : clip.sourceStart
+  return clip.reversed ? clip.sourceStart : clip.sourceEnd
+}
+
+/**
+ * Chỗ nối là đổi cảnh: hai clip thuộc hai đoạn quay khác nhau, hoặc nguồn nhảy ít nhất
+ * `SCENE_JUMP_MS` (bỏ một đoạn dài, đảo thứ tự). Tách clip tại chỗ, cắt khoảng lặng hay khung
+ * đứng yên thì hình vẫn liền nên không phải đổi cảnh — chuyển cảnh ở đó chỉ làm mất hình.
+ */
+export function isSceneCut(a: Clip, b: Clip, segments?: readonly SourceSegment[]): boolean {
+  if (a.freeze || b.freeze) return false
+  const from = sourceEdge(a, 'end')
+  const to = sourceEdge(b, 'start')
+  if (segments && segments.length > 1) {
+    // Mép cuối của clip trước nằm trong đoạn quay nào (lùi 1 ms để không rơi sang đoạn sau).
+    const segA = segmentAt(segments, Math.max(0, from - 1))?.segment.index
+    const segB = segmentAt(segments, to)?.segment.index
+    if (segA !== undefined && segB !== undefined && segA !== segB) return true
+  }
+  return Math.abs(to - from) >= SCENE_JUMP_MS
+}
+
+/** Các chỗ nối đổi cảnh (xem `isSceneCut`) — nơi nên đặt chuyển cảnh; chỗ còn lại cắt thẳng. */
+export function sceneCuts(
+  clips: readonly Clip[],
+  segments?: readonly SourceSegment[],
+): { afterClip: string; at: number }[] {
+  return cutPoints(clips).filter((cut, i) => isSceneCut(clips[i]!, clips[i + 1]!, segments))
 }
 
 /** Chuyển tiếp đang diễn ra tại thời điểm xuất `t` (null nếu không có). */

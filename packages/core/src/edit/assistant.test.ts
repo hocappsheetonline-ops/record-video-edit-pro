@@ -404,6 +404,22 @@ describe('từ khóa hiệu ứng & chuyển cảnh mới', () => {
     expect(tr('chuyển cảnh lật thẻ')).toEqual({ kind: 'transitions', transition: 'flip' })
     expect(tr('chuyển cảnh xoay')).toEqual({ kind: 'transitions', transition: 'spin' })
     expect(tr('thêm chuyển cảnh')).toEqual({ kind: 'transitions', transition: 'fadeBlack' })
+    // Mặc định chỉ ở chỗ đổi cảnh; nói rõ "mọi / tất cả chỗ nối" mới đặt ở mọi chỗ cắt.
+    expect(tr('chuyển cảnh zoom ở mọi chỗ nối')).toEqual({
+      kind: 'transitions',
+      transition: 'zoom',
+      all: true,
+    })
+    expect(tr('thêm chuyển cảnh cho tất cả đoạn cắt')).toEqual({
+      kind: 'transitions',
+      transition: 'fadeBlack',
+      all: true,
+    })
+    expect(tr('zoom transition at every cut')).toEqual({
+      kind: 'transitions',
+      transition: 'zoom',
+      all: true,
+    })
   })
 })
 

@@ -257,6 +257,11 @@ const COMMAND_SCHEMA: Schema = {
       description: 'captionsLook: words shown at once (0 = whole line; 2-3 for TikTok style)',
     },
     enhance: { type: 'boolean', description: 'export: HD enhance (denoise + sharpen)' },
+    all: {
+      type: 'boolean',
+      description:
+        'transitions: true = at every cut (only when the user explicitly asks for every cut); default = scene changes only',
+    },
     aspect: { type: 'string', enum: ['16:9', '9:16', '1:1', '4:3', 'source'] },
     ms: {
       type: 'integer',
@@ -272,7 +277,8 @@ const COMMAND_SCHEMA: Schema = {
     transition: {
       type: 'string',
       enum: [...TRANSITION_KINDS],
-      description: 'transitions: transition used at every cut; transitionAt: transition at one cut',
+      description:
+        'transitions: transition at scene changes (every cut only with all: true); transitionAt: transition at one cut',
     },
     query: {
       type: 'string',
@@ -438,7 +444,7 @@ const COMMAND_GUIDE = `- cutSilences: remove long pauses. removeFillers: remove 
 - aspect {aspect}: output aspect ratio ("9:16" for TikTok / Shorts / Reels, "1:1" square, "16:9" landscape).
 - trimStart {ms} / trimEnd {ms}: cut that many milliseconds from the beginning / end.
 - effect {effect}: visual effect at the start of the video and at every cut (${EFFECT_KINDS.join(', ')}).
-- transitions {transition, ms}: transition at every cut (${TRANSITION_KINDS.join(', ')}); ms = length (600 by default, 200-300 for punchy short-form).
+- transitions {transition, ms, all?}: one transition at every scene change, i.e. a cut between two recordings or where a long part (3 s+) was removed (${TRANSITION_KINDS.join(', ')}); silence / filler cuts and in-place splits stay hard cuts, because a transition on continuous footage only hides the picture. all: true puts it at every cut: only when the user explicitly asks for every cut. ms = length (600 by default, 200-300 for punchy short-form).
 - music {query, volume}: background music from the user's own library; query = words from one track name; volume 0.05-1 (0.4 by default, about 0.25 when asked for quiet music).
 - export {resolution, format, fps, enhance}: set export settings and export right away (resolution ${RESOLUTIONS.join(' / ')}; format mp4 or gif; enhance = HD denoise + sharpen).
 - styleFrom {project}: copy the style (frame, filter, captions, motion…) of one of the user's other projects, by its exact name.
@@ -464,7 +470,7 @@ Markers & rows:
 - clear {target}: remove every item of one kind (${CLEAR_TARGETS.join(', ')}); "cuts" restores the full recording; "captions" turns captions off; "filter" / "adjust" reset the colour look.
 - shorts {mode, seconds, vertical, count}: split the video into short clips, each becoming its own project (mode fixed = every N seconds, chapters = by AI chapters, highlights = AI picks the count best self-contained moments of 15-90 s, each with a hook, vertical TikTok captions and the same look).
 Pro editing (1.9.0):
-- recipe {style}: a whole professional recipe in one command (${RECIPE_STYLES.join(' / ')}): youtube = long-form 16:9 tutorial (silence + filler cuts, clean voice, smooth cursor zoom, pressed keys, box captions, quiet ducked music, chapters); shorts = vertical TikTok / Shorts / Reels (9:16, fast pacing, big TikTok captions, zoom transitions, ducked music); vlog = talking head (karaoke captions, warm look, soft music); clean = minimal (silence cuts, clean voice, outline captions). Explicit commands in the same plan override the recipe's.
+- recipe {style}: a whole professional recipe in one command (${RECIPE_STYLES.join(' / ')}): youtube = long-form 16:9 tutorial (silence + filler cuts, clean voice, smooth cursor zoom, pressed keys, box captions, quiet ducked music, chapters); shorts = vertical TikTok / Shorts / Reels (9:16, fast pacing, big TikTok captions, zoom transitions at scene changes, ducked music); vlog = talking head (karaoke captions, warm look, soft music); clean = minimal (silence cuts, clean voice, outline captions). Explicit commands in the same plan override the recipe's.
 - effectAt {effect, atMs, ms, intensity}: one visual effect at a time (a pattern interrupt: flash / shake / zoomPunch on a reveal, confetti / sparkle on a success, bw / vintage for a flashback, spotlight to focus one spot). Keep most effects 0.5-3 s; strobe / shake under 1 s; colour tints (warm, cool, bw, letterbox, grain) may run over a whole segment.
 - speedRange {fromMs, toMs, factor}: speed up a boring span (loading, typing, waiting: 2-4×) or slow down a key moment (0.5×).
 - speedCurve {preset, atMs}: a CapCut-style speed curve on the clip at atMs (${SPEED_CURVE_PRESETS.join(', ')}).
@@ -522,7 +528,7 @@ export const DIRECTOR_SCHEMA: Schema = {
 export const EDITING_PLAYBOOK = `Professional editing playbook (follow it whenever the user asks for a "professional", "complete", "YouTube", "TikTok" or "like a pro" edit, or gives only a goal):
 1. Pick the format first: long-form (YouTube tutorial / demo, 16:9, calm pace, whole-line captions) or short-form (TikTok / Shorts / Reels, 9:16 fill, fast pace, 2-3 word highlight captions). A recipe command (youtube / shorts / vlog / clean) is the quickest way to apply the right defaults; add explicit commands on top for anything specific.
 2. Hook (first 3-5 s): never open with a slow intro. Put a text hook at atMs 0 for 2-3 s that states the result or promise ("Làm X trong 30 giây", "3 lỗi khiến…"); add a quick effectAt flash/pulse or a sound at 0 if the style is energetic. Trim dead time before the first spoken words (trimStart) when the transcript shows a late start.
-3. Pacing: remove silences (>0.5 s) and filler words, then make something change on screen every 10-20 s (zoomAt on the UI detail being explained, a text label for a key step or setting, a shape arrow at a click, a sticker, a short effectAt). Speed up waiting / loading / typing spans with speedRange 2-4×; slow a key moment to 0.5× only when it matters. Short-form: cuts every 2-4 s, zoom transitions 200-300 ms; long-form: hard cuts, a transition (fadeBlack / slide 400-600 ms) only at section changes (transitionAt).
+3. Pacing: remove silences (>0.5 s) and filler words, then make something change on screen every 10-20 s (zoomAt on the UI detail being explained, a text label for a key step or setting, a shape arrow at a click, a sticker, a short effectAt). Speed up waiting / loading / typing spans with speedRange 2-4×; slow a key moment to 0.5× only when it matters. Hard cuts are the default everywhere: never a transition at every cut. Short-form: cuts every 2-4 s, a zoom transition 200-300 ms only at scene changes; long-form: a transition (fadeBlack / slide 400-600 ms) only at section changes (transitions, or transitionAt for one cut).
 4. Zoom and cursor: autoZoom for screen recordings with mouse data; punch in (zoomAt 1.6-2.5×, 2-4 s) where small UI details are mentioned, starting just before the narration names the target and holding through the click; keep the cursor visible with click ripples; show pressed shortcuts when the tutorial uses them. Never zoom on talking-head only footage.
 5. Captions: always on for short-form and recommended for tutorials. Short-form: tiktok / popWord / shadowPop / comic template, highlight style, 2-3 words, large, slightly below centre, plus captionsKeywords (and captionsEmoji when the tone is playful) so the key words pop like in the Captions app. Long-form: box / outline template, classic style, bottom. Keep the caption language = spoken language; translate / bilingual only when asked; dub only when the user wants the voice itself in another language.
 6. Audio: cleanAudio first (noise reduction, voice enhance, loudness about -14 LUFS). Background music from the library at 0.15-0.3, ducked under speech (duck level 0.2-0.3), fade in/out 1-2 s; mute the music entirely for calm tutorials if the user hints at it. Sound effects sparingly (a pop / whoosh on a reveal or key step, a success chime at the end), never over every cut.

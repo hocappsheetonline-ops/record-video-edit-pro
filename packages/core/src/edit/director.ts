@@ -189,6 +189,7 @@ export function expandRecipe(style: RecipeStyle, ctx: RecipeContext): AssistantC
       out.push({ kind: 'captionsLayout', position: 'bottom', size: 1.2 })
       // Từ khóa tô màu riêng như app Captions: phụ đề short-form nổi bật hơn.
       out.push({ kind: 'captionsKeywords' })
+      // Chỉ ở chỗ đổi cảnh (mặc định của lệnh); các chỗ cắt lặng cắt thẳng.
       out.push({ kind: 'transitions', transition: 'zoom', ms: 300 })
       music(0.3, 0.2)
       break

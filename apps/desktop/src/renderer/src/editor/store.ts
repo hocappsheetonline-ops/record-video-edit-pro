@@ -48,6 +48,7 @@ import {
   cutPoints,
   DEFAULT_TRANSITION_MS,
   pruneTransitions,
+  sceneCuts,
   type TransitionKind,
   type Filmstrip,
   MIN_AUDIO_CLIP_MS,
@@ -307,7 +308,15 @@ interface EditorStore {
   trimAtPlayhead(side: 'left' | 'right'): void
   /** Đặt (hoặc bỏ khi `kind` null) chuyển tiếp ở chỗ nối sau clip `afterClip`. */
   setTransition(afterClip: string, kind: TransitionKind | null, durationMs?: number): void
-  applyTransitionToAll(kind: TransitionKind | null, durationMs: number): void
+  /**
+   * Đặt cùng một chuyển cảnh ở các chỗ nối: `scope` 'scenes' (mặc định) = chỉ chỗ đổi cảnh
+   * (xem `sceneCuts`), 'all' = mọi chỗ nối; `kind` null = bỏ hết. Trả về số chỗ nối đã đặt.
+   */
+  applyTransitionToAll(
+    kind: TransitionKind | null,
+    durationMs: number,
+    scope?: 'scenes' | 'all',
+  ): number
   /** Thêm nhạc từ máy tại đầu phát. Trả về false nếu người dùng hủy. */
   addMusic(): Promise<boolean>
   /** Thêm hiệu ứng âm thanh có sẵn tại đầu phát. */
@@ -1292,13 +1301,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     )
   },
 
-  applyTransitionToAll(kind, durationMs) {
+  applyTransitionToAll(kind, durationMs, scope = 'scenes') {
+    const { edit, project } = get()
+    if (!edit) return 0
+    const cuts =
+      scope === 'all'
+        ? cutPoints(edit.clips)
+        : sceneCuts(edit.clips, project ? sourceSegments(project.segments) : undefined)
+    if (kind && cuts.length === 0) return 0
     get().change((e) => ({
       ...e,
-      transitions: kind
-        ? cutPoints(e.clips).map((c) => ({ afterClip: c.afterClip, kind, durationMs }))
-        : [],
+      transitions: kind ? cuts.map((c) => ({ afterClip: c.afterClip, kind, durationMs })) : [],
     }))
+    return kind ? cuts.length : 0
   },
 
   trimAtPlayhead(side) {
@@ -1864,12 +1879,17 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           break
         }
         case 'transitions': {
-          const cuts = cutPoints(get().edit!.clips).length
-          if (cuts === 0) skipped('transitions', 'no_cuts')
-          else {
-            get().applyTransitionToAll(c.transition, c.ms ?? DEFAULT_TRANSITION_MS)
-            done('transitions', cuts)
+          if (cutPoints(get().edit!.clips).length === 0) {
+            skipped('transitions', 'no_cuts')
+            break
           }
+          const n = get().applyTransitionToAll(
+            c.transition,
+            c.ms ?? DEFAULT_TRANSITION_MS,
+            c.all ? 'all' : 'scenes',
+          )
+          if (n === 0) skipped('transitions', 'no_scene_cuts')
+          else done('transitions', n)
           break
         }
         case 'music': {
@@ -1941,8 +1961,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
               micFx: { ...(other.audio?.micFx ?? e.audio.micFx) },
               systemFx: { ...(other.audio?.systemFx ?? e.audio.systemFx) },
             },
+            // Chuyển cảnh của dự án mẫu: chỉ đặt ở chỗ đổi cảnh (xem `sceneCuts`).
             transitions: transition
-              ? cutPoints(e.clips).map((p) => ({
+              ? sceneCuts(e.clips, sourceSegments(get().project!.segments)).map((p) => ({
                   afterClip: p.afterClip,
                   kind: transition.kind,
                   durationMs: transition.durationMs,

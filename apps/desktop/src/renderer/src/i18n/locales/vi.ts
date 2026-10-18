@@ -245,7 +245,10 @@ export const vi = {
       sample: 'Chữ mẫu',
       textHint: 'Sửa nội dung, màu, cỡ ở bảng bên phải; kéo chữ trực tiếp trên khung xem trước.',
       transitionTarget: 'Áp dụng cho chỗ nối {{n}}/{{count}} (đang chọn hoặc gần đầu phát nhất).',
-      transitionAll: 'Mờ qua đen cho cả {{count}} chỗ nối',
+      transitionScenes: 'Đặt ở {{count}} chỗ đổi cảnh',
+      transitionAll: 'Đặt ở cả {{count}} chỗ nối',
+      transitionHint:
+        'Chỗ đổi cảnh = đổi đoạn quay hoặc bỏ đi một đoạn dài. Chỗ cắt lặng, tách clip tại chỗ thì hình vẫn liền, nên cắt thẳng; đặt chuyển cảnh ở đó chỉ làm mất hình.',
       errors: {
         image_unsupported:
           'Định dạng chưa hỗ trợ. Dùng MP4, MOV, WEBM, MKV hoặc PNG, JPG, GIF, WEBP.',
@@ -1394,6 +1397,8 @@ export const vi = {
         no_music: 'kho nhạc trống (thêm nhạc ở tab Âm thanh)',
         no_project: 'không tìm thấy dự án mẫu',
         no_cuts: 'không có đoạn nào để cắt',
+        no_scene_cuts:
+          'không có chỗ đổi cảnh (chỉ cắt lặng / tách tại chỗ); nói "chuyển cảnh ở mọi chỗ nối" nếu vẫn muốn',
         too_short: 'video quá ngắn',
         duplicate: 'đã có sẵn',
         no_captions: 'chưa có phụ đề',
