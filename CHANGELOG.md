@@ -6,7 +6,7 @@ Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; a
 
 - **Tất cả đoạn zoom** (tab Zoom): đặt một mức zoom cố định cho mọi đoạn, đổi kiểu zoom cho tất cả; nút **Áp dụng mức này cho tất cả** khi đang chọn một đoạn; menu chuột phải trên đoạn zoom.
 - **Chỉnh zoom bằng Claude** (mục AI): mô tả cách muốn zoom hoặc chọn gợi ý sẵn, xem trước danh sách đề xuất rồi áp dụng.
-- **Phụ đề**: **Tìm và thay thế** (phân biệt hoa thường, cả từ, cả trong bản dịch) và **Sửa phụ đề bằng Claude** (sửa chính tả & dấu câu, hoặc theo yêu cầu).
+- **Phụ đề**: **Tìm và thay thế** (phân biệt hoa thường, cả từ, cả trong bản dịch; tìm được cả phụ đề để dấu ở dạng tách rời, ký tự `$` trong chuỗi thay được giữ nguyên, thay cả dòng bằng rỗng thì bỏ dòng) và **Sửa phụ đề bằng Claude** (sửa chính tả & dấu câu, hoặc theo yêu cầu).
 
 ## 1.5.1
 

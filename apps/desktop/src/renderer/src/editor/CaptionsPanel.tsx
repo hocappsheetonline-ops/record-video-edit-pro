@@ -7,6 +7,7 @@ import {
   CAPTION_LANGUAGES,
   CAPTION_TEMPLATES,
   captionSearchPattern,
+  captionTextMatches,
   countCaptionMatches,
   FONTS,
   fontFamily,
@@ -111,11 +112,8 @@ export function CaptionsPanel() {
   const searchOptions = { matchCase, wholeWord }
   const matchCount = countCaptionMatches(captions.lines, find, searchOptions)
   const matchPattern = captionSearchPattern(find, searchOptions)
-  const isMatch = (text: string | undefined) => {
-    if (!matchPattern || text === undefined) return false
-    matchPattern.lastIndex = 0
-    return matchPattern.test(text)
-  }
+  const isMatch = (text: string | undefined) =>
+    matchPattern !== null && captionTextMatches(matchPattern, text)
   const toLang = target ?? (captions.language.startsWith('en') ? 'vi' : 'en')
 
   const setCaptions = (patch: Partial<CaptionsState>, coalesce?: string) =>
@@ -497,7 +495,10 @@ export function CaptionsPanel() {
                   className="size-3.5 accent-accent"
                   data-testid="caption-match-case"
                   checked={matchCase}
-                  onChange={(e) => setMatchCase(e.target.checked)}
+                  onChange={(e) => {
+                    setMatchCase(e.target.checked)
+                    setReplaced(null)
+                  }}
                 />
                 {t('captions.matchCase')}
               </label>
@@ -507,7 +508,10 @@ export function CaptionsPanel() {
                   className="size-3.5 accent-accent"
                   data-testid="caption-whole-word"
                   checked={wholeWord}
-                  onChange={(e) => setWholeWord(e.target.checked)}
+                  onChange={(e) => {
+                    setWholeWord(e.target.checked)
+                    setReplaced(null)
+                  }}
                 />
                 {t('captions.wholeWord')}
               </label>
