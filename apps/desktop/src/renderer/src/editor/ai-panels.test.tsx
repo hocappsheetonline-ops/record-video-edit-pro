@@ -104,6 +104,53 @@ describe('CaptionsPanel', () => {
     expect(screen.getAllByTestId('caption-merge')[1]).toBeDisabled()
   })
 
+  it('tìm và thay thế: đếm dòng khớp, thay trong từng từ, phân biệt hoa thường', async () => {
+    const api = await setup()
+    render(<CaptionsPanel />)
+    await userEvent.click(screen.getByTestId('captions-generate'))
+    await screen.findAllByTestId('caption-line')
+    expect(screen.getByTestId('caption-replace-all')).toBeDisabled()
+    await userEvent.type(screen.getByTestId('caption-find'), 'xin')
+    expect(screen.getByTestId('caption-match-count')).toHaveTextContent('1 dòng khớp')
+    expect(
+      screen.getAllByTestId('captions-lines')[0]!.querySelectorAll('[data-match]'),
+    ).toHaveLength(1)
+    await userEvent.click(screen.getByTestId('caption-match-case'))
+    expect(screen.getByTestId('caption-match-count')).toHaveTextContent('Không có dòng nào khớp.')
+    await userEvent.click(screen.getByTestId('caption-match-case'))
+    await userEvent.type(screen.getByTestId('caption-replace'), 'Chào')
+    await userEvent.click(screen.getByTestId('caption-replace-all'))
+    expect(screen.getByTestId('caption-match-count')).toHaveTextContent('Đã thay trong 1 dòng.')
+    const line = useEditorStore.getState().edit!.captions.lines[0]!
+    expect(line).toMatchObject({ text: 'Chào chào ừm các bạn.', edited: false })
+    expect(line.words[0]!.text).toBe('Chào')
+    expect(api.editCaptions).not.toHaveBeenCalled()
+  })
+
+  it('sửa phụ đề bằng Claude: sửa chính tả hoặc theo yêu cầu, chỉ dòng đổi được đánh dấu', async () => {
+    const api = await setup()
+    render(<CaptionsPanel />)
+    await userEvent.click(screen.getByTestId('captions-generate'))
+    await screen.findAllByTestId('caption-line')
+    expect(screen.getByTestId('caption-ai-run')).toBeDisabled()
+    await userEvent.click(screen.getByTestId('caption-ai-fix'))
+    expect(await screen.findByTestId('caption-ai-result')).toHaveTextContent(
+      'Claude đã sửa 1 dòng.',
+    )
+    expect(api.editCaptions).toHaveBeenCalledWith(expect.any(Array), '', 'vi')
+    const lines = useEditorStore.getState().edit!.captions.lines
+    expect(lines[0]).toMatchObject({ text: 'Xin chào các bạn.', edited: true })
+    expect(lines[1]).toMatchObject({ text: 'Hôm nay', edited: false })
+
+    api.editCaptions.mockResolvedValueOnce([{ id: lines[1]!.id, text: 'Hôm nay' }])
+    await userEvent.type(screen.getByTestId('caption-ai-instruction'), 'Viết hoa tên riêng')
+    await userEvent.click(screen.getByTestId('caption-ai-run'))
+    expect(await screen.findByTestId('caption-ai-result')).toHaveTextContent(
+      'Claude không thấy gì cần sửa.',
+    )
+    expect(api.editCaptions).toHaveBeenLastCalledWith(expect.any(Array), 'Viết hoa tên riêng', 'vi')
+  })
+
   it('thiếu API key thì báo dễ hiểu', async () => {
     const api = await setup()
     api.transcribe.mockRejectedValueOnce(
@@ -152,6 +199,35 @@ describe('AiPanel', () => {
     expect(box).toHaveTextContent('Hướng dẫn Lumora')
     expect(screen.getByTestId('ai-chapters')).toHaveTextContent('0:00 Mở đầu')
     expect(screen.getByTestId('ai-chapters')).toHaveTextContent('0:05 Phần 2')
+  })
+
+  it('chỉnh zoom bằng Claude: gửi zoom hiện có và click, xem trước rồi áp dụng', async () => {
+    const api = await setup(true)
+    const s = useEditorStore.getState
+    s().setTime(5000)
+    s().addZoomAtPlayhead()
+    expect(s().edit!.zooms).toHaveLength(1)
+    render(<AiPanel />)
+    expect(screen.getByTestId('ai-zoom-plan')).toBeDisabled()
+    await userEvent.click(screen.getByTestId('ai-zoom-preset-tidy'))
+    expect(screen.getByTestId('ai-zoom-instruction')).toHaveValue(
+      'Gọn hơn: bỏ zoom ngắn, gộp zoom gần nhau',
+    )
+    await userEvent.click(screen.getByTestId('ai-zoom-plan'))
+    const proposal = await screen.findByTestId('ai-zoom-proposal')
+    expect(proposal).toHaveTextContent('Claude đề xuất 1 đoạn zoom (hiện có 1).')
+    expect(screen.getAllByTestId('ai-zoom-item')).toHaveLength(1)
+    expect(api.planZooms).toHaveBeenCalledWith(sampleSummary.folder, {
+      instruction: 'Gọn hơn: bỏ zoom ngắn, gộp zoom gần nhau',
+      zooms: s().edit!.zooms,
+      durationMs: 7000,
+      clicks: expect.any(Array),
+    })
+    // Chưa áp dụng thì chưa đổi.
+    expect(s().edit!.zooms.map((z) => z.scale)).toEqual([2])
+    await userEvent.click(screen.getByTestId('ai-zoom-apply'))
+    expect(s().edit!.zooms.map((z) => z.scale)).toEqual([3])
+    expect(screen.queryByTestId('ai-zoom-proposal')).toBeNull()
   })
 
   it('chưa có phụ đề thì hướng dẫn tạo trước', async () => {

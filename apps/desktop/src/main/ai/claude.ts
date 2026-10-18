@@ -169,3 +169,72 @@ export function translateSystem(target: string): string {
 Keep every id unchanged and return one translated line per input line, in the same order.
 Keep each line short enough to read as a subtitle, preserve product names and code, and keep the tone natural.`
 }
+
+export interface CaptionEditResponse {
+  lines: { id: string; text: string }[]
+}
+
+export const CAPTION_EDIT_SCHEMA: Schema = TRANSLATE_SCHEMA
+
+export function captionEditSystem(language: string): string {
+  return `You edit the subtitle lines of a screen-recorded video, following the user's instruction.
+The lines are in ${languageName(language)}; keep that language unless the instruction says otherwise.
+Return every id unchanged, in the same order, with the edited text (return the original text for lines that need no change).
+Keep the meaning and keep each line short enough to read as a subtitle; never add new lines or drop ids.
+Typical instructions: fix spelling, punctuation and capitalisation; write product names correctly; remove filler words; replace a term everywhere; make the tone more formal or more casual.
+If the instruction asks to replace a word, change all its occurrences, matching the capitalisation of each occurrence.`
+}
+
+export const CAPTION_FIX_INSTRUCTION =
+  'Fix spelling, punctuation, capitalisation and obvious speech-to-text mistakes. Keep the wording otherwise.'
+
+export interface ZoomPlanResponse {
+  zooms: {
+    id: string
+    start_seconds: number
+    end_seconds: number
+    scale: number
+    mode: 'follow' | 'fixed'
+    x: number
+    y: number
+  }[]
+}
+
+export const ZOOM_PLAN_SCHEMA: Schema = {
+  type: 'object',
+  properties: {
+    zooms: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            description: 'id of an existing region to keep (edited), or "" for a new region',
+          },
+          start_seconds: { type: 'number' },
+          end_seconds: { type: 'number' },
+          scale: { type: 'number', description: 'Zoom level, 1.2 to 4 (2 = twice as big)' },
+          mode: {
+            type: 'string',
+            enum: ['follow', 'fixed'],
+            description: 'follow = the view follows the mouse cursor; fixed = centred on x, y',
+          },
+          x: { type: 'number', description: 'Horizontal centre 0..1 (used when mode is fixed)' },
+          y: { type: 'number', description: 'Vertical centre 0..1 (used when mode is fixed)' },
+        },
+        required: ['id', 'start_seconds', 'end_seconds', 'scale', 'mode', 'x', 'y'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['zooms'],
+  additionalProperties: false,
+}
+
+export const ZOOM_PLAN_SYSTEM = `You plan the zoom-in regions of a screen-recording video, following the user's instruction.
+You receive the video duration, the current zoom regions (id, start/end in seconds, scale, mode), the times of mouse clicks and, when available, the transcript with [m:ss] timestamps.
+Return the complete new list of zoom regions (not only the changed ones): keep the id of every existing region you keep or adjust, use "" for new regions, and simply leave out regions that should be removed.
+Rules: regions must not overlap and must stay within the duration; each region lasts at least 1.5 seconds; scale is between 1.2 and 4; prefer "follow" mode so the view tracks the cursor, and use "fixed" with x, y only when the instruction names a place on the screen (x, y are fractions of the width and height, 0,0 = top-left).
+Zoom where the viewer needs detail: clicks, typing and the moments the narration explains something on screen. Do not zoom during introductions or when the whole screen matters.
+Apply the instruction literally when it gives numbers (for example "set all zooms to 2.5" means every region gets scale 2.5 and nothing else changes).`

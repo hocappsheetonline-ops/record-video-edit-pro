@@ -1,6 +1,13 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { removeSourceRanges, sourceToOutput, wordsToRanges, type CutSuggestion } from '@lumora/core'
+import {
+  removeSourceRanges,
+  sourceDuration,
+  sourceToOutput,
+  wordsToRanges,
+  type CutSuggestion,
+  type ZoomRegion,
+} from '@lumora/core'
 import type { AiSummary } from '@shared/ipc'
 import { lumora } from '../api'
 import { aiErrorText } from './ai-errors'
@@ -17,6 +24,7 @@ export function AiPanel() {
   const folder = useEditorStore((s) => s.folder)
   const project = useEditorStore((s) => s.project)
   const transcript = useEditorStore((s) => s.transcript)
+  const cursor = useEditorStore((s) => s.cursor)
   const change = useEditorStore((s) => s.change)
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -24,6 +32,8 @@ export function AiPanel() {
   const [checked, setChecked] = useState<Set<string>>(new Set())
   const [selectedWords, setSelectedWords] = useState<Set<number>>(new Set())
   const [summary, setSummary] = useState<AiSummary | null>(null)
+  const [zoomAsk, setZoomAsk] = useState('')
+  const [zoomPlan, setZoomPlan] = useState<ZoomRegion[] | null>(null)
 
   const keptWords = useMemo(() => {
     if (!edit || !transcript) return []
@@ -69,6 +79,26 @@ export function AiPanel() {
   }
 
   const makeSummary = () => run('summary', async () => setSummary(await lumora().summarize(folder)))
+
+  const planZooms = () =>
+    run('zoom', async () => {
+      setZoomPlan(null)
+      const plan = await lumora().planZooms(folder, {
+        instruction: zoomAsk.trim(),
+        zooms: edit.zooms,
+        durationMs: sourceDuration(project.segments),
+        clicks: cursor?.clicks.map((c) => c.s) ?? [],
+      })
+      setZoomPlan(plan)
+    })
+
+  const applyZoomPlan = () => {
+    if (!zoomPlan) return
+    useEditorStore.getState().setZooms(zoomPlan)
+    setZoomPlan(null)
+  }
+
+  const zoomPresets = ['narration', 'tidy', 'calmer'] as const
 
   const chapterLines = (summary?.chapters ?? []).flatMap((c) => {
     const out = sourceToOutput(edit.clips, c.start)
@@ -196,6 +226,79 @@ export function AiPanel() {
               {t('ai.text.cut', { count: selectedWords.size })}
             </button>
           </>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-3" data-testid="ai-zoom">
+        <h3 className={heading}>{t('ai.zoom.title')}</h3>
+        <p className="text-xs text-muted">{t('ai.zoom.intro')}</p>
+        <p className="text-xs text-muted" data-testid="ai-zoom-current">
+          {t('ai.zoom.current', { count: edit.zooms.length })}
+        </p>
+        <div className="flex flex-wrap gap-1.5">
+          {zoomPresets.map((preset) => (
+            <button
+              key={preset}
+              type="button"
+              data-testid={`ai-zoom-preset-${preset}`}
+              onClick={() => setZoomAsk(t(`ai.zoom.presets.${preset}`))}
+              className="rounded-full border border-border px-2.5 py-1 text-xs text-muted hover:bg-surface-2 hover:text-text"
+            >
+              {t(`ai.zoom.presets.${preset}`)}
+            </button>
+          ))}
+        </div>
+        <textarea
+          rows={2}
+          value={zoomAsk}
+          data-testid="ai-zoom-instruction"
+          aria-label={t('ai.zoom.title')}
+          placeholder={t('ai.zoom.placeholder')}
+          onChange={(e) => setZoomAsk(e.target.value)}
+          className="resize-none rounded-md border border-border bg-surface-2 px-2.5 py-2 text-sm focus:border-accent focus:outline-none"
+        />
+        <button
+          type="button"
+          data-testid="ai-zoom-plan"
+          className={button}
+          disabled={busy !== null || !zoomAsk.trim()}
+          onClick={() => void planZooms()}
+        >
+          {busy === 'zoom' ? t('ai.working') : t('ai.zoom.plan')}
+        </button>
+        {zoomPlan && (
+          <div className="flex flex-col gap-2" data-testid="ai-zoom-proposal">
+            <p className="text-sm">
+              {t('ai.zoom.proposal', { count: zoomPlan.length, current: edit.zooms.length })}
+            </p>
+            {zoomPlan.length > 0 && (
+              <ul className="flex max-h-40 flex-col gap-1 overflow-y-auto text-xs text-muted">
+                {zoomPlan.map((z) => (
+                  <li key={z.id} className="flex gap-2 font-mono" data-testid="ai-zoom-item">
+                    <span>
+                      {formatTimecode(sourceToOutput(edit.clips, z.start) ?? z.start)} –{' '}
+                      {formatTimecode(sourceToOutput(edit.clips, z.end) ?? z.end)}
+                    </span>
+                    <span>{z.scale.toFixed(1)}×</span>
+                    <span>{t(`editor.zoom.modes.${z.mode}`)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                data-testid="ai-zoom-apply"
+                className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-accent-fg hover:opacity-90"
+                onClick={applyZoomPlan}
+              >
+                {t('ai.zoom.apply')}
+              </button>
+              <button type="button" className={button} onClick={() => setZoomPlan(null)}>
+                {t('ai.zoom.discard')}
+              </button>
+            </div>
+          </div>
         )}
       </section>
 

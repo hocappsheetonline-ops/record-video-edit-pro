@@ -8,6 +8,7 @@ import {
   generateAutoZooms,
   newZoomId,
   normalizeZooms,
+  updateAllZooms,
   outputDuration,
   outputToSource,
   removeClip,
@@ -74,6 +75,7 @@ import {
   type Pose,
   canReverse,
   type SpeedCurve,
+  type ZoomRegion,
 } from '@lumora/core'
 import type { AudioAsset, MediaAsset } from '@shared/ipc'
 import { lumora } from '../api'
@@ -108,6 +110,8 @@ interface EditorStore {
   filmstrip: Filmstrip | null
   /** Yêu cầu mở một tab của bảng bên phải (n tăng mỗi lần yêu cầu, kể cả cùng tab). */
   tabRequest: { tab: string; n: number }
+  /** Yêu cầu mở một tab của bảng thuộc tính dự án (bên phải), ví dụ "zoom". */
+  propsTabRequest: { tab: string; n: number }
   /**
    * File âm thanh đã lọc tạp âm / hiệu ứng (theo `fxKeyOf`): tên file khi xong, 'pending' khi đang
    * xử lý, 'error' khi lỗi. Xem trước dùng file đã xử lý khi có.
@@ -250,6 +254,7 @@ interface EditorStore {
   /** Tách tiếng của video meme ra thành đoạn âm thanh riêng trên hàng Âm thanh. */
   detachOverlayAudio(id: string): void
   requestTab(tab: string): void
+  requestPropsTab(tab: string): void
   /** Thêm hiệu ứng hình tại đầu phát (mặc định 2 giây) và chọn nó. */
   addEffect(kind: EffectKind): void
   updateEffect(id: string, patch: Partial<EffectRegion>, coalesce?: string): void
@@ -277,6 +282,13 @@ interface EditorStore {
   setLook(look: Look, coalesce?: string): void
   addZoomAtPlayhead(): void
   regenerateZooms(): void
+  /** Đổi cùng một thuộc tính (mức zoom, kiểu, tâm) cho mọi đoạn zoom. */
+  updateAllZooms(
+    patch: Partial<Pick<ZoomRegion, 'scale' | 'mode' | 'x' | 'y'>>,
+    coalesce?: string,
+  ): void
+  /** Thay toàn bộ danh sách zoom (kết quả Claude đề xuất); bỏ chọn đoạn không còn. */
+  setZooms(zooms: ZoomRegion[]): void
 }
 
 const HISTORY_LIMIT = 100
@@ -302,6 +314,7 @@ const initial = {
   filmstrip: null,
   assetPeaks: {},
   tabRequest: { tab: '', n: 0 },
+  propsTabRequest: { tab: '', n: 0 },
   fxFiles: {},
   revFiles: {},
   aiStatus: 'idle' as EditorStore['aiStatus'],
@@ -1175,6 +1188,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set({ tabRequest: { tab, n: get().tabRequest.n + 1 } })
   },
 
+  requestPropsTab(tab) {
+    set({ propsTabRequest: { tab, n: get().propsTabRequest.n + 1 } })
+  },
+
   loadAssetPeaks(file) {
     const { folder, assetPeaks } = get()
     if (!folder || file in assetPeaks) return
@@ -1306,6 +1323,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       ...e,
       zooms: generateAutoZooms(cursor, sourceDuration(project.segments)),
     }))
+  },
+
+  updateAllZooms(patch, coalesce) {
+    get().change((e) => {
+      const zooms = updateAllZooms(e.zooms, patch)
+      return zooms.every((z, i) => z === e.zooms[i]) ? e : { ...e, zooms }
+    }, coalesce)
+  },
+
+  setZooms(zooms) {
+    const { project, selection } = get()
+    if (!project) return
+    get().change((e) => ({ ...e, zooms: normalizeZooms(zooms, sourceDuration(project.segments)) }))
+    if (selection?.kind === 'zoom' && !zooms.some((z) => z.id === selection.id)) get().select(null)
   },
 }))
 

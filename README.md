@@ -80,6 +80,7 @@ Mở một dự án và bấm **Chỉnh sửa**. Giao diện bố trí giống p
 Tính năng:
 
 - **Tự động zoom**: lần đầu mở, app gom các click chuột và đoạn gõ phím liên tục để tự tạo đoạn zoom. Khung nhìn đi theo con trỏ và chuyển vào/ra mượt. Trên timeline, kéo đoạn zoom để di chuyển, kéo mép để đổi độ dài; bấm vào đoạn zoom để chỉnh mức zoom và kiểu zoom.
+- **Tất cả đoạn zoom** (tab Zoom của bảng bên phải): kéo **Mức zoom chung** rồi **Đặt … cho cả N đoạn** để mọi đoạn cùng một mức cố định; đổi **kiểu zoom cho tất cả** (theo con trỏ / cố định). Đang chọn một đoạn thì có nút **Áp dụng mức này cho tất cả**; chuột phải lên đoạn zoom cũng có các lệnh này và **Chỉnh tất cả đoạn zoom…**. Muốn zoom theo lời nói hoặc theo yêu cầu riêng thì dùng **Chỉnh zoom bằng Claude** (mục AI).
 - **Con trỏ** được vẽ lại từ dữ liệu chuột, làm mượt bằng mô phỏng lò xo. Có thể phóng to con trỏ, bật hiệu ứng khi click, và tự ẩn khi chuột đứng yên.
 - **Khung hình**: chọn tỉ lệ 16:9, 9:16, 1:1, 4:3 hoặc giữ tỉ lệ gốc; nền trơn hoặc chuyển màu; lề, bo góc, bóng đổ.
 - **Video dọc 9:16 (TikTok, Shorts, Reels)**: bấm **Dọc 9:16 tự động**. Video màn hình phủ kín khung dọc, phần thừa được cắt và khung nhìn tự đi theo con trỏ (giống Screen Studio). Webcam là bong bóng nổi hoặc **Chia đôi khung** (dải webcam ở trên/dưới).
@@ -136,6 +137,8 @@ Trước tiên, nhập API key **ElevenLabs** và **Claude** trong **Cài đặt
 - **Phụ đề** (ElevenLabs Scribe v2): nhận dạng tiếng Việt, tiếng Anh hoặc tự nhận diện ngôn ngữ, có thời gian từng từ.
   - **8 mẫu phụ đề** có xem trước: Hộp tối, Karaoke (tô dần các từ đã nói), Viền đen, Nảy từng từ, Bật từng từ, Gạch chân, Neon, TikTok (chữ in hoa đậm, khối màu sau từ đang nói). Chỉnh phông (10 phông đi kèm), màu chữ, màu nhấn, chữ in hoa, số từ hiện mỗi lần (1–4 hoặc cả dòng), vị trí trên / giữa / dưới hoặc kéo độ cao, cỡ chữ; tô sáng từ đang nói hoặc hiện cả dòng.
   - Sửa nội dung từng dòng; **tách** dòng làm đôi hoặc **gộp** với dòng sau.
+  - **Tìm và thay thế** trong mọi dòng (và bản dịch): phân biệt hoa thường, cả từ; các dòng khớp được viền sáng. Thay trong từng từ nên vẫn tô sáng từng từ được.
+  - **Sửa phụ đề bằng Claude**: **Sửa chính tả & dấu câu** một nút, hoặc gõ yêu cầu (viết hoa tên sản phẩm, bỏ từ đệm, đổi một từ ở mọi chỗ, đổi giọng văn…). Thời gian giữ nguyên, chỉ dòng đổi mới được đánh dấu đã sửa.
   - Hàng **Phụ đề** trên timeline: mỗi dòng một khối, bấm để nhảy tới, kéo để dời, kéo mép để chỉnh thời gian.
   - **Dịch** bằng Claude sang 10 ngôn ngữ (Việt, Anh, Nhật, Hàn, Trung, Thái, Indonesia, Pháp, Tây Ban Nha, Đức): thay nội dung bằng bản dịch, hoặc **phụ đề song ngữ** (dòng dịch nhỏ hơn hiện bên dưới, sửa riêng được).
   - Lưu ra SRT/VTT hoặc in thẳng vào video khi xuất.
@@ -143,6 +146,7 @@ Trước tiên, nhập API key **ElevenLabs** và **Claude** trong **Cài đặt
 - **AI** (Claude):
   - Tìm từ đệm, câu nói lặp và khoảng lặng dài. Bạn duyệt danh sách rồi mới áp dụng.
   - Chỉnh video bằng văn bản: chọn các từ muốn bỏ, phần video tương ứng sẽ bị cắt.
+  - **Chỉnh zoom bằng Claude**: mô tả cách muốn zoom (đặt mọi zoom 2.5×, bỏ zoom ngắn hơn 2 giây, zoom lúc nói tới phần cài đặt…) hoặc chọn gợi ý sẵn (zoom theo lời nói, gọn hơn, nhẹ hơn). Claude lập lại danh sách zoom từ các đoạn hiện có, các lần click chuột và lời nói (nếu đã có phụ đề); bạn xem trước rồi mới áp dụng. Kết quả luôn được kẹp trong giới hạn (1.2–4×, không chồng nhau).
   - Tạo 3 gợi ý tiêu đề, mô tả, hashtag và chương YouTube. Thời gian các chương được tính theo video đã cắt.
 
 Mọi lệnh gọi Claude dùng model `claude-opus-5-5` kèm structured outputs (kết quả JSON đúng schema). Các lệnh này cũng bật `fallbacks: "default"`: khi bộ lọc an toàn từ chối một yêu cầu, máy chủ Anthropic tự chạy lại yêu cầu đó trên một model dự phòng phù hợp.
@@ -223,7 +227,7 @@ apps/desktop/          Ứng dụng Electron
   src/main/recording/  Phiên quay, bộ điều phối, ghi chuột/bàn phím, lập kế hoạch quay
   src/main/projects/   Đọc danh sách dự án, giao thức lumora-media:// (hỗ trợ tua video)
   src/main/export/     Ghi file xuất, trộn âm thanh, tạo GIF
-  src/main/ai/         ElevenLabs (phụ đề) và Claude (cắt, tiêu đề, chương, dịch)
+  src/main/ai/         ElevenLabs (phụ đề) và Claude (cắt, tiêu đề, chương, dịch, sửa phụ đề, chỉnh zoom)
   src/main/logger.ts   Nhật ký lỗi (che thông tin bí mật)
   src/main/updater.ts  Tự cập nhật từ GitHub Releases
   src/main/live/       Phát RTMP, máy chủ báo hiệu + trang khách mời, bình luận, phụ đề trực tiếp

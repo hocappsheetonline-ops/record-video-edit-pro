@@ -275,3 +275,56 @@ describe('nhập video ngoài, ghép bản quay, kéo thả, tách tiếng', () 
     expect(screen.getAllByTestId('timeline-audio')).toHaveLength(1)
   })
 })
+
+describe('tất cả đoạn zoom', () => {
+  it('bảng Zoom: đặt một mức cố định cho mọi đoạn; chọn một đoạn thì áp mức đó cho tất cả', async () => {
+    await setup()
+    act(() => s().setTime(1000))
+    act(() => s().addZoomAtPlayhead())
+    act(() => s().setTime(5000))
+    act(() => s().addZoomAtPlayhead())
+    act(() => s().select(null))
+    expect(s().edit!.zooms).toHaveLength(2)
+    await userEvent.click(screen.getByTestId('tab-zoom'))
+    expect(screen.getByTestId('zoom-count')).toHaveTextContent('2 đoạn zoom')
+    fireEvent.change(screen.getByTestId('zoom-all-scale'), { target: { value: '3' } })
+    expect(screen.getByTestId('zoom-all-apply')).toHaveTextContent('Đặt 3.0× cho cả 2 đoạn')
+    await userEvent.click(screen.getByTestId('zoom-all-apply'))
+    expect(s().edit!.zooms.map((z) => z.scale)).toEqual([3, 3])
+    expect(screen.getAllByTestId('timeline-zoom').map((el) => el.textContent)).toEqual([
+      '3.0×',
+      '3.0×',
+    ])
+    await userEvent.click(screen.getByTestId('zoom-all-mode-fixed'))
+    expect(s().edit!.zooms.map((z) => z.mode)).toEqual(['fixed', 'fixed'])
+
+    // Chọn một đoạn, đổi mức rồi "Áp dụng cho tất cả".
+    act(() => s().select({ kind: 'zoom', id: s().edit!.zooms[0]!.id }))
+    fireEvent.change(await screen.findByTestId('zoom-scale'), { target: { value: '2.2' } })
+    expect(s().edit!.zooms.map((z) => z.scale)).toEqual([2.2, 3])
+    await userEvent.click(screen.getByTestId('zoom-apply-all'))
+    expect(s().edit!.zooms.map((z) => z.scale)).toEqual([2.2, 2.2])
+  })
+
+  it('menu chuột phải trên đoạn zoom: áp mức cho tất cả, mở bảng Tất cả đoạn zoom, xóa', async () => {
+    await setup()
+    act(() => s().setTime(1000))
+    act(() => s().addZoomAtPlayhead())
+    act(() => s().setTime(5000))
+    act(() => s().addZoomAtPlayhead())
+    act(() => s().change((e) => ({ ...e, zooms: e.zooms.map((z, i) => ({ ...z, scale: 2 + i })) })))
+    fireEvent.contextMenu(screen.getAllByTestId('timeline-zoom')[1]!)
+    await userEvent.click(screen.getByTestId('menu-zoom-apply-all'))
+    expect(s().edit!.zooms.map((z) => z.scale)).toEqual([3, 3])
+
+    fireEvent.contextMenu(screen.getAllByTestId('timeline-zoom')[0]!)
+    await userEvent.click(screen.getByTestId('menu-zoom-all'))
+    expect(s().selection).toBeNull()
+    expect(screen.getByTestId('props-zoom')).toBeInTheDocument()
+    expect(screen.getByTestId('zoom-all')).toBeInTheDocument()
+
+    fireEvent.contextMenu(screen.getAllByTestId('timeline-zoom')[0]!)
+    await userEvent.click(screen.getByTestId('menu-zoom-delete'))
+    expect(s().edit!.zooms).toHaveLength(1)
+  })
+})

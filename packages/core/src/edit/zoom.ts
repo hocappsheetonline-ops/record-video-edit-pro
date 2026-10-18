@@ -193,3 +193,85 @@ export function normalizeZooms(regions: readonly ZoomRegion[], durationMs: numbe
   }
   return result
 }
+
+export const MIN_ZOOM_SCALE = 1.2
+export const MAX_ZOOM_SCALE = 4
+
+/** Kẹp mức zoom trong khoảng cho phép (1.2×–4×), làm tròn 0.1. */
+export function clampZoomScale(scale: number): number {
+  if (!Number.isFinite(scale)) return DEFAULT_ZOOM_SCALE
+  return Math.round(Math.min(MAX_ZOOM_SCALE, Math.max(MIN_ZOOM_SCALE, scale)) * 10) / 10
+}
+
+/**
+ * Đổi cùng một thuộc tính cho mọi đoạn zoom (ví dụ đặt tất cả về 2.5× hoặc đổi hết sang
+ * "Cố định"). Mức zoom được kẹp trong giới hạn; `scale` không đổi thì trả về đúng mảng cũ.
+ */
+export function updateAllZooms(
+  regions: readonly ZoomRegion[],
+  patch: Partial<Pick<ZoomRegion, 'scale' | 'mode' | 'x' | 'y'>>,
+): ZoomRegion[] {
+  const clean: typeof patch = { ...patch }
+  if (clean.scale !== undefined) clean.scale = clampZoomScale(clean.scale)
+  if (
+    regions.every((r) => Object.entries(clean).every(([k, v]) => r[k as keyof typeof clean] === v))
+  )
+    return [...regions]
+  return regions.map((r) => ({ ...r, ...clean }))
+}
+
+/** Mức zoom chung nếu mọi đoạn cùng một mức, không thì null (để bảng "Tất cả zoom" hiện giá trị). */
+export function commonZoomScale(regions: readonly ZoomRegion[]): number | null {
+  const first = regions[0]
+  if (!first) return null
+  return regions.every((r) => Math.abs(r.scale - first.scale) < 1e-6) ? first.scale : null
+}
+
+/** Đoạn zoom do Claude đề xuất (thời gian tính bằng giây để dễ đọc / viết). */
+export interface ZoomProposal {
+  /** id đoạn hiện có để giữ lại (đã sửa), rỗng nếu là đoạn mới. */
+  id: string
+  start_seconds: number
+  end_seconds: number
+  scale: number
+  mode: 'follow' | 'fixed'
+  x: number
+  y: number
+}
+
+/**
+ * Biến danh sách Claude trả về thành các đoạn zoom hợp lệ: kẹp mức zoom và tâm, giữ id cũ nếu
+ * có, bỏ đoạn quá ngắn / chồng nhau (`normalizeZooms`). Dữ liệu sai kiểu thì bỏ qua.
+ */
+export function zoomsFromProposals(
+  proposals: readonly unknown[],
+  existing: readonly ZoomRegion[],
+  durationMs: number,
+): ZoomRegion[] {
+  const known = new Set(existing.map((z) => z.id))
+  const used = new Set<string>()
+  const regions: ZoomRegion[] = []
+  for (const raw of proposals) {
+    if (typeof raw !== 'object' || raw === null) continue
+    const p = raw as Record<string, unknown>
+    const start = Number(p.start_seconds)
+    const end = Number(p.end_seconds)
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue
+    const id = typeof p.id === 'string' && known.has(p.id) && !used.has(p.id) ? p.id : newZoomId()
+    used.add(id)
+    const mode = p.mode === 'fixed' ? 'fixed' : 'follow'
+    const clamp01 = (v: unknown, fallback: number) =>
+      typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : fallback
+    const old = existing.find((z) => z.id === id)
+    regions.push({
+      id,
+      start: Math.round(start * 1000),
+      end: Math.round(end * 1000),
+      scale: clampZoomScale(Number(p.scale ?? old?.scale ?? DEFAULT_ZOOM_SCALE)),
+      mode,
+      x: clamp01(p.x, old?.x ?? 0.5),
+      y: clamp01(p.y, old?.y ?? 0.5),
+    })
+  }
+  return normalizeZooms(regions, durationMs)
+}

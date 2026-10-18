@@ -132,6 +132,36 @@ export async function startMockAi(): Promise<{
             }),
           )
         }
+        if (system.includes('You edit the subtitle lines')) {
+          const input = JSON.parse(request.messages[0].content).lines as {
+            id: string
+            text: string
+          }[]
+          return json(
+            200,
+            anthropicMessage({
+              lines: input.map((l) => ({ id: l.id, text: l.text.replace(/ ừm/g, '') })),
+            }),
+          )
+        }
+        if (system.includes('zoom-in regions')) {
+          return json(
+            200,
+            anthropicMessage({
+              zooms: [
+                {
+                  id: '',
+                  start_seconds: 0.5,
+                  end_seconds: 3.5,
+                  scale: 3,
+                  mode: 'follow',
+                  x: 0.5,
+                  y: 0.5,
+                },
+              ],
+            }),
+          )
+        }
         const input = JSON.parse(request.messages[0].content).lines as {
           id: string
           text: string
