@@ -94,6 +94,28 @@ describe('editor store', () => {
     expect(outputDuration(s().edit!.clips)).toBe(4500)
   })
 
+  it('đặt mức zoom cho tất cả đoạn; thay danh sách zoom thì bỏ chọn đoạn không còn', () => {
+    const s = useEditorStore.getState
+    s().setTime(5000)
+    s().addZoomAtPlayhead()
+    expect(s().edit!.zooms).toHaveLength(2)
+    s().updateAllZooms({ scale: 3.2 })
+    expect(s().edit!.zooms.map((z) => z.scale)).toEqual([3.2, 3.2])
+    const before = s().edit
+    s().updateAllZooms({ scale: 3.2 })
+    expect(s().edit).toBe(before) // không ghi thêm bước lịch sử
+    s().undo()
+    expect(s().edit!.zooms.map((z) => z.scale)).toEqual([2, 2])
+
+    const selected = s().selection
+    expect(selected?.kind).toBe('zoom')
+    s().setZooms([{ id: 'new', start: 0, end: 1500, scale: 2.5, mode: 'follow', x: 0.5, y: 0.5 }])
+    expect(s().edit!.zooms).toEqual([
+      { id: 'new', start: 0, end: 1500, scale: 2.5, mode: 'follow', x: 0.5, y: 0.5 },
+    ])
+    expect(s().selection).toBeNull()
+  })
+
   it('đầu phát không vượt quá độ dài video', () => {
     useEditorStore.getState().setTime(99_999)
     expect(useEditorStore.getState().time).toBe(7000)

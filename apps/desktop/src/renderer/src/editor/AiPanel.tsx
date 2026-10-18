@@ -31,6 +31,7 @@ import { aiErrorText } from './ai-errors'
 import { runJob, useJobs } from './jobs'
 import { AUTO_EDIT_STEPS, useEditorStore, type AutoEditOptions, type AutoEditReport } from './store'
 import { formatTimecode } from './timeline-math'
+import { ZoomPlan } from './ZoomPlan'
 
 const button =
   'rounded-lg border border-border bg-surface-2/70 px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-surface-2 disabled:opacity-50 disabled:shadow-none'
@@ -1075,6 +1076,7 @@ export function AiPanel() {
       <Advanced>
         <AutoEdit />
         <Shorts />
+        <ZoomPlan />
 
         <section className="flex flex-col gap-3">
           <h3 className={heading}>{t('ai.cuts.title')}</h3>

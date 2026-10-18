@@ -200,3 +200,115 @@ export function wordsFromElevenLabs(response: unknown): Transcript {
   }
   return { language: typeof r.language_code === 'string' ? r.language_code : '', words }
 }
+
+export interface CaptionReplaceOptions {
+  /** Phân biệt hoa / thường (mặc định không). */
+  matchCase?: boolean
+  /** Chỉ khớp cả từ (mặc định khớp cả bên trong từ). */
+  wholeWord?: boolean
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/** Biểu thức tìm trong phụ đề; null khi chuỗi tìm rỗng. */
+export function captionSearchPattern(
+  find: string,
+  options: CaptionReplaceOptions = {},
+): RegExp | null {
+  if (!find) return null
+  const needle = escapeRegExp(find.normalize('NFC'))
+  const body = options.wholeWord ? `(?<![\\p{L}\\p{N}])${needle}(?![\\p{L}\\p{N}])` : needle
+  return new RegExp(body, `gu${options.matchCase ? '' : 'i'}`)
+}
+
+/**
+ * Chuỗi có khớp biểu thức tìm không. Nội dung được chuẩn hóa NFC trước khi so (phụ đề dán từ
+ * macOS hay vài nguồn nhận dạng để dấu tiếng Việt ở dạng tách rời, gõ "chào" sẽ không thấy).
+ */
+export function captionTextMatches(pattern: RegExp, text: string | undefined): boolean {
+  if (text === undefined) return false
+  pattern.lastIndex = 0
+  return pattern.test(text.normalize('NFC'))
+}
+
+/** Số dòng phụ đề (nội dung hoặc bản dịch) chứa chuỗi tìm. */
+export function countCaptionMatches(
+  lines: readonly CaptionLine[],
+  find: string,
+  options: CaptionReplaceOptions = {},
+): number {
+  const pattern = captionSearchPattern(find, options)
+  if (!pattern) return 0
+  return lines.filter(
+    (l) => captionTextMatches(pattern, l.text) || captionTextMatches(pattern, l.translation),
+  ).length
+}
+
+/**
+ * Tìm và thay thế trong mọi dòng phụ đề (nội dung và bản dịch). Dòng chưa sửa tay mà chuỗi tìm
+ * nằm gọn trong từng từ thì thay ngay trong các từ để vẫn tô sáng từng từ được; nếu chuỗi tìm
+ * trải qua nhiều từ thì thay trong nội dung và đánh dấu dòng là đã sửa.
+ */
+export function replaceInCaptions(
+  lines: readonly CaptionLine[],
+  find: string,
+  replacement: string,
+  options: CaptionReplaceOptions = {},
+): { lines: CaptionLine[]; count: number } {
+  const pattern = captionSearchPattern(find, options)
+  if (!pattern) return { lines: [...lines], count: 0 }
+  const has = (text: string | undefined) => captionTextMatches(pattern, text)
+  // Hàm thay thế để "$" trong chuỗi thay không bị hiểu là mẫu đặc biệt ($&, $1, $$…).
+  const swap = (text: string) => text.normalize('NFC').replace(pattern, () => replacement)
+  let count = 0
+  const result = lines.flatMap((line): CaptionLine[] => {
+    const inText = has(line.text)
+    const inTranslation = has(line.translation)
+    if (!inText && !inTranslation) return [line]
+    count += 1
+    let next: CaptionLine = { ...line }
+    if (inTranslation) next.translation = swap(line.translation!)
+    if (inText) {
+      const perWord =
+        !line.edited && line.words.length > 0 && !/\s/.test(find) && !/\s/.test(replacement)
+      if (perWord) {
+        const words = line.words
+          .map((w) => ({ ...w, text: swap(w.text) }))
+          .filter((w) => w.text.trim() !== '')
+        next = { ...next, words, text: words.map((w) => w.text).join(' ') }
+      } else {
+        next = {
+          ...next,
+          text: swap(line.text)
+            .replace(/\s{2,}/g, ' ')
+            .trim(),
+          edited: true,
+        }
+      }
+    }
+    // Thay cả dòng bằng rỗng thì bỏ dòng (không để ô trống vẫn chiếm thời lượng trên video).
+    return next.text.trim() === '' ? [] : [next]
+  })
+  return { lines: result, count }
+}
+
+/**
+ * Áp dụng nội dung mới do Claude (hoặc người dùng) trả về theo id: chỉ dòng có nội dung khác mới
+ * đổi và được đánh dấu đã sửa; id lạ hay nội dung rỗng thì bỏ qua.
+ */
+export function applyCaptionTexts(
+  lines: readonly CaptionLine[],
+  texts: readonly { id: string; text: string }[],
+): { lines: CaptionLine[]; count: number } {
+  const byId = new Map(texts.map((l) => [l.id, l.text.trim()]))
+  let count = 0
+  const result = lines.map((line) => {
+    const text = byId.get(line.id)
+    if (text === undefined || text === '' || text === line.text) return line
+    count += 1
+    return { ...line, text, edited: true }
+  })
+  return { lines: result, count }
+}

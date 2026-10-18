@@ -249,6 +249,14 @@ export function ZoomProps({ zoom }: { zoom: ZoomRegion }) {
         onChange={(mode) => setZoom({ mode })}
         testIdPrefix="zoom-mode-"
       />
+      <button
+        type="button"
+        data-testid="zoom-apply-all"
+        onClick={() => useEditorStore.getState().updateAllZooms({ scale: zoom.scale })}
+        className={ghostButton}
+      >
+        {t('editor.zoom.applyThisAll', { scale: zoom.scale.toFixed(1) })}
+      </button>
       {zoom.mode === 'fixed' && (
         <>
           <SliderRow

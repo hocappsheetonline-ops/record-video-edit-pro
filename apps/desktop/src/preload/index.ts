@@ -114,6 +114,9 @@ const api: LumoraApi = {
   downloadLocalSpeech: (kind, id) => ipcRenderer.invoke(IPC.aiSpeechDownload, kind, id),
   removeLocalSpeech: (kind, id) => ipcRenderer.invoke(IPC.aiSpeechRemove, kind, id),
   translateLines: (lines, target) => ipcRenderer.invoke(IPC.aiTranslate, lines, target),
+  editCaptions: (lines, instruction, language) =>
+    ipcRenderer.invoke(IPC.aiEditCaptions, lines, instruction, language),
+  planZooms: (folder, input) => ipcRenderer.invoke(IPC.aiPlanZooms, folder, input),
   listVoices: () => ipcRenderer.invoke(IPC.aiVoices),
   speak: (folder, text, voiceId, options) =>
     ipcRenderer.invoke(IPC.aiSpeak, folder, text, voiceId, options),

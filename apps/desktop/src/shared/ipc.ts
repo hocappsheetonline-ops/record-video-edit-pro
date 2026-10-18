@@ -21,6 +21,7 @@ import type {
   SecretKey,
   TrackKind,
   WhisperModel,
+  ZoomRegion,
 } from '@lumora/core'
 
 /** Tên các kênh IPC giữa main process và giao diện. */
@@ -103,6 +104,8 @@ export const IPC = {
   aiSpeechRemove: 'ai:speech-remove',
   aiDirect: 'ai:direct',
   aiTranslate: 'ai:translate',
+  aiEditCaptions: 'ai:edit-captions',
+  aiPlanZooms: 'ai:plan-zooms',
   aiVoices: 'ai:voices',
   aiSpeak: 'ai:speak',
   onlineSearch: 'online:search',
@@ -274,6 +277,17 @@ export interface ProjectSummary {
   durationMs: number
   sourceKind: Project['source']['kind']
   hasThumbnail: boolean
+}
+
+/** Dữ liệu gửi Claude để chỉnh các đoạn zoom theo yêu cầu. */
+export interface ZoomPlanInput {
+  /** Yêu cầu của người dùng (ví dụ "đặt mọi zoom 2.5×", "bỏ zoom ngắn hơn 2 giây"). */
+  instruction: string
+  zooms: ZoomRegion[]
+  /** Thời lượng nguồn (ms). */
+  durationMs: number
+  /** Thời điểm nguồn các lần click chuột (ms). */
+  clicks: number[]
 }
 
 export interface AiSummary {
@@ -596,6 +610,14 @@ export interface LumoraApi {
     lines: { id: string; text: string }[],
     target: string,
   ): Promise<{ id: string; text: string }[]>
+  /** Sửa nội dung phụ đề bằng Claude theo yêu cầu (rỗng = sửa chính tả, dấu câu). */
+  editCaptions(
+    lines: { id: string; text: string }[],
+    instruction: string,
+    language: string,
+  ): Promise<{ id: string; text: string }[]>
+  /** Lập lại các đoạn zoom bằng Claude theo yêu cầu; trả về danh sách zoom mới (đã hợp lệ). */
+  planZooms(folder: string, input: ZoomPlanInput): Promise<ZoomRegion[]>
   /** Lưu file văn bản (phụ đề SRT/VTT, mô tả...) vào thư mục exports của dự án. */
   saveExportText(folder: string, fileName: string, content: string): Promise<ExportResult>
 

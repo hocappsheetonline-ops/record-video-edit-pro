@@ -131,6 +131,31 @@ function fakeApis() {
           chapters: [{ start_seconds: 0, title: 'Mở đầu' }],
         })
       }
+      if (system.includes('You edit the subtitle lines')) {
+        const input = JSON.parse(String(body.messages[0].content)) as {
+          instruction: string
+          lines: { id: string; text: string }[]
+        }
+        return message({
+          lines: input.lines.map((l) => ({ id: l.id, text: `${input.instruction}: ${l.text}` })),
+        })
+      }
+      if (system.includes('zoom-in regions')) {
+        return message({
+          zooms: [
+            {
+              id: 'a',
+              start_seconds: 0,
+              end_seconds: 2,
+              scale: 2.5,
+              mode: 'follow',
+              x: 0.5,
+              y: 0.5,
+            },
+            { id: '', start_seconds: 2.5, end_seconds: 9, scale: 7, mode: 'fixed', x: 0.2, y: 0.9 },
+          ],
+        })
+      }
       return message({ lines: [{ id: 'l0', text: 'Hello everyone.' }] })
     }
     return new Response('not found', { status: 404 })
@@ -228,6 +253,54 @@ describe('AiService', () => {
       { id: 'l1', text: 'Lumora' },
     ])
   })
+
+  it('sửa phụ đề bằng Claude: gửi yêu cầu (rỗng = sửa chính tả), giữ id và thứ tự', async () => {
+    const { calls, fetchImpl } = fakeApis()
+    const ai = service(fetchImpl)
+    const lines = [
+      { id: 'l0', text: 'xin chào' },
+      { id: 'l1', text: 'lumora' },
+    ]
+    expect(await ai.editCaptions(lines, 'Viết hoa', 'vi')).toEqual([
+      { id: 'l0', text: 'Viết hoa: xin chào' },
+      { id: 'l1', text: 'Viết hoa: lumora' },
+    ])
+    const fixed = await ai.editCaptions(lines, '   ', 'vi')
+    expect(fixed[0]!.text).toMatch(/^Fix spelling/)
+    expect(String(calls[0]!.body && (calls[0]!.body as { system: string }).system)).toContain(
+      'Vietnamese',
+    )
+    expect(await ai.editCaptions([], 'x', 'vi')).toEqual([])
+  })
+
+  it('chỉnh zoom bằng Claude: gửi zoom hiện có, click và lời nói; kết quả được kẹp và giữ id', async () => {
+    const { calls, fetchImpl } = fakeApis()
+    const ai = service(fetchImpl)
+    await ai.transcribe(project, dir)
+    const existing = [
+      { id: 'a', start: 100, end: 1500, scale: 2, mode: 'follow' as const, x: 0.5, y: 0.5 },
+    ]
+    const zooms = await ai.planZooms(dir, {
+      instruction: 'zoom theo lời nói',
+      zooms: existing,
+      durationMs: 3000,
+      clicks: [400, 1200],
+    })
+    expect(zooms).toEqual([
+      { id: 'a', start: 0, end: 2000, scale: 2.5, mode: 'follow', x: 0.5, y: 0.5 },
+      { id: expect.any(String), start: 2500, end: 3000, scale: 4, mode: 'fixed', x: 0.2, y: 0.9 },
+    ])
+    expect(zooms[1]!.id).not.toBe('a')
+    const claude = calls.filter((c) => c.url.includes('/v1/messages')).at(-1)!
+    const user = String((claude.body as { messages: { content: string }[] }).messages[0]!.content)
+    expect(user).toContain('Instruction: zoom theo lời nói')
+    expect(user).toContain('"id":"a","start_seconds":0.1,"end_seconds":1.5')
+    expect(user).toContain('Mouse clicks (seconds): [0.4,1.2]')
+    expect(user).toContain('[0:00] Xin chào')
+    await expect(
+      ai.planZooms(dir, { instruction: ' ', zooms: [], durationMs: 1, clicks: [] }),
+    ).rejects.toThrow('instruction_empty')
+  }, 30_000)
 
   it('chưa có transcript thì báo lỗi', async () => {
     const { fetchImpl } = fakeApis()
@@ -457,6 +530,28 @@ describe('AI cục bộ (Ollama)', () => {
     expect(body.format).toMatchObject({ type: 'object' })
     expect(body.messages.map((m) => m.role)).toEqual(['system', 'user'])
     expect(await ai.listLocalModels('http://127.0.0.1:11434')).toEqual(['llama3.2', 'qwen2.5:7b'])
+  })
+
+  it('bật AI cục bộ: sửa phụ đề và chỉnh zoom cũng đi qua Ollama, không cần key Claude', async () => {
+    const { calls, fetchImpl } = ollamaFetch()
+    const ai = new AiService({
+      getKey: async () => undefined,
+      getLocalAi: async () => local(),
+      run: runFfmpeg,
+      fetchImpl,
+    })
+    const lines = [{ id: 'l0', text: 'xin chào' }]
+    // Máy chủ giả trả JSON không có "lines": giữ nguyên nội dung, nhưng phải đã hỏi Ollama.
+    expect(await ai.editCaptions(lines, 'viết hoa', 'vi')).toEqual(lines)
+    expect(
+      await ai.planZooms(dir, { instruction: 'zoom 2x', zooms: [], durationMs: 1000, clicks: [] }),
+    ).toEqual([])
+    const chats = calls.filter((c) => c.url.endsWith('/api/chat'))
+    expect(chats).toHaveLength(2)
+    expect(chats.map((c) => (c.body as { model: string }).model)).toEqual([
+      'qwen2.5:7b',
+      'qwen2.5:7b',
+    ])
   })
 
   it('model chưa tải hoặc Ollama không chạy: báo mã lỗi rõ; tắt AI cục bộ thì về Claude', async () => {

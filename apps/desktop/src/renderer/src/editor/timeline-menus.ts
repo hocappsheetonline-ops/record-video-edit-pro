@@ -178,3 +178,36 @@ export function emptyMenu(t: TFunction): MenuEntry[] {
     },
   ]
 }
+
+/** Menu cho một đoạn zoom: áp mức này cho tất cả, mở bảng "Tất cả đoạn zoom", xóa. */
+export function zoomMenu(t: TFunction, id: string): MenuEntry[] {
+  const s = store()
+  if (s.selection?.kind !== 'zoom' || s.selection.id !== id) s.select({ kind: 'zoom', id })
+  const zoom = s.edit?.zooms.find((z) => z.id === id)
+  return [
+    {
+      label: t('editor.zoom.applyThisAll', { scale: (zoom?.scale ?? 2).toFixed(1) }),
+      testId: 'menu-zoom-apply-all',
+      disabled: !zoom,
+      onClick: () => {
+        if (zoom) store().updateAllZooms({ scale: zoom.scale })
+      },
+    },
+    {
+      label: t('editor.zoom.selectAll'),
+      testId: 'menu-zoom-all',
+      onClick: () => {
+        store().select(null)
+        store().requestPropsTab('zoom')
+      },
+    },
+    null,
+    {
+      label: t('editor.zoom.delete'),
+      shortcut: 'Delete',
+      testId: 'menu-zoom-delete',
+      danger: true,
+      onClick: () => store().deleteSelection(),
+    },
+  ]
+}
