@@ -1,4 +1,4 @@
-import { useRef, type PointerEvent as ReactPointerEvent } from 'react'
+import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { RotateCcw, Sparkles } from 'lucide-react'
 import {
@@ -11,6 +11,10 @@ import {
   placementCorner,
   type Background,
   type EditState,
+  commonZoomScale,
+  DEFAULT_ZOOM_SCALE,
+  MAX_ZOOM_SCALE,
+  MIN_ZOOM_SCALE,
 } from '@lumora/core'
 import { AudioFxPanel } from './AudioFxPanel'
 import { useEditorStore } from './store'
@@ -654,31 +658,92 @@ export function MotionProps({ edit }: { edit: EditState }) {
 
 export function ZoomProjectProps({ edit }: { edit: EditState }) {
   const { t } = useTranslation()
+  const common = commonZoomScale(edit.zooms)
+  const commonMode = edit.zooms.every((z) => z.mode === edit.zooms[0]?.mode)
+    ? (edit.zooms[0]?.mode ?? null)
+    : null
+  // Mức muốn đặt cho mọi đoạn: theo mức chung nếu các đoạn đã bằng nhau.
+  const [level, setLevel] = useState(common ?? DEFAULT_ZOOM_SCALE)
+  const [seenCommon, setSeenCommon] = useState(common)
+  if (common !== seenCommon) {
+    setSeenCommon(common)
+    if (common !== null) setLevel(common)
+  }
+  const store = useEditorStore.getState
   return (
-    <Section>
-      <p className="text-sm" data-testid="zoom-count">
-        {t('editor.zoom.count', { count: edit.zooms.length })}
-      </p>
-      <div className="grid grid-cols-2 gap-2">
+    <>
+      <Section>
+        <p className="text-sm" data-testid="zoom-count">
+          {t('editor.zoom.count', { count: edit.zooms.length })}
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            data-testid="zoom-auto"
+            onClick={() => store().regenerateZooms()}
+            className={ghostButton}
+          >
+            {t('editor.zoom.auto')}
+          </button>
+          <button
+            type="button"
+            data-testid="zoom-add"
+            onClick={() => store().addZoomAtPlayhead()}
+            className={ghostButton}
+          >
+            {t('editor.zoom.add')}
+          </button>
+        </div>
+        <p className="text-xs text-muted">{t('editor.zoom.hint')}</p>
+      </Section>
+      <Section title={t('editor.zoom.all')} testId="zoom-all">
+        <SliderRow
+          label={t('editor.zoom.allScale')}
+          value={level}
+          min={MIN_ZOOM_SCALE}
+          max={MAX_ZOOM_SCALE}
+          step={0.1}
+          format={(v) => `${v.toFixed(1)}×`}
+          onChange={setLevel}
+          testId="zoom-all-scale"
+        />
         <button
           type="button"
-          data-testid="zoom-auto"
-          onClick={() => useEditorStore.getState().regenerateZooms()}
-          className={ghostButton}
+          data-testid="zoom-all-apply"
+          disabled={edit.zooms.length === 0}
+          onClick={() => store().updateAllZooms({ scale: level })}
+          className={primaryButton}
         >
-          {t('editor.zoom.auto')}
+          {t('editor.zoom.applyAll', { scale: level.toFixed(1), count: edit.zooms.length })}
         </button>
-        <button
-          type="button"
-          data-testid="zoom-add"
-          onClick={() => useEditorStore.getState().addZoomAtPlayhead()}
-          className={ghostButton}
-        >
-          {t('editor.zoom.add')}
-        </button>
-      </div>
-      <p className="text-xs text-muted">{t('editor.zoom.hint')}</p>
-    </Section>
+        {edit.zooms.length > 1 && common === null && (
+          <p className="text-xs text-muted" data-testid="zoom-all-mixed">
+            {t('editor.zoom.mixed')}
+          </p>
+        )}
+        <Segmented
+          label={t('editor.zoom.allMode')}
+          options={(['follow', 'fixed'] as const).map((m) => ({
+            value: m,
+            label: t(`editor.zoom.modes.${m}`),
+          }))}
+          value={commonMode}
+          onChange={(mode) => store().updateAllZooms({ mode })}
+          testIdPrefix="zoom-all-mode-"
+        />
+        <p className="text-xs text-muted">
+          {t('editor.zoom.aiHint')}{' '}
+          <button
+            type="button"
+            data-testid="zoom-open-ai"
+            onClick={() => store().requestTab('ai')}
+            className="text-accent hover:underline"
+          >
+            {t('editor.zoom.openAi')}
+          </button>
+        </p>
+      </Section>
+    </>
   )
 }
 

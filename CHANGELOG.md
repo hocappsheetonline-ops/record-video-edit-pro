@@ -2,6 +2,12 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.1.0
+
+- **Tất cả đoạn zoom** (tab Zoom): đặt một mức zoom cố định cho mọi đoạn, đổi kiểu zoom cho tất cả; nút **Áp dụng mức này cho tất cả** khi đang chọn một đoạn; menu chuột phải trên đoạn zoom.
+- **Chỉnh zoom bằng Claude** (mục AI): mô tả cách muốn zoom hoặc chọn gợi ý sẵn, xem trước danh sách đề xuất rồi áp dụng.
+- **Phụ đề**: **Tìm và thay thế** (phân biệt hoa thường, cả từ, cả trong bản dịch) và **Sửa phụ đề bằng Claude** (sửa chính tả & dấu câu, hoặc theo yêu cầu).
+
 ## 1.0.0
 
 - Hoàn tất lộ trình kiểu CapCut (ROADMAP Bước 1–6): giao diện biểu tượng, kho meme, âm thanh và lọc tạp âm, bộ lọc / keyframe / mặt nạ / xóa phông AI, chữ / phụ đề / giọng AI, timeline chuyên nghiệp, nhập video ngoài, việc nền, lịch sử, ổn định.

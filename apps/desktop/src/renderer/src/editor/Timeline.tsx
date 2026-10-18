@@ -56,7 +56,7 @@ import { HistoryButton, useUndoLabels } from './HistoryPanel'
 import { runJob } from './jobs'
 import { DRAG_TYPE, dropFiles, dropPayload, readPayload } from './library-drag'
 import { useEditorStore, type SelItem } from './store'
-import { clipMenu, emptyMenu } from './timeline-menus'
+import { clipMenu, emptyMenu, zoomMenu } from './timeline-menus'
 import { MarkerFlags, TrackControls } from './TimelineMarkers'
 import { formatTimecode, laneCount, tickInterval, zoomOutputIntervals } from './timeline-math'
 
@@ -656,6 +656,7 @@ export function Timeline() {
                         key={`${zoomRegion.id}-${k}`}
                         data-testid="timeline-zoom"
                         onPointerDown={(e) => onZoomDown(e, zoomRegion, 'move')}
+                        onContextMenu={(e) => openContextMenu(e, zoomMenu(t, zoomRegion.id))}
                         className={`absolute top-0.5 bottom-0.5 flex cursor-grab items-center justify-center rounded-md border text-[11px] ${
                           selected
                             ? 'border-amber-200 bg-amber-400/55 text-white'

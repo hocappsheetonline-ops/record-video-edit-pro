@@ -55,6 +55,14 @@ export function PropertiesPanel() {
   const edit = useEditorStore((s) => s.edit)
   const selection = useEditorStore((s) => s.selection)
   const [tab, setTab] = useState<ProjectTab>('frame')
+  // Timeline / bảng khác có thể yêu cầu mở một tab (ví dụ "Chỉnh tất cả đoạn zoom").
+  const propsTabRequest = useEditorStore((s) => s.propsTabRequest)
+  const [seenRequest, setSeenRequest] = useState(propsTabRequest.n)
+  if (propsTabRequest.n !== seenRequest) {
+    setSeenRequest(propsTabRequest.n)
+    if ((PROJECT_TABS as readonly string[]).includes(propsTabRequest.tab))
+      setTab(propsTabRequest.tab as ProjectTab)
+  }
   const { select, deleteSelection } = useEditorStore.getState()
   if (!edit) return null
 
