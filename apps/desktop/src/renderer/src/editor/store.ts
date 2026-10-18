@@ -98,6 +98,11 @@ import {
   type DirectorPlan,
   type StyleMemory,
   type ZoomRegion,
+  editSummary,
+  expandRecipes,
+  outputClicks,
+  presetCurve,
+  transcriptExcerpt,
   BEAUTY_PRESET,
   captionYOf,
   clipDuration,
@@ -1681,9 +1686,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     return { commands, report }
   },
 
-  async applyAssistantCommands(commands, onProgress) {
-    const { folder, edit: before, project } = get()
-    if (!folder || !before || !project || commands.length === 0) return []
+  async applyAssistantCommands(input, onProgress) {
+    const { folder, edit: before, project, cursor, events } = get()
+    if (!folder || !before || !project || input.length === 0) return []
+    // Công thức dựng (recipe) mở rộng thành lệnh cụ thể trước khi chạy.
+    const commands = expandRecipes(input, {
+      hasCursor: cursor !== null && events.length > 0,
+      hasMusic: true,
+      durationMs: outputDuration(before.clips),
+    })
     const pastBefore = get().past
     const has = (kind: AssistantCommand['kind']) => commands.some((c) => c.kind === kind)
     // Các bước AI (cắt, zoom, phụ đề, âm thanh) làm trước: lệnh sau tính theo clip đã cắt.
@@ -1787,7 +1798,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           const cuts = cutPoints(get().edit!.clips).length
           if (cuts === 0) skipped('transitions', 'no_cuts')
           else {
-            get().applyTransitionToAll(c.transition, DEFAULT_TRANSITION_MS)
+            get().applyTransitionToAll(c.transition, c.ms ?? DEFAULT_TRANSITION_MS)
             done('transitions', cuts)
           }
           break
@@ -1834,6 +1845,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
               resolution: c.resolution,
               format: c.format,
               fps: c.fps ?? e.export.fps,
+              enhance: c.enhance ?? e.export.enhance,
             },
           }))
           exportAfter = true
@@ -2271,6 +2283,122 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           done('clear', count)
           break
         }
+        case 'recipe':
+          // Đã mở rộng thành lệnh cụ thể ở đầu hàm.
+          break
+        case 'effectAt': {
+          const cur = get().edit!
+          const total = outputDuration(cur.clips)
+          const start = Math.min(c.atMs, Math.max(0, total - MIN_REGION_MS))
+          const end = Math.min(total, start + c.ms)
+          if (end - start < MIN_REGION_MS) {
+            skipped('effectAt', 'too_short')
+            break
+          }
+          const region: EffectRegion = {
+            id: newEffectId(),
+            kind: c.effect,
+            start,
+            end,
+            intensity: c.intensity,
+          }
+          get().change((e) => ({ ...e, effects: [...e.effects, region] }))
+          done('effectAt')
+          break
+        }
+        case 'speedRange': {
+          const cur = get().edit!
+          const total = outputDuration(cur.clips)
+          const from = Math.min(c.fromMs, total)
+          const to = Math.min(c.toMs, total)
+          if (to - from < MIN_REGION_MS) {
+            skipped('speedRange', 'too_short')
+            break
+          }
+          // Tách ở hai đầu rồi đổi tốc độ các clip nằm trọn trong khoảng (clip đứng yên giữ nguyên).
+          const split = splitAt(splitAt(cur.clips, from), to)
+          const ids = clipPositions(split)
+            .filter(
+              (p) =>
+                !p.clip.freeze &&
+                p.outputStart >= from - 1 &&
+                p.outputStart + clipDuration(p.clip) <= to + 1,
+            )
+            .map((p) => p.clip.id)
+          if (ids.length === 0) {
+            skipped('speedRange', 'too_short')
+            break
+          }
+          get().change((e) => ({
+            ...e,
+            clips: ids.reduce<Clip[]>((acc, id) => setClipSpeed(acc, id, c.factor), split),
+          }))
+          done('speedRange', ids.length)
+          break
+        }
+        case 'speedCurve': {
+          const hit = outputToSource(get().edit!.clips, c.atMs)
+          if (!hit || hit.position.clip.freeze) {
+            skipped('speedCurve', 'too_short')
+            break
+          }
+          get().setSpeedCurve(hit.position.clip.id, presetCurve(c.preset))
+          done('speedCurve')
+          break
+        }
+        case 'transitionAt': {
+          const cuts = cutPoints(get().edit!.clips)
+          const nearest = cuts
+            .map((p) => ({ ...p, dist: Math.abs(p.at - c.atMs) }))
+            .sort((a, b) => a.dist - b.dist)[0]
+          if (!nearest || nearest.dist > 1500) {
+            skipped('transitionAt', 'no_cuts')
+            break
+          }
+          get().setTransition(nearest.afterClip, c.transition, c.ms)
+          done('transitionAt')
+          break
+        }
+        case 'captionsLook':
+          get().change((e) => ({
+            ...e,
+            captions: {
+              ...e.captions,
+              style: c.style ?? e.captions.style,
+              look: {
+                ...e.captions.look,
+                font: c.font ?? e.captions.look.font,
+                color: c.color ?? e.captions.look.color,
+                highlightColor: c.highlightColor ?? e.captions.look.highlightColor,
+                uppercase: c.uppercase ?? e.captions.look.uppercase,
+                maxWords: c.maxWords ?? e.captions.look.maxWords,
+              },
+            },
+          }))
+          done('captionsLook')
+          break
+        case 'outro': {
+          const cur = get().edit!
+          const total = outputDuration(cur.clips)
+          const ms = Math.min(c.ms, total)
+          if (ms < MIN_REGION_MS) {
+            skipped('outro', 'too_short')
+            break
+          }
+          const start = total - ms
+          const style = templateStyle(c.template)
+          const overlay = buildOverlay(
+            { kind: 'text', text: c.text, style: 'title', color: style.color, textStyle: style },
+            start,
+            total,
+          )
+          get().change((e) => ({
+            ...e,
+            overlays: [...e.overlays, { ...overlay, start, end: total, x: 0.5, y: 0.5 }],
+          }))
+          done('outro')
+          break
+        }
         case 'shorts': {
           try {
             const made = await get().splitIntoShorts({
@@ -2318,16 +2446,21 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       ])
       if (get().folder !== folder) return { plan: EMPTY_PLAN, applied: false, report: [] }
       const musicTracks = tracks.map((t) => t.name)
+      const hasCursor = cursor !== null && events.length > 0
       const context: DirectorContext = {
         language,
         durationMs: outputDuration(edit.clips),
         hasTranscript: transcript !== null,
-        hasCursor: cursor !== null && events.length > 0,
+        hasCursor,
         musicTracks,
         projects: projects.filter((p) => p.folder !== folder).map((p) => p.name),
         memory: memorySummary(get().memory, language || 'vi'),
         // Các lượt trước câu vừa gửi.
         history: get().directorMessages.slice(0, -1).slice(-DIRECTOR_CONTEXT_TURNS),
+        // Ngữ cảnh thời gian thật: lời thoại có mốc, thời điểm bấm chuột, bản dựng hiện tại.
+        transcript: transcript ? transcriptExcerpt(transcript.words, edit.clips) : '',
+        clicks: cursor ? outputClicks(cursor.clicks, edit.clips) : [],
+        edit: editSummary(edit),
       }
       let plan: DirectorPlan = EMPTY_PLAN
       try {
@@ -2339,7 +2472,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       // Bổ sung lệnh hiểu theo từ khóa + thói quen (mẫu phụ đề quen, âm lượng nhạc quen).
       const local = planLocally(
         normalizeAssistantCommands([...plan.commands, ...parseAssistantRequest(text)]),
-        { musicTracks },
+        { musicTracks, hasCursor, durationMs: context.durationMs },
         get().memory,
       )
       const commands = local.commands

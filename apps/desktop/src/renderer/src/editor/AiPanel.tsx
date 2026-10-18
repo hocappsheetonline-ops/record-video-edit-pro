@@ -309,7 +309,18 @@ function Director() {
         </button>
       </div>
       <div className="flex flex-wrap gap-1">
-        {(['full', 'silences', 'captions', 'vertical', 'cinematic'] as const).map((k) => (
+        {(
+          [
+            'youtube',
+            'shorts',
+            'vlog',
+            'full',
+            'silences',
+            'captions',
+            'vertical',
+            'cinematic',
+          ] as const
+        ).map((k) => (
           <button
             key={k}
             type="button"

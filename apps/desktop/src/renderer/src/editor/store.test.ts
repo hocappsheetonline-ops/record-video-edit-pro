@@ -10,7 +10,7 @@ import {
   outputDuration,
   withCaptionTemplate,
 } from '@lumora/core'
-import { createFakeApi, sampleProject, sampleSummary } from '../test/fake-api'
+import { createFakeApi, sampleProject, sampleSummary, sampleTranscript } from '../test/fake-api'
 import { useEditorStore } from './store'
 
 const t0 = sampleProject.segments[0]!.startedAt
@@ -801,5 +801,121 @@ describe('lệnh AI 1.8.0: che vùng, tự giảm nhạc, hiện phím tắt', (
     s().undo()
     expect(s().edit!.overlays).toEqual([])
     expect(s().edit!.audio.duck.enabled).toBe(false)
+  })
+})
+
+describe('lệnh AI 1.9.0: công thức dựng, hiệu ứng / tốc độ / chuyển cảnh theo thời điểm, kiểu phụ đề, thẻ kết', () => {
+  it('effectAt, captionsLook, outro, export enhance; outro luôn bám cuối video', async () => {
+    const s = useEditorStore.getState
+    const report = await s().applyAssistantCommands([
+      { kind: 'effectAt', effect: 'flash', atMs: 1000, ms: 1500, intensity: 0.9 },
+      { kind: 'captionsLook', font: 'anton', uppercase: true, maxWords: 3, style: 'classic' },
+      { kind: 'outro', text: 'Đăng ký kênh', ms: 2000, template: 'title' },
+      { kind: 'export', resolution: 1080, format: 'mp4', enhance: true },
+    ])
+    expect(report.map((r) => [r.step, r.status])).toEqual([
+      ['effectAt', 'done'],
+      ['captionsLook', 'done'],
+      ['outro', 'done'],
+      ['export', 'done'],
+    ])
+    const edit = s().edit!
+    expect(edit.effects).toHaveLength(1)
+    expect(edit.effects[0]).toMatchObject({ kind: 'flash', start: 1000, end: 2500, intensity: 0.9 })
+    expect(edit.captions.style).toBe('classic')
+    expect(edit.captions.look).toMatchObject({ font: 'anton', uppercase: true, maxWords: 3 })
+    expect(edit.overlays).toHaveLength(1)
+    expect(edit.overlays[0]).toMatchObject({
+      kind: 'text',
+      text: 'Đăng ký kênh',
+      start: 5000,
+      end: 7000,
+      y: 0.5,
+    })
+    expect(edit.export.enhance).toBe(true)
+    // Một bước hoàn tác.
+    s().undo()
+    expect(s().edit!.effects).toEqual([])
+    expect(s().edit!.overlays).toEqual([])
+    expect(s().edit!.export.enhance).toBe(false)
+  })
+
+  it('speedRange tách clip ở hai đầu và tăng tốc đoạn giữa; speedCurve áp mẫu cho clip chứa atMs', async () => {
+    const s = useEditorStore.getState
+    const report = await s().applyAssistantCommands([
+      { kind: 'speedRange', fromMs: 1000, toMs: 3000, factor: 2 },
+      { kind: 'speedRange', fromMs: 6900, toMs: 6950, factor: 2 },
+    ])
+    expect(report.map((r) => [r.step, r.status, r.detail])).toEqual([
+      ['speedRange', 'done', 1],
+      ['speedRange', 'skipped', 'too_short'],
+    ])
+    // Clip 0-5 s tách thành 0-1, 1-3 (2×), 3-5; video ngắn đi 1 giây.
+    expect(s().edit!.clips.map((c) => c.speed)).toEqual([1, 2, 1, 1])
+    expect(outputDuration(s().edit!.clips)).toBe(6000)
+    const curve = await s().applyAssistantCommands([
+      { kind: 'speedCurve', preset: 'hero', atMs: 0 },
+    ])
+    expect(curve).toEqual([{ step: 'speedCurve', status: 'done', detail: 1 }])
+    expect(s().edit!.clips[0]!.speedCurve?.preset).toBe('hero')
+    expect(outputDuration(s().edit!.clips)).toBeLessThan(6000)
+  })
+
+  it('transitionAt chọn chỗ nối gần nhất (trong 1,5 s), không có thì bỏ qua; transitions nhận độ dài', async () => {
+    const s = useEditorStore.getState
+    const report = await s().applyAssistantCommands([
+      { kind: 'transitionAt', atMs: 4800, transition: 'slide', ms: 400 },
+      { kind: 'transitionAt', atMs: 1000, transition: 'zoom', ms: 300 },
+    ])
+    expect(report.map((r) => [r.step, r.status])).toEqual([
+      ['transitionAt', 'done'],
+      ['transitionAt', 'skipped'],
+    ])
+    expect(s().edit!.transitions).toEqual([
+      { afterClip: s().edit!.clips[0]!.id, kind: 'slide', durationMs: 400 },
+    ])
+    await s().applyAssistantCommands([{ kind: 'transitions', transition: 'zoom', ms: 250 }])
+    expect(s().edit!.transitions).toEqual([
+      { afterClip: s().edit!.clips[0]!.id, kind: 'zoom', durationMs: 250 },
+    ])
+  })
+
+  it('recipe mở rộng thành lệnh cụ thể (lệnh nêu rõ thắng), không có dòng "recipe" trong báo cáo', async () => {
+    const s = useEditorStore.getState
+    const report = await s().applyAssistantCommands([
+      { kind: 'recipe', style: 'clean' },
+      { kind: 'captionsStyle', template: 'neon' },
+    ])
+    const steps = report.map((r) => r.step)
+    expect(steps).not.toContain('recipe')
+    expect(steps).toEqual(expect.arrayContaining(['captionsStyle', 'captionsLook', 'frame']))
+    expect(report.filter((r) => r.step === 'captionsStyle')).toHaveLength(1)
+    const edit = s().edit!
+    expect(edit.captions.look.template).toBe('neon')
+    expect(edit.captions.style).toBe('classic')
+    expect(edit.frame.padding).toBe(0.04)
+  })
+
+  it('askDirector gửi lời thoại có mốc, thời điểm bấm chuột và tóm tắt bản dựng cho AI', async () => {
+    const s = useEditorStore.getState
+    s().setTranscript(sampleTranscript)
+    api.directEdits.mockResolvedValueOnce({ summary: 'Không làm gì.', questions: [], commands: [] })
+    await s().askDirector('dựng kiểu youtube')
+    expect(api.directEdits).toHaveBeenCalledWith(
+      'dựng kiểu youtube',
+      expect.objectContaining({
+        hasTranscript: true,
+        transcript: '[0:00.0] Xin chào ừm các bạn.\n[0:04.1] Hôm nay',
+        // Bấm chuột lúc 1,5 s sau khi bắt đầu quay.
+        clicks: [1500],
+        edit: expect.stringContaining('duration 7 s; 2 clip(s), 1 cut(s)'),
+      }),
+    )
+    // Không có AI trả lệnh: công thức theo từ khóa vẫn chạy (video 7 s, không có nhạc → không chương, không nhạc).
+    const plan = s().directorPlan
+    expect(plan).toBeNull()
+    expect(s().edit!.captions.look.template).toBe('box')
+    expect(s().edit!.cursor.showKeys).toBe(true)
+    expect(s().edit!.audioClips).toEqual([])
   })
 })

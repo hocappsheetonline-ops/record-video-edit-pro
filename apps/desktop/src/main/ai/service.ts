@@ -123,6 +123,9 @@ const DIRECTOR_MAX_NAME_CHARS = 80
 const DIRECTOR_MAX_HISTORY = 8
 const DIRECTOR_MAX_MESSAGE_CHARS = 500
 const DIRECTOR_MAX_MEMORY_CHARS = 2000
+const DIRECTOR_MAX_TRANSCRIPT_CHARS = 4500
+const DIRECTOR_MAX_CLICKS = 60
+const DIRECTOR_MAX_EDIT_CHARS = 600
 
 /** Cắt gọn ngữ cảnh đạo diễn trước khi đưa vào lời nhắc hệ thống. */
 function trimDirectorContext(context: DirectorContext): DirectorContext {
@@ -139,6 +142,11 @@ function trimDirectorContext(context: DirectorContext): DirectorContext {
     history: context.history
       .slice(-DIRECTOR_MAX_HISTORY)
       .map((m) => ({ ...m, text: m.text.trim().slice(0, DIRECTOR_MAX_MESSAGE_CHARS) })),
+    transcript: (context.transcript ?? '').trim().slice(0, DIRECTOR_MAX_TRANSCRIPT_CHARS),
+    clicks: (context.clicks ?? [])
+      .filter((ms) => typeof ms === 'number' && Number.isFinite(ms) && ms >= 0)
+      .slice(0, DIRECTOR_MAX_CLICKS),
+    edit: (context.edit ?? '').trim().slice(0, DIRECTOR_MAX_EDIT_CHARS),
   }
 }
 /** Yêu cầu gửi Claude tối đa (ký tự). */

@@ -1,5 +1,14 @@
-import { normalizeAssistantCommands, type AssistantCommand } from './assistant'
+import {
+  assistantCommandKey,
+  normalizeAssistantCommands,
+  type AssistantCommand,
+  type RecipeStyle,
+} from './assistant'
+import { buildCaptionLines, linesOnOutput, type TranscriptWord } from './captions'
+import type { ClickMark } from './cursor'
 import type { EditState } from './edit-state'
+import { cutPoints } from './transitions'
+import { outputDuration, sourceToOutput, type Clip } from './timeline'
 
 /**
  * Đạo diễn AI: từ một câu yêu cầu, AI lập kế hoạch (tóm tắt, câu hỏi làm rõ nếu cần, danh sách
@@ -32,6 +41,191 @@ export interface DirectorContext {
   memory: string
   /** Vài lượt hội thoại gần nhất của dự án này. */
   history: DirectorMessage[]
+  /** Lời thoại có mốc thời gian trên video xuất (xem `transcriptExcerpt`), để AI đặt chữ / zoom / mốc đúng lúc. */
+  transcript?: string
+  /** Thời điểm bấm chuột trên video xuất (ms), để AI đặt zoom / mũi tên đúng chỗ bấm. */
+  clicks?: number[]
+  /** Tóm tắt bản dựng hiện tại (xem `editSummary`), để AI không làm trùng. */
+  edit?: string
+}
+
+/** "1:05.2" cho 65 200 ms. */
+function stamp(ms: number): string {
+  const total = Math.max(0, Math.round(ms / 100) / 10)
+  const m = Math.floor(total / 60)
+  const sec = total - m * 60
+  return `${m}:${sec < 10 ? '0' : ''}${sec.toFixed(1)}`
+}
+
+/**
+ * Lời thoại thành các dòng ngắn có mốc thời gian trên video xuất ("[0:03.5] câu nói"), bỏ phần đã
+ * cắt; giới hạn số dòng và số ký tự để lời nhắc không quá dài (dòng cuối ghi "…" khi bị cắt).
+ */
+export function transcriptExcerpt(
+  words: readonly TranscriptWord[],
+  clips: readonly Clip[],
+  limits: { maxLines?: number; maxChars?: number } = {},
+): string {
+  if (words.length === 0) return ''
+  const maxLines = limits.maxLines ?? 80
+  const maxChars = limits.maxChars ?? 4000
+  const lines = linesOnOutput(
+    buildCaptionLines(words, { maxChars: 60, maxDurationMs: 6000 }),
+    clips,
+  )
+  const out: string[] = []
+  let chars = 0
+  for (const line of lines) {
+    const text = `[${stamp(line.start)}] ${line.text}`
+    if (out.length >= maxLines || chars + text.length > maxChars) {
+      out.push('…')
+      break
+    }
+    out.push(text)
+    chars += text.length + 1
+  }
+  return out.join('\n')
+}
+
+/** Thời điểm bấm chuột trên video xuất (ms), gộp các lần bấm cách nhau dưới `gapMs`, tối đa `max`. */
+export function outputClicks(
+  clicks: readonly ClickMark[],
+  clips: readonly Clip[],
+  options: { gapMs?: number; max?: number } = {},
+): number[] {
+  const gap = options.gapMs ?? 500
+  const max = options.max ?? 60
+  const out: number[] = []
+  const times = clicks
+    .map((c) => sourceToOutput(clips, c.s))
+    .filter((t): t is number => t !== null)
+    .sort((a, b) => a - b)
+  for (const t of times) {
+    const ms = Math.round(t)
+    if (out.length > 0 && ms - out[out.length - 1]! < gap) continue
+    out.push(ms)
+    if (out.length >= max) break
+  }
+  return out
+}
+
+/** Một dòng tóm tắt bản dựng hiện tại (số đoạn cắt, zoom, lớp, nhạc, phụ đề…), bằng tiếng Anh cho AI. */
+export function editSummary(edit: EditState): string {
+  const parts: string[] = []
+  parts.push(`duration ${Math.round(outputDuration(edit.clips) / 1000)} s`)
+  parts.push(`${edit.clips.length} clip(s), ${cutPoints(edit.clips).length} cut(s)`)
+  parts.push(`aspect ${edit.frame.aspect}${edit.frame.fill ? ' (fill)' : ''}`)
+  parts.push(`${edit.zooms.length} zoom(s)`)
+  parts.push(`${edit.transitions.length} transition(s)`)
+  parts.push(`${edit.effects.length} effect(s)`)
+  parts.push(`${edit.overlays.length} overlay(s)`)
+  const music = edit.audioClips.filter((c) => c.kind === 'music').length
+  const sfx = edit.audioClips.length - music
+  parts.push(`${music} music track(s), ${sfx} sound effect(s)`)
+  parts.push(
+    edit.captions.enabled && edit.captions.lines.length > 0
+      ? `captions on (${edit.captions.look.template})`
+      : 'captions off',
+  )
+  if (edit.look.filter !== 'none') parts.push(`filter ${edit.look.filter}`)
+  if (edit.markers.length > 0) parts.push(`${edit.markers.length} marker(s)`)
+  if (edit.audio.duck.enabled) parts.push('music ducking on')
+  return parts.join('; ')
+}
+
+/** Ngữ cảnh để mở rộng công thức dựng. */
+export interface RecipeContext {
+  hasCursor: boolean
+  hasMusic: boolean
+  durationMs: number
+}
+
+/**
+ * Mở rộng một công thức dựng thành lệnh cụ thể, theo cách dựng video chuyên nghiệp:
+ * - `youtube`: hướng dẫn dài 16:9 — cắt lặng / từ thừa, giọng sạch, zoom theo chuột mượt, hiện
+ *   phím tắt, phụ đề hộp dưới, nhạc nền rất nhỏ tự giảm khi nói, mốc chương khi video > 1 phút.
+ * - `shorts`: TikTok / Shorts / Reels — khung dọc, nhịp nhanh (cắt lặng, từ thừa), phụ đề TikTok
+ *   to ở giữa, zoom theo chuột, chuyển cảnh zoom ngắn, nhạc nền nhỏ tự giảm khi nói.
+ * - `vlog`: nói trước camera — cắt lặng, giọng sạch, phụ đề karaoke, tông ấm, nhạc nền nhẹ.
+ * - `clean`: tối giản — chỉ cắt lặng, giọng sạch, phụ đề viền cả dòng, lề nhỏ.
+ */
+export function expandRecipe(style: RecipeStyle, ctx: RecipeContext): AssistantCommand[] {
+  const out: AssistantCommand[] = []
+  const music = (volume: number, duckLevel: number) => {
+    if (!ctx.hasMusic) return
+    out.push({ kind: 'music', query: '', volume })
+    out.push({ kind: 'duck', enabled: true, level: duckLevel })
+    out.push({ kind: 'fade', ms: 1500 })
+  }
+  switch (style) {
+    case 'youtube':
+      out.push({ kind: 'aspect', aspect: '16:9' })
+      out.push({ kind: 'cutSilences' }, { kind: 'removeFillers' }, { kind: 'cleanAudio' })
+      if (ctx.hasCursor) {
+        out.push({ kind: 'autoZoom' })
+        out.push({ kind: 'motion', cameraSpeed: 0.8, zoomMs: 600 })
+        out.push({ kind: 'cursor', clickEffect: true, showKeys: true })
+      }
+      out.push({ kind: 'captions' }, { kind: 'captionsStyle', template: 'box' })
+      out.push({ kind: 'captionsLayout', position: 'bottom', size: 1 })
+      music(0.2, 0.25)
+      if (ctx.durationMs > 60_000) out.push({ kind: 'chapters' })
+      break
+    case 'shorts':
+      out.push({ kind: 'aspect', aspect: '9:16' })
+      out.push({ kind: 'cutSilences' }, { kind: 'removeFillers' }, { kind: 'cleanAudio' })
+      if (ctx.hasCursor) {
+        out.push({ kind: 'autoZoom' })
+        out.push({ kind: 'motion', cameraSpeed: 0.9, zoomMs: 400 })
+      }
+      out.push({ kind: 'captions' }, { kind: 'captionsStyle', template: 'tiktok' })
+      out.push({ kind: 'captionsLayout', position: 'bottom', size: 1.2 })
+      out.push({ kind: 'transitions', transition: 'zoom', ms: 300 })
+      music(0.3, 0.2)
+      break
+    case 'vlog':
+      out.push({ kind: 'cutSilences' }, { kind: 'removeFillers' }, { kind: 'cleanAudio' })
+      out.push({ kind: 'captions' }, { kind: 'captionsStyle', template: 'karaoke' })
+      out.push({ kind: 'filter', preset: 'warm', intensity: 0.6 })
+      music(0.25, 0.25)
+      break
+    case 'clean':
+      out.push({ kind: 'cutSilences' }, { kind: 'cleanAudio' })
+      out.push({ kind: 'captions' }, { kind: 'captionsStyle', template: 'outline' })
+      out.push({ kind: 'captionsLook', style: 'classic' })
+      out.push({ kind: 'frame', padding: 0.04, shadow: 0.3 })
+      break
+  }
+  return out
+}
+
+/**
+ * Thay mỗi lệnh `recipe` bằng các lệnh của công thức; lệnh người dùng / AI nêu rõ được giữ nguyên
+ * và thắng lệnh cùng loại của công thức (so theo khóa lệnh). Thứ tự: lệnh công thức đứng ở chỗ
+ * của lệnh `recipe`.
+ */
+export function expandRecipes(
+  commands: AssistantCommand[],
+  ctx: RecipeContext,
+): AssistantCommand[] {
+  if (!commands.some((c) => c.kind === 'recipe')) return commands
+  const explicit = new Set(
+    commands.filter((c) => c.kind !== 'recipe').map((c) => assistantCommandKey(c)),
+  )
+  const out: AssistantCommand[] = []
+  const seen = new Set<string>()
+  for (const c of commands) {
+    const items = c.kind === 'recipe' ? expandRecipe(c.style, ctx) : [c]
+    for (const item of items) {
+      const key = assistantCommandKey(item)
+      if (seen.has(key)) continue
+      // Lệnh của công thức nhường lệnh nêu rõ cùng loại (lệnh nêu rõ sẽ tới lượt sau hoặc đã có).
+      if (c.kind === 'recipe' && explicit.has(key)) continue
+      seen.add(key)
+      out.push(item)
+    }
+  }
+  return out
 }
 
 export function normalizeDirectorPlan(input: unknown): DirectorPlan {
@@ -168,10 +362,17 @@ export function memorySummary(memory: StyleMemory, language = 'vi'): string {
  */
 export function planLocally(
   commands: AssistantCommand[],
-  context: Pick<DirectorContext, 'musicTracks'>,
+  context: Pick<DirectorContext, 'musicTracks'> &
+    Partial<Pick<DirectorContext, 'hasCursor' | 'durationMs'>>,
   memory: StyleMemory,
 ): DirectorPlan {
-  const out = [...commands]
+  const out = [
+    ...expandRecipes(commands, {
+      hasCursor: context.hasCursor ?? true,
+      hasMusic: context.musicTracks.length > 0,
+      durationMs: context.durationMs ?? 0,
+    }),
+  ]
   const has = (kind: AssistantCommand['kind']) => out.some((c) => c.kind === kind)
   const questions: string[] = []
   if (has('captions') && !has('captionsStyle')) {

@@ -192,3 +192,54 @@ test('Đạo diễn AI: một câu → nhiều lệnh (chữ, nhãn dán, mốc,
   expect(errors).toEqual([])
   await app.close()
 })
+
+test('Đạo diễn AI 1.9.0: dựng chuyên nghiệp (hiệu ứng, tua nhanh, chuyển cảnh, thẻ kết) + sổ tay dựng trong lời nhắc', async () => {
+  const { app, page, errors } = await launchApp(dirs.userData, {
+    env: { LUMORA_ANTHROPIC_BASE_URL: mock.url },
+  })
+
+  await page.getByTestId('nav-settings').click()
+  await saveKey(page, 'anthropic', 'Claude (Anthropic)', 'sk-ant-test-key-0123456789abcdef')
+  await page.getByTestId('nav-projects').click()
+  await page.getByTestId('project-card').click()
+  await page.getByTestId('open-editor').click()
+  await expect(page.getByTestId('timecode')).toContainText('/ 0:04.0')
+
+  await page.getByTestId('lib-ai').click()
+  // Nút gợi ý phong cách điền sẵn câu yêu cầu.
+  await page.getByTestId('assistant-example-youtube').click()
+  await expect(page.getByTestId('assistant-input')).toHaveValue(/YouTube/)
+  await page.getByTestId('assistant-input').fill('dựng chuyên nghiệp cho mình')
+  await page.getByTestId('assistant-run').click()
+
+  const commands = page.getByTestId('assistant-command')
+  await expect(commands).toHaveCount(5)
+  await expect(page.locator('[data-testid="assistant-command"][data-status="done"]')).toHaveCount(5)
+  await expect(page.getByTestId('director-message').last()).toContainText('chuẩn YouTube')
+
+  // Hiệu ứng, thẻ kết trên timeline; đoạn 2-4 s tua 2× nên video còn 3 s; thẻ kết bám cuối.
+  await expect(page.getByTestId('timeline-effect')).toHaveCount(1)
+  await expect(page.getByTestId('timeline-overlay')).toHaveCount(1)
+  await expect(page.getByTestId('timecode')).toContainText('/ 0:03.0')
+
+  // Lời nhắc đạo diễn có sổ tay dựng chuyên nghiệp, thời điểm bấm chuột và bản dựng hiện tại.
+  const direct = mock.requests.filter((r) => r.path === '/v1/messages').at(-1)!
+  const body = JSON.parse(direct.body.toString('utf8'))
+  const system = String(body.system)
+  expect(system).toContain('Professional editing playbook')
+  expect(system).toContain('recipe {style}')
+  expect(system).toContain('Mouse click times')
+  expect(system).toMatch(/Current edit: duration 4 s/)
+  expect(body.output_config.format.schema.properties.commands.items.properties.kind.enum).toContain(
+    'outro',
+  )
+
+  // Một bước hoàn tác.
+  await page.keyboard.press('Control+z')
+  await expect(page.getByTestId('timeline-effect')).toHaveCount(0)
+  await expect(page.getByTestId('timeline-overlay')).toHaveCount(0)
+  await expect(page.getByTestId('timecode')).toContainText('/ 0:04.0')
+
+  expect(errors).toEqual([])
+  await app.close()
+})

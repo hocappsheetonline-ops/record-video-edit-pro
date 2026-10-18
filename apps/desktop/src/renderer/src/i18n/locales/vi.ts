@@ -1168,6 +1168,10 @@ export const vi = {
       },
       examples: {
         full: 'Làm thành video TikTok hoàn chỉnh: cắt lặng, phụ đề, nhạc lofi, xuất 9:16',
+        youtube:
+          'Dựng kiểu YouTube chuyên nghiệp: hook mở đầu, cắt lặng, zoom đúng lúc, phụ đề, nhạc nhỏ, thẻ kết',
+        shorts: 'Dựng kiểu TikTok / Shorts: dọc 9:16, nhịp nhanh, phụ đề to, nhạc tự giảm khi nói',
+        vlog: 'Dựng kiểu vlog: cắt lặng, phụ đề karaoke, tông ấm, nhạc nhẹ',
         silences: 'Cắt khoảng lặng và bỏ từ thừa',
         captions: 'Thêm phụ đề và làm sạch âm thanh',
         vertical: 'Làm video dọc 9:16 cho TikTok',
@@ -1219,6 +1223,13 @@ export const vi = {
         track: 'Hàng timeline',
         clear: 'Xóa sạch',
         shorts: 'Chia video ngắn',
+        recipe: 'Công thức dựng',
+        effectAt: 'Hiệu ứng tại thời điểm',
+        speedRange: 'Tốc độ một đoạn',
+        speedCurve: 'Đường cong tốc độ',
+        transitionAt: 'Chuyển cảnh tại chỗ nối',
+        captionsLook: 'Kiểu chữ phụ đề',
+        outro: 'Thẻ kết',
       },
     },
     shorts: {
