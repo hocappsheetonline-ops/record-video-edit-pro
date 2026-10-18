@@ -325,3 +325,39 @@ describe('lệnh AI 1.9.0: công thức dựng, hiệu ứng / tốc độ / chu
     ])
   })
 })
+
+describe('từ khóa hiệu ứng & chuyển cảnh mới', () => {
+  it('nhận tên các hiệu ứng mới bằng tiếng Việt và tiếng Anh', () => {
+    const effectOf = (text: string) => parseAssistantRequest(text).find((c) => c.kind === 'effect')
+    expect(effectOf('thêm hiệu ứng lấp lánh')).toEqual({ kind: 'effect', effect: 'sparkle' })
+    expect(effectOf('cho tuyết rơi')).toEqual({ kind: 'effect', effect: 'snow' })
+    expect(effectOf('hiệu ứng tách màu RGB')).toEqual({ kind: 'effect', effect: 'rgbSplit' })
+    expect(effectOf('add film grain')).toEqual({ kind: 'effect', effect: 'grain' })
+    expect(effectOf('hiệu ứng phóng nhấn')).toEqual({ kind: 'effect', effect: 'zoomPunch' })
+    expect(effectOf('thêm dải điện ảnh')).toEqual({ kind: 'effect', effect: 'letterbox' })
+    expect(effectOf('hiệu ứng đèn rọi')).toEqual({ kind: 'effect', effect: 'spotlight' })
+  })
+
+  it('hiệu ứng màu chỉ nhận khi có chữ "hiệu ứng"; "bộ lọc cổ điển" vẫn là bộ lọc', () => {
+    const kinds = (text: string) => parseAssistantRequest(text).map((c) => c.kind)
+    expect(kinds('bộ lọc cổ điển')).toEqual(['filter'])
+    expect(parseAssistantRequest('hiệu ứng đen trắng')).toEqual([{ kind: 'effect', effect: 'bw' }])
+    expect(parseAssistantRequest('hiệu ứng tông ấm')).toEqual([{ kind: 'effect', effect: 'warm' }])
+  })
+
+  it('nhận các chuyển cảnh mới', () => {
+    const tr = (text: string) => parseAssistantRequest(text).find((c) => c.kind === 'transitions')
+    expect(tr('chuyển cảnh lia máy')).toEqual({ kind: 'transitions', transition: 'whip' })
+    expect(tr('chuyển cảnh thu nhỏ')).toEqual({ kind: 'transitions', transition: 'zoomOut' })
+    expect(tr('chuyển cảnh lướt lên')).toEqual({ kind: 'transitions', transition: 'slideUp' })
+    expect(tr('chuyển cảnh lướt sang phải')).toEqual({
+      kind: 'transitions',
+      transition: 'slideRight',
+    })
+    expect(tr('transition wipe')).toEqual({ kind: 'transitions', transition: 'wipe' })
+    expect(tr('chuyển cảnh vòng tròn')).toEqual({ kind: 'transitions', transition: 'iris' })
+    expect(tr('chuyển cảnh lật thẻ')).toEqual({ kind: 'transitions', transition: 'flip' })
+    expect(tr('chuyển cảnh xoay')).toEqual({ kind: 'transitions', transition: 'spin' })
+    expect(tr('thêm chuyển cảnh')).toEqual({ kind: 'transitions', transition: 'fadeBlack' })
+  })
+})

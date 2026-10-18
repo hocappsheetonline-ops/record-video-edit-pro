@@ -2,6 +2,12 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.11.0
+
+- **Thư viện hiệu ứng 27 kiểu, chia 5 nhóm** (Thư viện → Hiệu ứng): thêm 17 hiệu ứng mới kiểu CapCut — **Chuyển động**: Phóng nhấn, Nhảy nhún, Gương đối xứng; **Glitch & retro**: Tách màu RGB, Khảm ô, Hạt phim; **Màu sắc**: Đảo màu, Hai tông màu, Tông ấm, Tông lạnh; **Ánh sáng & khung**: Nhấp nháy nhanh, Tỏa sáng, Lọt sáng, Đèn rọi, Dải điện ảnh; **Hạt bay**: Lấp lánh, Tuyết rơi. Mọi hiệu ứng tính theo thời gian trên cùng một canvas nên tua tới đâu cũng đúng và **video xuất giống hệt xem trước**.
+- **Thư viện chuyển cảnh 21 kiểu, chia 4 nhóm** (Thư viện → Chuyển cảnh hoặc nút ◆ ở chỗ nối): thêm 14 chuyển cảnh mới — Lọt sáng, Thu nhỏ, Lia máy (whip pan), Xoay, Lướt phải / lên / xuống, Rung lắc, Kéo rèm, Vòng tròn (iris), Rèm sáo, Ép dẹt, Lật thẻ, Khảm ô. Ô trong thư viện có biểu tượng và đánh dấu kiểu đang dùng; **Áp dụng cho tất cả chỗ nối** dùng đúng kiểu và thời gian đang chọn thay vì luôn là Mờ qua đen.
+- **Đạo diễn AI chọn hiệu ứng theo ý nghĩa**: lời nhắc hệ thống có **danh mục hiệu ứng và chuyển cảnh** (tên, trông thế nào, dùng khi nào: zoomPunch / flash khi lộ kết quả, confetti / sparkle khi thành công, bw / vintage cho hồi tưởng, spotlight để tập trung một chỗ; fadeBlack / wipe cho đổi phần, zoom / whip cho short-form, slide* cho bước tiếp / trước, flip cho trước – sau, iris để tập trung) kèm gợi ý độ dài. Bộ hiểu từ khóa (không có AI) nhận tên tiếng Việt / tiếng Anh của mọi hiệu ứng và chuyển cảnh mới ("hiệu ứng lấp lánh", "chuyển cảnh lia máy", "lướt sang phải"…); hiệu ứng màu trùng tên bộ lọc chỉ nhận khi câu có chữ "hiệu ứng".
+
 ## 1.9.0
 
 - **Đạo diễn AI dựng video như biên tập viên chuyên nghiệp**: lời nhắc hệ thống có **sổ tay dựng YouTube / TikTok** rút từ cách làm của các kênh hướng dẫn và short-form (hook 3–5 giây đầu nói thẳng kết quả, đổi hình mỗi 10–20 giây bằng zoom / chữ / mũi tên / hiệu ứng, cắt khoảng lặng > 0,5 giây và từ thừa, tua nhanh đoạn chờ, zoom đúng lúc lời thoại nhắc tới chi tiết nhỏ và giữ qua lúc bấm, phụ đề ngắn 2–3 từ cho video dọc / cả dòng cho hướng dẫn, giọng sạch khoảng −14 LUFS và nhạc nền nhỏ tự giảm khi nói, hiệu ứng âm thanh tiết chế, che thông tin riêng tư, thẻ kết CTA 3–5 giây cuối, thứ tự lệnh chuẩn). AI còn nhận **lời thoại có mốc thời gian trên video xuất**, **thời điểm bấm chuột** và **tóm tắt bản dựng hiện tại** để đặt chữ, zoom, mốc đúng chỗ và không làm trùng.
