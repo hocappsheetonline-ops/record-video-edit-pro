@@ -8,6 +8,7 @@ import {
   generateAutoZooms,
   newZoomId,
   normalizeZooms,
+  updateAllZooms,
   outputDuration,
   outputToSource,
   removeClip,
@@ -96,6 +97,7 @@ import {
   type DirectorMessage,
   type DirectorPlan,
   type StyleMemory,
+  type ZoomRegion,
 } from '@lumora/core'
 import type { AudioAsset, MediaAsset, MusicTrack } from '@shared/ipc'
 import { lumora } from '../api'
@@ -138,6 +140,8 @@ interface EditorStore {
   filmstrip: Filmstrip | null
   /** Yêu cầu mở một tab của bảng bên phải (n tăng mỗi lần yêu cầu, kể cả cùng tab). */
   tabRequest: { tab: string; section?: string; n: number }
+  /** Yêu cầu mở một tab của bảng thuộc tính dự án (bên phải), ví dụ "zoom". */
+  propsTabRequest: { tab: string; n: number }
   /**
    * File âm thanh đã lọc tạp âm / hiệu ứng (theo `fxKeyOf`): tên file khi xong, 'pending' khi đang
    * xử lý, 'error' khi lỗi. Xem trước dùng file đã xử lý khi có.
@@ -310,6 +314,7 @@ interface EditorStore {
   detachOverlayAudio(id: string): void
   /** Mở một mục thư viện (và mục con, ví dụ Âm thanh → Lồng tiếng). */
   requestTab(tab: string, section?: string): void
+  requestPropsTab(tab: string): void
   /** Thêm hiệu ứng hình tại đầu phát (mặc định 2 giây) và chọn nó. */
   addEffect(kind: EffectKind): void
   updateEffect(id: string, patch: Partial<EffectRegion>, coalesce?: string): void
@@ -398,6 +403,13 @@ interface EditorStore {
     },
     onProgress?: (done: number, total: number) => void,
   ): Promise<number>
+  /** Đổi cùng một thuộc tính (mức zoom, kiểu, tâm) cho mọi đoạn zoom. */
+  updateAllZooms(
+    patch: Partial<Pick<ZoomRegion, 'scale' | 'mode' | 'x' | 'y'>>,
+    coalesce?: string,
+  ): void
+  /** Thay toàn bộ danh sách zoom (kết quả Claude đề xuất); bỏ chọn đoạn không còn. */
+  setZooms(zooms: ZoomRegion[]): void
 }
 
 /** Đoạn ngắn nhất khi chia video (ms); đoạn cuối ngắn hơn thì gộp vào đoạn trước. */
@@ -560,6 +572,7 @@ const initial = {
   filmstrip: null,
   assetPeaks: {},
   tabRequest: { tab: '', n: 0 },
+  propsTabRequest: { tab: '', n: 0 },
   fxFiles: {},
   revFiles: {},
   aiStatus: 'idle' as EditorStore['aiStatus'],
@@ -1437,6 +1450,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set({ tabRequest: { tab, section, n: get().tabRequest.n + 1 } })
   },
 
+  requestPropsTab(tab) {
+    set({ propsTabRequest: { tab, n: get().propsTabRequest.n + 1 } })
+  },
+
   loadAssetPeaks(file) {
     const { folder, assetPeaks } = get()
     if (!folder || file in assetPeaks) return
@@ -2098,6 +2115,20 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (after && after !== before)
       set({ past: [...pastBefore, before].slice(-HISTORY_LIMIT), future: [] })
     return report
+  },
+
+  updateAllZooms(patch, coalesce) {
+    get().change((e) => {
+      const zooms = updateAllZooms(e.zooms, patch)
+      return zooms.every((z, i) => z === e.zooms[i]) ? e : { ...e, zooms }
+    }, coalesce)
+  },
+
+  setZooms(zooms) {
+    const { project, selection } = get()
+    if (!project) return
+    get().change((e) => ({ ...e, zooms: normalizeZooms(zooms, sourceDuration(project.segments)) }))
+    if (selection?.kind === 'zoom' && !zooms.some((z) => z.id === selection.id)) get().select(null)
   },
 }))
 

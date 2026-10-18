@@ -491,6 +491,12 @@ export function createFakeApi(
     translateLines: vi.fn<LumoraApi['translateLines']>(async (lines) =>
       lines.map((l) => ({ id: l.id, text: `EN: ${l.text}` })),
     ),
+    editCaptions: vi.fn<LumoraApi['editCaptions']>(async (lines) =>
+      lines.map((l) => ({ id: l.id, text: l.text.replace(/ ừm/g, '') })),
+    ),
+    planZooms: vi.fn<LumoraApi['planZooms']>(async (_folder, input) =>
+      input.zooms.map((z) => ({ ...z, scale: 3 })),
+    ),
     saveExportText: vi.fn<LumoraApi['saveExportText']>(async (_folder, fileName) => ({
       path: `/x/${fileName}`,
       fileName,

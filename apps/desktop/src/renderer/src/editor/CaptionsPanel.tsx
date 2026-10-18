@@ -2,12 +2,17 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Merge, Scissors } from 'lucide-react'
 import {
+  applyCaptionTexts,
   buildCaptionLines,
   CAPTION_LANGUAGES,
   CAPTION_TEMPLATES,
+  captionSearchPattern,
+  captionTextMatches,
+  countCaptionMatches,
   FONTS,
   fontFamily,
   mergeCaptionLine,
+  replaceInCaptions,
   sourceToOutput,
   splitCaptionLine,
   toSrt,
@@ -94,9 +99,21 @@ export function CaptionsPanel() {
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState<ExportResult | null>(null)
+  const [find, setFind] = useState('')
+  const [replacement, setReplacement] = useState('')
+  const [matchCase, setMatchCase] = useState(false)
+  const [wholeWord, setWholeWord] = useState(false)
+  const [replaced, setReplaced] = useState<number | null>(null)
+  const [instruction, setInstruction] = useState('')
+  const [aiChanged, setAiChanged] = useState<number | null>(null)
   if (!edit || !folder || !project) return null
   const captions = edit.captions
   const look = captions.look
+  const searchOptions = { matchCase, wholeWord }
+  const matchCount = countCaptionMatches(captions.lines, find, searchOptions)
+  const matchPattern = captionSearchPattern(find, searchOptions)
+  const isMatch = (text: string | undefined) =>
+    matchPattern !== null && captionTextMatches(matchPattern, text)
   const toLang = target ?? (captions.language.startsWith('en') ? 'vi' : 'en')
 
   const setCaptions = (patch: Partial<CaptionsState>, coalesce?: string) =>
@@ -159,6 +176,27 @@ export function CaptionsPanel() {
           translationLanguage: toLang,
           lines: lines.map((l) => ({ ...l, translation: byId.get(l.id) ?? l.text })),
         })
+    })
+
+  const replaceAll = () => {
+    const result = replaceInCaptions(captions.lines, find, replacement, searchOptions)
+    if (result.count > 0) setCaptions({ lines: result.lines })
+    setReplaced(result.count)
+  }
+
+  /** Nhờ Claude sửa nội dung các dòng theo yêu cầu (rỗng = sửa chính tả, dấu câu). */
+  const editWithAi = (ask: string) =>
+    run('ai', async () => {
+      setAiChanged(null)
+      const texts = await lumora().editCaptions(
+        captions.lines.map((l) => ({ id: l.id, text: l.text })),
+        ask,
+        captions.language,
+      )
+      const lines = useEditorStore.getState().edit?.captions.lines ?? captions.lines
+      const result = applyCaptionTexts(lines, texts)
+      if (result.count > 0) setCaptions({ lines: result.lines })
+      setAiChanged(result.count)
     })
 
   const saveFile = (format: 'srt' | 'vtt') =>
@@ -426,10 +464,131 @@ export function CaptionsPanel() {
               </button>
             </p>
           )}
+          <Heading>{t('captions.findReplace')}</Heading>
+          <div className="flex flex-col gap-2 text-xs" data-testid="captions-find-replace">
+            <input
+              value={find}
+              data-testid="caption-find"
+              aria-label={t('captions.find')}
+              placeholder={t('captions.findPlaceholder')}
+              onChange={(e) => {
+                setFind(e.target.value)
+                setReplaced(null)
+              }}
+              className="rounded-md border border-border bg-surface-2 px-2 py-1.5 text-sm"
+            />
+            <input
+              value={replacement}
+              data-testid="caption-replace"
+              aria-label={t('captions.replaceWith')}
+              placeholder={t('captions.replacePlaceholder')}
+              onChange={(e) => {
+                setReplacement(e.target.value)
+                setReplaced(null)
+              }}
+              className="rounded-md border border-border bg-surface-2 px-2 py-1.5 text-sm"
+            />
+            <div className="flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  className="size-3.5 accent-accent"
+                  data-testid="caption-match-case"
+                  checked={matchCase}
+                  onChange={(e) => {
+                    setMatchCase(e.target.checked)
+                    setReplaced(null)
+                  }}
+                />
+                {t('captions.matchCase')}
+              </label>
+              <label className="flex items-center gap-1.5">
+                <input
+                  type="checkbox"
+                  className="size-3.5 accent-accent"
+                  data-testid="caption-whole-word"
+                  checked={wholeWord}
+                  onChange={(e) => {
+                    setWholeWord(e.target.checked)
+                    setReplaced(null)
+                  }}
+                />
+                {t('captions.wholeWord')}
+              </label>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className={button}
+                data-testid="caption-replace-all"
+                disabled={matchCount === 0}
+                onClick={replaceAll}
+              >
+                {t('captions.replaceAll')}
+              </button>
+              <span className="text-muted" data-testid="caption-match-count">
+                {replaced !== null
+                  ? t('captions.replaced', { count: replaced })
+                  : find
+                    ? matchCount > 0
+                      ? t('captions.matches', { count: matchCount })
+                      : t('captions.noMatches')
+                    : ''}
+              </span>
+            </div>
+          </div>
+
+          <Heading>{t('captions.ai')}</Heading>
+          <p className="text-xs text-muted">{t('captions.aiIntro')}</p>
+          <textarea
+            rows={2}
+            value={instruction}
+            data-testid="caption-ai-instruction"
+            aria-label={t('captions.ai')}
+            placeholder={t('captions.aiPlaceholder')}
+            onChange={(e) => setInstruction(e.target.value)}
+            className="resize-none rounded-md border border-border bg-surface-2 px-2.5 py-2 text-sm focus:border-accent focus:outline-none"
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              className={button}
+              data-testid="caption-ai-fix"
+              disabled={busy !== null}
+              onClick={() => void editWithAi('')}
+            >
+              {busy === 'ai' && !instruction.trim() ? t('captions.aiWorking') : t('captions.aiFix')}
+            </button>
+            <button
+              type="button"
+              className={button}
+              data-testid="caption-ai-run"
+              disabled={busy !== null || !instruction.trim()}
+              onClick={() => void editWithAi(instruction)}
+            >
+              {busy === 'ai' && instruction.trim() ? t('captions.aiWorking') : t('captions.aiRun')}
+            </button>
+          </div>
+          {aiChanged !== null && (
+            <p className="text-xs text-success" data-testid="caption-ai-result">
+              {aiChanged > 0
+                ? t('captions.aiChanged', { count: aiChanged })
+                : t('captions.aiUnchanged')}
+            </p>
+          )}
+
           <Heading>{t('captions.lines')}</Heading>
           <ol className="flex flex-col gap-2" data-testid="captions-lines">
             {captions.lines.map((line, i) => (
-              <li key={line.id} className="flex flex-col gap-1">
+              <li
+                key={line.id}
+                className={`flex flex-col gap-1 ${
+                  isMatch(line.text) || isMatch(line.translation)
+                    ? 'rounded-md ring-1 ring-accent/60'
+                    : ''
+                }`}
+                data-match={isMatch(line.text) || isMatch(line.translation) ? 'true' : undefined}
+              >
                 <div className="flex items-center gap-1">
                   <button
                     type="button"

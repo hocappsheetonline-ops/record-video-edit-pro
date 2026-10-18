@@ -303,6 +303,28 @@ const color = (v: unknown, fallback: string) =>
  * Đọc edit.json, sửa giá trị sai về mặc định và giữ clip/zoom trong thời lượng thật của bản quay,
  * để file hỏng hoặc sửa tay cũng không làm app lỗi.
  */
+/** Đọc danh sách đoạn zoom từ dữ liệu không tin cậy (file dự án, IPC); bỏ mục sai kiểu, kẹp giá trị. */
+export function parseZoomRegions(input: unknown, duration: number): ZoomRegion[] {
+  if (!Array.isArray(input)) return []
+  return input.flatMap((z, i): ZoomRegion[] => {
+    if (!isObj(z)) return []
+    const start = num(z.start, NaN, 0, duration)
+    const end = num(z.end, NaN, 0, duration)
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return []
+    return [
+      {
+        id: typeof z.id === 'string' ? z.id : `z${i}`,
+        start,
+        end,
+        scale: num(z.scale, 2, 1.1, 5),
+        mode: z.mode === 'fixed' ? 'fixed' : 'follow',
+        x: num(z.x, 0.5, 0, 1),
+        y: num(z.y, 0.5, 0, 1),
+      },
+    ]
+  })
+}
+
 export function parseEditState(
   input: unknown,
   project: Pick<Project, 'segments' | 'cursorHidden' | 'fps'>,
@@ -341,25 +363,7 @@ export function parseEditState(
       })
     : base.clips
 
-  const zooms: ZoomRegion[] = Array.isArray(input.zooms)
-    ? input.zooms.flatMap((z, i): ZoomRegion[] => {
-        if (!isObj(z)) return []
-        const start = num(z.start, NaN, 0, duration)
-        const end = num(z.end, NaN, 0, duration)
-        if (!Number.isFinite(start) || !Number.isFinite(end)) return []
-        return [
-          {
-            id: typeof z.id === 'string' ? z.id : `z${i}`,
-            start,
-            end,
-            scale: num(z.scale, 2, 1.1, 5),
-            mode: z.mode === 'fixed' ? 'fixed' : 'follow',
-            x: num(z.x, 0.5, 0, 1),
-            y: num(z.y, 0.5, 0, 1),
-          },
-        ]
-      })
-    : []
+  const zooms = parseZoomRegions(input.zooms, duration)
 
   const f = isObj(input.frame) ? input.frame : {}
   const bg = isObj(f.background) ? f.background : {}
