@@ -463,3 +463,33 @@ describe('phụ đề kiểu Captions 1.13.0: captionsEmoji, captionsKeywords, d
     ])
   })
 })
+
+describe('chỉnh sửa bằng văn bản 1.14.0: cutText', () => {
+  it('normalize: gọn khoảng trắng, cắt độ dài, mặc định mọi lần; trùng cụm (khác hoa thường) chỉ giữ một', () => {
+    expect(
+      normalizeAssistantCommands([
+        { kind: 'cutText', text: '  xin   chào  ', all: false },
+        { kind: 'cutText', text: 'Xin chào' },
+        { kind: 'cutText', text: 'ờ' },
+        { kind: 'cutText', text: '   ' },
+        { kind: 'cutText' },
+      ]),
+    ).toEqual([
+      { kind: 'cutText', text: 'xin chào', all: false },
+      { kind: 'cutText', text: 'ờ', all: true },
+    ])
+  })
+
+  it('từ khóa: cắt / bỏ câu trích trong ngoặc kép thành cutText, không nhầm với tiêu đề', () => {
+    expect(parseAssistantRequest('cắt câu "hôm nay mình demo" và bỏ đoạn nói “ờ để xem”')).toEqual([
+      { kind: 'cutText', text: 'hôm nay mình demo', all: true },
+      { kind: 'cutText', text: 'ờ để xem', all: true },
+    ])
+    expect(parseAssistantRequest('remove the sentence "let me check that"')).toEqual([
+      { kind: 'cutText', text: 'let me check that', all: true },
+    ])
+    expect(parseAssistantRequest('tiêu đề "Mở đầu khóa học"')).toEqual([
+      { kind: 'title', text: 'Mở đầu khóa học' },
+    ])
+  })
+})

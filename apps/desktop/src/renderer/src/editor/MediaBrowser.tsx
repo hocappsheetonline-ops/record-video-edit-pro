@@ -8,6 +8,7 @@ import {
   Palette,
   Smile,
   Sparkle,
+  TextQuote,
   Type,
   WandSparkles,
   type LucideIcon,
@@ -18,6 +19,7 @@ import { AudioTab } from './library/AudioTab'
 import { MediaTab } from './library/MediaTab'
 import { EffectsTab, StickersTab, TransitionsTab } from './library/tabs'
 import { TextTemplatesTab } from './TextPanels'
+import { TranscriptPanel } from './TranscriptPanel'
 import { FiltersTab } from './LookPanels'
 import { useEditorStore } from './store'
 
@@ -30,6 +32,7 @@ export const LIBRARY_TABS = [
   'filters',
   'transitions',
   'captions',
+  'transcript',
   'ai',
 ] as const
 export type LibraryTab = (typeof LIBRARY_TABS)[number]
@@ -43,6 +46,7 @@ const TAB_ICONS: Record<LibraryTab, LucideIcon> = {
   filters: Palette,
   transitions: ArrowLeftRight,
   captions: Captions,
+  transcript: TextQuote,
   ai: WandSparkles,
 }
 
@@ -105,6 +109,11 @@ export function MediaBrowser() {
           {tab === 'captions' && (
             <div className="p-3">
               <CaptionsPanel />
+            </div>
+          )}
+          {tab === 'transcript' && (
+            <div className="p-3">
+              <TranscriptPanel />
             </div>
           )}
           {tab === 'ai' && (

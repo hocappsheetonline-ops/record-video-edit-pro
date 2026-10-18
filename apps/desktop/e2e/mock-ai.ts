@@ -169,6 +169,19 @@ export async function startMockAi(): Promise<{
                 ],
               }),
             )
+          // Chỉnh sửa bằng văn bản 1.14.0: cắt đúng câu trích từ lời thoại.
+          if (goal.includes('cắt câu'))
+            return json(
+              200,
+              anthropicMessage({
+                summary: 'Cắt câu "Hôm nay mình demo" và từ đệm',
+                questions: [],
+                commands: [
+                  { kind: 'cutText', text: 'Hôm nay mình demo.', all: true },
+                  { kind: 'cutText', text: 'không có câu này', all: true },
+                ],
+              }),
+            )
           // Kế hoạch dựng chuyên nghiệp 1.9.0: hiệu ứng tại thời điểm, tua nhanh một đoạn, chuyển
           // cảnh tại chỗ nối vừa tạo, kiểu phụ đề, thẻ kết bám cuối.
           if (goal.includes('chuyên nghiệp'))

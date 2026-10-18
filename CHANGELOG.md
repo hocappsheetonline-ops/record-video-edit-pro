@@ -2,6 +2,12 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.14.0
+
+- **Chỉnh sửa video bằng văn bản (kiểu Descript)** (Thư viện → **Lời thoại**): lời thoại hiện thành chữ (nhận dạng nếu chưa có), **xóa chữ nào thì đoạn video + tiếng tương ứng bị cắt**. Bấm một từ để đưa đầu phát tới đó; Shift+bấm hoặc bôi đen để chọn nhiều từ rồi bấm **Delete** (hoặc nút Cắt chữ đã chọn). Phần đã cắt hiện **gạch ngang**, bấm để khôi phục (có ô ẩn / hiện phần đã cắt); mọi bước đều hoàn tác được. Hợp cho video hướng dẫn kiểu quay màn hình + nói.
+- **Từ đệm và khoảng lặng hiện ngay trong văn bản**: "ờ", "à", "ừm", "ơ", "hừm", um / uh / erm… được **tô vàng**; khoảng nghỉ dài hơn 0,7 giây hiện thành ô **⋯ 1,5 s** bấm để rút ngắn (chừa lại 0,35 giây cho tự nhiên). Hai nút một chạm: **Bỏ mọi từ đệm (N)** và **Rút ngắn mọi khoảng lặng (N)**; dòng thống kê số từ / từ đệm / khoảng lặng còn lại cập nhật theo timeline. Ô **Cắt theo cụm từ**: gõ câu cần bỏ, các từ khớp được tô hồng, **Cắt mọi lần**.
+- **Lệnh `cutText` cho Đạo diễn AI / trợ lý**: AI trích đúng câu từ lời thoại ("cắt câu “hôm nay mình demo”", "bỏ đoạn nói lạc đề", "remove the sentence …") và app cắt đúng đoạn video đó (mọi lần xuất hiện hoặc chỉ lần đầu), nhận dạng lời thoại trước nếu chưa có; không thấy câu đó thì báo bỏ qua. Bộ hiểu từ khóa (không có AI) nhận câu trích trong ngoặc kép sau "cắt / bỏ / xóa".
+
 ## 1.13.0
 
 - **Phụ đề kiểu app Captions** (Thư viện → Phụ đề → AI kiểu Captions): **Thêm emoji (AI)** — Claude / Ollama chọn một emoji hợp nghĩa cho từng dòng, hiện cuối dòng và nảy nhẹ khi dòng vừa hiện; **Tô từ khóa (AI)** — chọn 1–3 từ quan trọng mỗi dòng (số, tên sản phẩm, hành động) và tô bằng **màu từ khóa** riêng (ô màu mới cạnh màu chữ / màu nhấn, mỗi mẫu có màu sẵn). Emoji và từ khóa lưu theo dòng, giữ khi đổi mẫu / tách / gộp dòng, bỏ bằng một nút; không có AI thì chọn theo từ điển tiếng Việt / tiếng Anh có sẵn.

@@ -92,7 +92,9 @@ function useShortcuts() {
         modalOpen ||
         target.tagName === 'INPUT' ||
         target.tagName === 'SELECT' ||
-        target.tagName === 'TEXTAREA'
+        target.tagName === 'TEXTAREA' ||
+        // Ô văn bản lời thoại (Delete cắt chữ, không xóa mục trên timeline).
+        target.getAttribute('role') === 'textbox'
       )
         return
       const s = useEditorStore.getState()

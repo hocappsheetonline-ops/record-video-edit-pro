@@ -110,6 +110,11 @@ export type AssistantCommand =
   // ---- Timeline ----
   /** Cắt bỏ một khoảng của video xuất. */
   | { kind: 'cutRange'; fromMs: number; toMs: number }
+  /**
+   * Chỉnh sửa bằng văn bản (kiểu Descript): cắt khỏi video đúng cụm từ / câu trích từ lời thoại
+   * (đoạn video + tiếng tương ứng); `all` = mọi lần xuất hiện, không thì chỉ lần đầu.
+   */
+  | { kind: 'cutText'; text: string; all: boolean }
   /** Chèn khung hình đứng yên tại một thời điểm, giữ `ms`. */
   | { kind: 'freeze'; atMs: number; ms: number }
   /** Lật toàn bộ video màn hình. */
@@ -321,6 +326,7 @@ export const ASSISTANT_KINDS: readonly AssistantKind[] = [
   'captionsEmoji',
   'captionsKeywords',
   'dub',
+  'cutText',
 ]
 
 /** Thông tin về video gửi kèm yêu cầu để AI ra lệnh phù hợp. */
@@ -383,6 +389,8 @@ export function assistantCommandKey(cmd: AssistantCommand): string {
       return `freeze:${cmd.atMs}`
     case 'cutRange':
       return `cutRange:${cmd.fromMs}`
+    case 'cutText':
+      return `cutText:${cmd.text.toLowerCase()}`
     case 'effectAt':
       return `effectAt:${cmd.atMs}:${cmd.effect}`
     case 'broll':
@@ -488,6 +496,12 @@ function parseCommand(r: Record<string, unknown>): AssistantCommand | null {
       if (typeof r.project === 'string' && r.project.trim())
         return { kind: 'styleFrom', project: r.project.trim().slice(0, 200) }
       return null
+    case 'cutText': {
+      if (typeof r.text !== 'string') return null
+      const text = r.text.replace(/\s+/g, ' ').trim().slice(0, 300)
+      if (!text) return null
+      return { kind: 'cutText', text, all: r.all !== false }
+    }
     case 'cutRange': {
       const fromMs = timeMs(r.fromMs)
       const toMs = timeMs(r.toMs)
@@ -953,6 +967,12 @@ export function parseAssistantRequest(text: string): AssistantCommand[] {
   else if (/16\s*:\s*9|ngang|landscape|youtube/i.test(forAspect))
     push({ kind: 'aspect', aspect: '16:9' })
   else if (/4\s*:\s*3/.test(forAspect)) push({ kind: 'aspect', aspect: '4:3' })
+
+  // Cắt theo lời thoại: 'cắt câu "…"', 'bỏ đoạn nói "…"', 'remove the sentence "…"'.
+  const CUT_TEXT =
+    /(?:cắt|bỏ|xóa|cut|remove|delete)\s+(?:bỏ\s+)?(?:(?:đoạn|câu|cụm|chữ|phần|lời|the\s+(?:part|sentence|phrase|words?)|sentence|phrase|words?)\s*)?(?:nói\s+|where\s+i\s+say\s+|saying\s+)?["“'‘]([^"”'’]{2,300})["”'’]/gi
+  for (const m of t.matchAll(CUT_TEXT))
+    push({ kind: 'cutText', text: m[1]!.replace(/\s+/g, ' ').trim(), all: true })
 
   const start =
     /(?:cắt|bỏ|xóa|trim|cut|remove|skip)\s+(.{0,24}?)(?:đầu|first|beginning|intro|start)/i.exec(t)

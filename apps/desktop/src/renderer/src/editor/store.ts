@@ -82,6 +82,7 @@ import {
   findFillerWords,
   findQuietRanges,
   findSilences,
+  cutPhrase,
   removeSourceRanges,
   wordsToRanges,
   type SourceRange,
@@ -1984,6 +1985,28 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
               : e.transitions,
           }))
           done('styleFrom')
+          break
+        }
+        case 'cutText': {
+          // Chỉnh sửa bằng văn bản: cắt đúng cụm từ trích từ lời thoại (nhận dạng nếu chưa có).
+          let words = get().transcript
+          if (!words) {
+            try {
+              words = await lumora().transcribe(folder, before.captions.language || '')
+              if (get().folder !== folder) return report
+              get().setTranscript(words)
+            } catch (e) {
+              skipped('cutText', errorCode(e))
+              break
+            }
+          }
+          const found = cutPhrase(get().edit!.clips, words.words, c.text, c.all)
+          if (found.count === 0) {
+            skipped('cutText', 'not_found')
+            break
+          }
+          get().change((e) => ({ ...e, clips: found.clips }))
+          done('cutText', found.count)
           break
         }
         case 'cutRange': {

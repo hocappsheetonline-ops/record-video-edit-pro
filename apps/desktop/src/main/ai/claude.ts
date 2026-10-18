@@ -216,7 +216,7 @@ const COMMAND_SCHEMA: Schema = {
     text: {
       type: 'string',
       description:
-        'title: the opening title text; text: the overlay text; outro: the end-card text',
+        'title: the opening title text; text: the overlay text; outro: the end-card text; cutText: the exact words to cut, quoted from the transcript',
     },
     preset: {
       type: 'string',
@@ -260,7 +260,7 @@ const COMMAND_SCHEMA: Schema = {
     all: {
       type: 'boolean',
       description:
-        'transitions: true = at every cut (only when the user explicitly asks for every cut); default = scene changes only',
+        'transitions: true = at every cut (only when the user explicitly asks for every cut); default = scene changes only. cutText: cut every occurrence of the words (true, default) or only the first',
     },
     aspect: { type: 'string', enum: ['16:9', '9:16', '1:1', '4:3', 'source'] },
     ms: {
@@ -487,7 +487,9 @@ Auto build (1.12.0):
 Captions-app style (1.13.0; all need captions, which the app generates first when missing):
 - captionsEmoji: an AI-picked emoji on the caption lines where one fits the meaning (playful short-form, vlogs).
 - captionsKeywords: AI picks 1-3 key words per caption line and the app draws them in a separate colour (numbers, product names, the point of the sentence) — makes short-form captions pop.
-- dub {language, keepOriginal, voiceName}: AI dubbing — translate the speech to the language (when it differs from the spoken one), read every caption line with an AI voice at the right time, mute the original microphone (keepOriginal = keep it quietly underneath); captions switch to the dubbed language. Only when the user asks for a voice in another language / dubbing / narration by AI.`
+- dub {language, keepOriginal, voiceName}: AI dubbing — translate the speech to the language (when it differs from the spoken one), read every caption line with an AI voice at the right time, mute the original microphone (keepOriginal = keep it quietly underneath); captions switch to the dubbed language. Only when the user asks for a voice in another language / dubbing / narration by AI.
+Text-based editing (1.14.0):
+- cutText {text, all}: cut the video and audio where the narrator says exactly these words (Descript-style: deleting words from the transcript cuts the footage). Quote the words verbatim from the transcript excerpt (a sentence the user wants gone, a false start, an off-topic remark, a repeated sentence, a specific filler like "ờ để xem"); never guess words that are not in the transcript. all = every occurrence (default) or only the first. Prefer cutText over cutRange whenever the user describes the cut by what is said rather than by time.`
 
 export function assistantSystem(context: {
   language: string
@@ -535,7 +537,7 @@ export const EDITING_PLAYBOOK = `Professional editing playbook (follow it whenev
 7. Look: a light filter (cinematic / warm / tealOrange at 0.4-0.7) for vlogs; keep screen recordings neutral (no filter, maybe small contrast / sharpen adjust). Frame: 16:9 with padding 0.04-0.08, radius, shadow and a gradient background for long-form; 9:16 fill for short-form.
 8. Privacy: blur / pixelate emails, passwords, names or tokens visible in the transcript or the goal (blur command at that time span).
 9. Ending: a short outro / CTA card in the last 3-5 s (subscribe, follow, next video, link in description), optionally a marker at the CTA; fade the music out. Short-form: end right after the payoff, no long goodbye (trimEnd if needed).
-10. Order of commands: cuts (cutSilences, removeFillers, trimStart/End, cutRange, speedRange) → audio (cleanAudio, music, duck, fade) → zoom & motion → frame & look → captions → overlays (text, sticker, shape, blur, effectAt, outro) → markers / chapters → export last. The app runs the AI steps (silence / filler cuts, autoZoom, captions, cleanAudio) first, so every atMs / fromMs / toMs you give must already be on the cut video: when you also cut silences, prefer times from the transcript excerpt at the start of the video, use outro for the ending, and avoid exact times late in the video.
+10. Order of commands: cuts (cutSilences, removeFillers, cutText, trimStart/End, cutRange, speedRange) → audio (cleanAudio, music, duck, fade) → zoom & motion → frame & look → captions → overlays (text, sticker, shape, blur, effectAt, outro) → markers / chapters → export last. The app runs the AI steps (silence / filler cuts, autoZoom, captions, cleanAudio) first, so every atMs / fromMs / toMs you give must already be on the cut video: when you also cut silences, prefer times from the transcript excerpt at the start of the video, use outro for the ending, and avoid exact times late in the video.
 11. Say what you did in the summary in the user's language, briefly; do not ask questions when a sensible professional default exists.
 12. AUTO BUILD (the user pressed one button after recording): deliver the whole edit in one plan with no questions, in this order: recipe for the format → trimStart if the transcript starts late → text hook at 0 (from the first thing the transcript promises) → 2-4 zoomAt / text labels / shape arrows at real clicks and transcript moments → speedRange over obvious waiting → findMusic (mood + tempo by content) with duck → optional broll in generic narration → blur for any secret visible in the transcript → outro CTA. Keep it to about 8-15 commands; the app reviews the result against this playbook afterwards and fills what is missing.`
 
