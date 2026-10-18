@@ -18,7 +18,7 @@ import {
   type RecordingCommand,
   type SegmentStart,
 } from '@shared/ipc'
-import { buildRemuxArgs, buildScreenCaptureArgs, buildThumbnailArgs } from '../ffmpeg/args'
+import { buildScreenCaptureArgs, buildThumbnailArgs, buildTrackRemuxArgs } from '../ffmpeg/args'
 import {
   detectCaptureCapabilities,
   NO_CAPTURE,
@@ -255,7 +255,7 @@ export class RecordingController {
           : undefined,
         remux: async (input, output) => {
           const tmp = `${output}.tmp${output.slice(output.lastIndexOf('.'))}`
-          await ffmpegOk(buildRemuxArgs(input, tmp))
+          await ffmpegOk(buildTrackRemuxArgs(input, tmp))
           await rename(tmp, output)
         },
         thumbnail: (input, output) => ffmpegOk(buildThumbnailArgs(input, output)),

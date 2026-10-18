@@ -37,6 +37,8 @@ import { withPreview, type TryPreview } from './try-preview'
 
 type MediaEl = HTMLVideoElement | HTMLAudioElement
 const RESYNC_S = 0.25
+/** Bậc làm tròn tốc độ phát của thẻ media (xem `drive`). */
+const RATE_STEP = 0.02
 
 /** Phát thẻ media, bỏ qua lỗi (trình duyệt chặn tự phát, thẻ đã bị gỡ…). */
 function safePlay(el: HTMLMediaElement) {
@@ -276,8 +278,13 @@ export class PreviewEngine {
 
   /** Đưa một thẻ media tới đúng thời điểm, phát / dừng theo trạng thái và tốc độ. */
   private drive(el: MediaEl, target: number, playing: boolean, rate: number) {
-    if (rate > 0 && Math.abs(el.playbackRate - rate) > 0.01)
-      el.playbackRate = Math.min(16, Math.max(0.0625, rate))
+    // Clip có đường cong tốc độ đổi tốc độ liên tục: làm tròn theo bậc 0.02 để không đặt lại
+    // playbackRate mỗi khung hình (mỗi lần đổi, bộ kéo giãn âm thanh của Chromium khựng một chút,
+    // nghe lạo xạo). Lệch tối đa 1 % được kéo về bằng mốc đồng bộ RESYNC_S như bình thường.
+    if (rate > 0) {
+      const want = Math.min(16, Math.max(0.0625, Math.round(rate / RATE_STEP) * RATE_STEP))
+      if (Math.abs(el.playbackRate - want) > 1e-6) el.playbackRate = want
+    }
     const drift = Math.abs(el.currentTime - target)
     if (playing && rate > 0) {
       if (drift > RESYNC_S) el.currentTime = target
