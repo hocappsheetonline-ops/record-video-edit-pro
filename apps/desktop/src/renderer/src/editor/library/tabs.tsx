@@ -44,6 +44,8 @@ import {
 } from 'lucide-react'
 import {
   cutPoints,
+  sceneCuts,
+  sourceSegments,
   DEFAULT_TRANSITION_MS,
   EFFECT_CATEGORIES,
   EFFECT_CATEGORY,
@@ -294,10 +296,13 @@ export function EffectsTab() {
 export function TransitionsTab() {
   const { t } = useTranslation()
   const edit = useEditorStore((s) => s.edit)
+  const project = useEditorStore((s) => s.project)
   const selection = useEditorStore((s) => s.selection)
   const time = useEditorStore((s) => s.time)
   if (!edit) return null
   const cuts = cutPoints(edit.clips)
+  // Chỗ đổi cảnh (đổi đoạn quay / bỏ một đoạn dài): nơi nên đặt chuyển cảnh.
+  const scenes = sceneCuts(edit.clips, project ? sourceSegments(project.segments) : undefined)
   if (cuts.length === 0)
     return <p className="p-4 text-sm text-muted">{t('editor.transition.noCuts')}</p>
   // Chỗ nối đang chọn, hoặc chỗ nối gần đầu phát nhất.
@@ -354,6 +359,24 @@ export function TransitionsTab() {
           </div>
         </div>
       ))}
+      {scenes.length > 0 && (
+        <button
+          type="button"
+          className={ghostButton}
+          data-testid="lib-transition-scenes"
+          onClick={() =>
+            useEditorStore
+              .getState()
+              .applyTransitionToAll(
+                current?.kind ?? 'fadeBlack',
+                current?.durationMs ?? DEFAULT_TRANSITION_MS,
+                'scenes',
+              )
+          }
+        >
+          {t('editor.library.transitionScenes', { count: scenes.length })}
+        </button>
+      )}
       <button
         type="button"
         className={ghostButton}
@@ -364,11 +387,13 @@ export function TransitionsTab() {
             .applyTransitionToAll(
               current?.kind ?? 'fadeBlack',
               current?.durationMs ?? DEFAULT_TRANSITION_MS,
+              'all',
             )
         }
       >
         {t('editor.library.transitionAll', { count: cuts.length })}
       </button>
+      <p className="text-[11px] text-muted">{t('editor.library.transitionHint')}</p>
     </div>
   )
 }

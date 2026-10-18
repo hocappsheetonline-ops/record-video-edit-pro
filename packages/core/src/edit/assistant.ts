@@ -87,8 +87,11 @@ export type AssistantCommand =
   | { kind: 'trimEnd'; ms: number }
   /** Hiệu ứng hình tại đầu video và mỗi chỗ nối clip. */
   | { kind: 'effect'; effect: EffectKind }
-  /** Chuyển cảnh cho mọi chỗ nối; `ms` = độ dài (mặc định 600). */
-  | { kind: 'transitions'; transition: TransitionKind; ms?: number }
+  /**
+   * Chuyển cảnh ở các chỗ đổi cảnh (đổi đoạn quay, bỏ một đoạn dài); `all` = mọi chỗ nối;
+   * `ms` = độ dài (mặc định 600).
+   */
+  | { kind: 'transitions'; transition: TransitionKind; ms?: number; all?: boolean }
   /** Nhạc nền từ kho nhạc của tôi (tìm theo từ khóa trong tên bài), âm lượng 0–1. */
   | { kind: 'music'; query: string; volume: number }
   /** Mẫu phụ đề (tiktok, karaoke, neon…). */
@@ -427,6 +430,7 @@ function parseCommand(r: Record<string, unknown>): AssistantCommand | null {
         kind: 'transitions' as const,
         transition,
         ms: isNum(r.ms) && r.ms > 0 ? Math.round(clamp(r.ms, 100, 3000)) : undefined,
+        all: r.all === true ? true : undefined,
       })
     }
     case 'music':
@@ -941,7 +945,11 @@ export function parseAssistantRequest(text: string): AssistantCommand[] {
   }
   if (/chuyển cảnh|transition/i.test(t) && !cleared.has('transitions')) {
     const transition = TRANSITION_WORDS.find(([re]) => re.test(t))?.[1] ?? 'fadeBlack'
-    push({ kind: 'transitions', transition })
+    // Mặc định chỉ ở chỗ đổi cảnh; "mọi / tất cả chỗ nối" mới đặt ở mọi chỗ cắt.
+    const all = /(?:mọi|tất cả|từng|all|every|each)\s+(?:chỗ nối|chỗ cắt|đoạn cắt|cut|clip)/i.test(
+      t,
+    )
+    push(all ? { kind: 'transitions', transition, all: true } : { kind: 'transitions', transition })
   }
   // AI tự tìm nhạc nền miễn phí ("tự tìm nhạc nền vui", "find upbeat music").
   const findMusicMatch =

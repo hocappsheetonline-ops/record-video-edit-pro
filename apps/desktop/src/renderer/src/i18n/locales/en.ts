@@ -254,7 +254,10 @@ export const en: Messages = {
       sample: 'Sample',
       textHint: 'Edit the text, colour and size in the right panel; drag the text on the preview.',
       transitionTarget: 'Applies to cut {{n}}/{{count}} (selected, or nearest to the playhead).',
-      transitionAll: 'Fade through black on all {{count}} cuts',
+      transitionScenes: 'Apply at {{count}} scene changes',
+      transitionAll: 'Apply at all {{count}} cuts',
+      transitionHint:
+        'A scene change is a new recording or a long part removed. Silence cuts and in-place splits keep the picture continuous, so they stay hard cuts; a transition there only hides the picture.',
       errors: {
         image_unsupported: 'Unsupported format. Use MP4, MOV, WEBM, MKV or PNG, JPG, GIF, WEBP.',
         image_unreadable: 'Could not read this file (damaged or missing?).',
@@ -1372,6 +1375,8 @@ export const en: Messages = {
         no_music: 'music library is empty (add tracks in the Audio tab)',
         no_project: 'reference project not found',
         no_cuts: 'nothing to cut',
+        no_scene_cuts:
+          'no scene changes (only silence cuts / in-place splits); say "transitions at every cut" if you still want them',
         too_short: 'video is too short',
         duplicate: 'already there',
         no_captions: 'no captions yet',

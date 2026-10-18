@@ -2,6 +2,10 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.12.1
+
+- **Sửa lỗi mất hình (đen màn hình) ở mỗi đoạn cắt.** Lệnh "thêm chuyển cảnh" (trợ lý từ khóa, Đạo diễn AI, công thức TikTok / Shorts, nút trong Thư viện) trước đây đặt chuyển cảnh — mặc định là Mờ qua đen 600 ms — ở **mọi** chỗ nối, kể cả hàng chục chỗ cắt khoảng lặng và chỗ tách clip tại chỗ, nên video cứ vài giây lại tối đen một nhịp. Giờ chuyển cảnh chỉ đặt ở **chỗ đổi cảnh**: giữa hai đoạn quay khác nhau hoặc nơi bỏ đi một đoạn dài (từ 3 giây); chỗ cắt lặng, cắt từ thừa, tách tại chỗ hay khung đứng yên thì hình vẫn liền nên cắt thẳng. Muốn đặt ở mọi chỗ nối thì nói rõ ("chuyển cảnh zoom ở mọi chỗ nối", Đạo diễn AI dùng `transitions {all: true}`) hoặc bấm **Đặt ở cả … chỗ nối** trong Thư viện → Chuyển cảnh, cạnh nút mới **Đặt ở … chỗ đổi cảnh**. Không có chỗ đổi cảnh thì lệnh báo bỏ qua thay vì bôi đen cả video. Chuyển cảnh đã đặt trong dự án cũ không tự đổi: bấm **Xóa chuyển cảnh** (hoặc nói "bỏ chuyển cảnh") rồi đặt lại.
+
 ## 1.12.0
 
 - **Tự dựng một nút** (Thư viện → AI → Tự dựng một nút): quay xong, chọn định dạng (tự chọn / YouTube / TikTok-Shorts / Vlog / Tối giản) rồi bấm **Tự dựng ngay**. App đọc lời thoại (nhận dạng nếu chưa có) và thao tác chuột, gọi AI **đúng một lần** để lập kế hoạch dựng chuyên nghiệp theo sổ tay (hook, cắt lặng / từ thừa, zoom đúng lúc, phụ đề, nhạc nền, thẻ kết), áp dụng, rồi **tự rà soát theo sổ tay mà không tốn token** (khung đúng định dạng, phụ đề, nhạc tự giảm khi nói, hook, thẻ kết, giọng sạch) và lấp chỗ thiếu. Không có AI (thiếu key Claude / Ollama tắt) thì dựng theo công thức có sẵn, hook lấy từ câu nói đầu. Cả bản dựng là một bước hoàn tác.

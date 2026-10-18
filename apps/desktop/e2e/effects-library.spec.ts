@@ -161,3 +161,80 @@ test('thư viện chuyển cảnh: 21 kiểu chia nhóm; kéo rèm làm khung �
   expect(errors).toEqual([])
   await app.close()
 })
+
+test('chuyển cảnh chỉ ở chỗ đổi cảnh: tách tại chỗ / cắt lặng cắt thẳng, không đen hình; "mọi chỗ nối" phải nói rõ', async () => {
+  // Bản quay 10 s: tách ở 1 s (tại chỗ), bỏ đoạn 2–6 s (đổi cảnh: nguồn nhảy 4 s).
+  dirs.cleanup()
+  dirs = createTestDirs()
+  projectDir = createFixtureProject(dirs.projects, 10)
+  const { app, page, errors } = await launchApp(dirs.userData)
+  await openEditor(page)
+  await page.getByTestId('editor-canvas').click()
+  for (let i = 0; i < 2; i++) {
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('s')
+  }
+  await page.keyboard.press('Shift+ArrowRight')
+  await page.keyboard.press('ArrowLeft')
+  await page.keyboard.press('s')
+  await expect(page.getByTestId('timeline-clip')).toHaveCount(4)
+  await page.getByTestId('timeline-clip').nth(2).click()
+  await page.getByTestId('delete').click()
+  await expect(page.getByTestId('timeline-clip')).toHaveCount(3)
+  await expect(page.getByTestId('timecode')).toContainText('/ 0:06.0')
+  await expect(page.getByTestId('transition-marker')).toHaveCount(2)
+
+  // Thư viện: nút "chỗ đổi cảnh" (1) và "cả ... chỗ nối" (2); mặc định là chỗ đổi cảnh.
+  await page.getByTestId('lib-transitions').click()
+  await expect(page.getByTestId('lib-transition-scenes')).toContainText('1 chỗ đổi cảnh')
+  await expect(page.getByTestId('lib-transition-all')).toContainText('cả 2 chỗ nối')
+  await page.getByTestId('lib-transition-scenes').click()
+  await expect(page.locator('[data-testid="transition-marker"][data-active="true"]')).toHaveCount(1)
+  const savedTransitions = () => {
+    const file = join(projectDir, 'edit.json')
+    return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')).transitions : null
+  }
+  const clipIds = () => JSON.parse(readFileSync(join(projectDir, 'edit.json'), 'utf8')).clips
+  await expect.poll(savedTransitions).toHaveLength(1)
+  let saved = { transitions: savedTransitions(), clips: clipIds() }
+  expect(saved.transitions).toEqual([
+    { afterClip: saved.clips[1].id, kind: 'fadeBlack', durationMs: 600 },
+  ])
+  await page.getByTestId('lib-transition-all').click()
+  await expect(page.locator('[data-testid="transition-marker"][data-active="true"]')).toHaveCount(2)
+
+  // Trợ lý (từ khóa, không cần AI): "thêm chuyển cảnh" → chỉ chỗ đổi cảnh; "mọi chỗ nối" → cả hai.
+  await page.getByTestId('lib-ai').click()
+  await expect(page.getByTestId('director-engine')).toHaveAttribute('data-engine', 'keywords')
+  await page.getByTestId('assistant-input').fill('thêm chuyển cảnh zoom')
+  await page.getByTestId('assistant-run').click()
+  await expect(
+    page.locator('[data-testid="assistant-command"][data-kind="transitions"][data-status="done"]'),
+  ).toHaveCount(1)
+  await expect(page.locator('[data-testid="transition-marker"][data-active="true"]')).toHaveCount(1)
+  await expect.poll(() => savedTransitions()?.[0]?.kind).toBe('zoom')
+  saved = { transitions: savedTransitions(), clips: clipIds() }
+  expect(saved.transitions).toEqual([
+    { afterClip: saved.clips[1].id, kind: 'zoom', durationMs: 600 },
+  ])
+  await page.getByTestId('assistant-input').fill('chuyển cảnh đen ở mọi chỗ nối')
+  await page.getByTestId('assistant-run').click()
+  await expect(page.locator('[data-testid="transition-marker"][data-active="true"]')).toHaveCount(2)
+  await expect
+    .poll(() => savedTransitions()?.map((t: { kind: string }) => t.kind))
+    .toEqual(['fadeBlack', 'fadeBlack'])
+
+  // Xuất với chuyển cảnh mặc định (chỉ chỗ đổi cảnh): chỗ tách tại chỗ (1 s) vẫn sáng, chỗ đổi cảnh (2 s) mờ qua đen.
+  await page.getByTestId('assistant-input').fill('thêm chuyển cảnh đen')
+  await page.getByTestId('assistant-run').click()
+  await expect(page.locator('[data-testid="transition-marker"][data-active="true"]')).toHaveCount(1)
+  await openExport(page)
+  await page.getByTestId('resolution-720').click()
+  await closeExport(page)
+  const file = await exportNew(page)
+  expect(probeMedia(file).durationMs).toBeGreaterThan(5800)
+  expect(luma(file, 1.0)).toBeGreaterThan(60)
+  expect(luma(file, 2.0)).toBeLessThan(20)
+  expect(errors).toEqual([])
+  await app.close()
+})
