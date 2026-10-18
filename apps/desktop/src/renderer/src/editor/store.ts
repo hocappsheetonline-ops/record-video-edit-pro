@@ -2056,10 +2056,36 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
               size: c.size ?? e.cursor.size,
               clickEffect: c.clickEffect ?? e.cursor.clickEffect,
               hideIdle: c.hideIdle ?? e.cursor.hideIdle,
+              showKeys: c.showKeys ?? e.cursor.showKeys,
             },
           }))
           done('cursor')
           break
+        case 'duck':
+          get().change((e) => ({
+            ...e,
+            audio: {
+              ...e.audio,
+              duck: { enabled: c.enabled, level: c.level ?? e.audio.duck.level },
+            },
+          }))
+          done('duck')
+          break
+        case 'blur': {
+          const cur = get().edit!
+          const total = outputDuration(cur.clips)
+          const start = Math.min(c.atMs, Math.max(0, total - MIN_REGION_MS))
+          const end = Math.min(total, start + c.ms)
+          if (end - start < MIN_REGION_MS) {
+            skipped('blur', 'too_short')
+            break
+          }
+          const overlay = buildOverlay({ kind: 'blur', blurMode: c.mode }, start, total)
+          const placed: Overlay = { ...overlay, start, end, x: c.x, y: c.y, size: c.size }
+          get().change((e) => ({ ...e, overlays: [...e.overlays, placed] }))
+          done('blur')
+          break
+        }
         case 'camera':
           get().change((e) => {
             const place = c.position ? cornerPlacement(c.position) : null

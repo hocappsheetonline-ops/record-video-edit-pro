@@ -47,6 +47,7 @@ describe('planAudioClips', () => {
     expect(planAudioClips([music], 6000)).toEqual([
       {
         file: 'asset-song.mp3',
+        kind: 'music',
         mediaStart: 0.5,
         duration: 5,
         outputStart: 1,

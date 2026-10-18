@@ -218,3 +218,43 @@ describe('lệnh mở rộng (hầu hết tính năng chỉnh sửa)', () => {
     ])
   })
 })
+
+describe('lệnh mới 1.8.0: che vùng, tự giảm nhạc, hiện phím tắt', () => {
+  it('từ khóa: hiện phím tắt, giảm nhạc khi nói, khảm vùng', () => {
+    const vi = parseAssistantRequest('hiện phím tắt, giảm nhạc khi nói, khảm vùng mật khẩu')
+    expect(vi).toEqual(
+      expect.arrayContaining([
+        { kind: 'cursor', showKeys: true },
+        { kind: 'duck', enabled: true },
+        { kind: 'blur', mode: 'pixelate', atMs: 0, ms: 600_000, x: 0.5, y: 0.5, size: 0.3 },
+      ]),
+    )
+    const en = parseAssistantRequest('show shortcuts and duck the music, blur the area')
+    expect(en).toEqual(
+      expect.arrayContaining([
+        { kind: 'cursor', showKeys: true },
+        { kind: 'duck', enabled: true },
+        { kind: 'blur', mode: 'blur', atMs: 0, ms: 600_000, x: 0.5, y: 0.5, size: 0.3 },
+      ]),
+    )
+    expect(parseAssistantRequest('tắt phím tắt')).toEqual([{ kind: 'cursor', showKeys: false }])
+  })
+
+  it('chuẩn hóa: kẹp giá trị, mặc định khi thiếu, bỏ lệnh thiếu dữ liệu bắt buộc', () => {
+    expect(
+      normalizeAssistantCommands([
+        { kind: 'duck', enabled: true, level: 5 },
+        { kind: 'duck', enabled: 'yes' },
+        { kind: 'blur', atMs: 1000 },
+        { kind: 'blur', mode: 'pixelate', atMs: 2000, ms: 500, x: 2, y: -1, size: 9 },
+        { kind: 'blur', mode: 'blur' },
+        { kind: 'cursor', showKeys: true },
+      ]),
+    ).toEqual([
+      { kind: 'duck', enabled: true, level: 0.8 },
+      { kind: 'blur', mode: 'blur', atMs: 1000, ms: 3000, x: 0.5, y: 0.5, size: 0.3 },
+      { kind: 'blur', mode: 'pixelate', atMs: 2000, ms: 500, x: 1, y: 0, size: 1 },
+      { kind: 'cursor', showKeys: true },
+    ])
+  })
+})

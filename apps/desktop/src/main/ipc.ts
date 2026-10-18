@@ -527,6 +527,23 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
     return { path, project }
   }
 
+  ipcMain.handle(IPC.projectSnapshot, async (_event, folder: unknown, png: unknown) => {
+    const bytes = asBytes(png)
+    // PNG hợp lệ bắt đầu bằng chữ ký 8 byte; chặn dữ liệu lạ / quá lớn (ảnh 4K ~ vài chục MB).
+    if (bytes.byteLength < 8 || bytes.byteLength > 64 * 1024 * 1024)
+      throw new Error('snapshot_invalid')
+    if (bytes[0] !== 0x89 || bytes[1] !== 0x50 || bytes[2] !== 0x4e || bytes[3] !== 0x47)
+      throw new Error('snapshot_invalid')
+    const { path } = await projectPath(folder)
+    const dir = join(path, EXPORTS_DIR)
+    await mkdir(dir, { recursive: true })
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')
+    const fileName = safeFileName(`snapshot ${stamp}.png`)
+    const file = join(dir, fileName)
+    await writeFile(file, bytes)
+    return { path: file, fileName }
+  })
+
   ipcMain.handle(IPC.projectImportVideo, async (_event, folder: unknown, file: unknown) => {
     if (file !== undefined && file !== null && (typeof file !== 'string' || file.length > 1000))
       throw new Error('import_no_video')

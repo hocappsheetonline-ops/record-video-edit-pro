@@ -120,6 +120,45 @@ function drawCaptions(ctx: Ctx, scene: FrameScene) {
   if (scene.captions) drawCaptionBlock(ctx, scene.captions, scene.width, scene.height)
 }
 
+/**
+ * Phím tắt vừa bấm: các viên thuốc tối chữ trắng xếp ngang, giữa mép dưới video màn hình (như
+ * Screen Studio / Camtasia). Mờ dần theo `opacity`.
+ */
+function drawKeyCaption(ctx: Ctx, scene: FrameScene) {
+  const keys = scene.keys
+  if (!keys || keys.combos.length === 0) return
+  const { content } = scene
+  const fs = keys.fontSize
+  ctx.save()
+  ctx.globalAlpha = keys.opacity
+  ctx.font = `600 ${fs}px system-ui, "Segoe UI", Roboto, sans-serif`
+  ctx.textBaseline = 'middle'
+  ctx.textAlign = 'center'
+  const padX = fs * 0.7
+  const gap = fs * 0.4
+  const h = fs * 1.75
+  const widths = keys.combos.map((c) => ctx.measureText(c).width + padX * 2)
+  const total = widths.reduce((a, b) => a + b, 0) + gap * (widths.length - 1)
+  let x = content.x + content.width / 2 - total / 2
+  const y = content.y + content.height - h - fs * 0.9
+  keys.combos.forEach((combo, i) => {
+    const w = widths[i]!
+    ctx.shadowColor = 'rgba(0,0,0,0.35)'
+    ctx.shadowBlur = fs * 0.4
+    ctx.fillStyle = 'rgba(22,22,28,0.82)'
+    roundedRect(ctx, x, y, w, h, h * 0.28)
+    ctx.fill()
+    ctx.shadowColor = 'transparent'
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)'
+    ctx.lineWidth = Math.max(1, fs * 0.05)
+    ctx.stroke()
+    ctx.fillStyle = '#ffffff'
+    ctx.fillText(combo, x + w / 2, y + h / 2)
+    x += w + gap
+  })
+  ctx.restore()
+}
+
 /** Vẽ một khung hình hoàn chỉnh. Dùng chung cho xem trước và xuất video. */
 export function drawScene(
   ctx: Ctx,
@@ -298,6 +337,7 @@ export function drawScene(
       ctx.restore()
     }
   }
+  drawKeyCaption(ctx, scene)
   applyTransition(ctx, scene)
   applyEffects(ctx, scene)
   drawOverlays(

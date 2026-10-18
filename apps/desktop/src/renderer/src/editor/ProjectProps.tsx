@@ -589,6 +589,13 @@ export function CursorProps({ edit }: { edit: EditState }) {
         checked={edit.cursor.hideIdle}
         onChange={(v) => set('cursor', { hideIdle: v })}
       />
+      <Toggle
+        label={t('editor.cursor.showKeys')}
+        checked={edit.cursor.showKeys}
+        onChange={(v) => set('cursor', { showKeys: v })}
+        testId="cursor-show-keys"
+      />
+      <p className="text-xs text-muted">{t('editor.cursor.showKeysHint')}</p>
     </Section>
   )
 }
@@ -802,6 +809,28 @@ export function AudioMixProps({ edit }: { edit: EditState }) {
         ) : (
           <p className="text-xs text-muted">{t('editor.audio.noTrack')}</p>
         )}
+      </Section>
+      <Section title={t('editor.audio.duck')}>
+        <Toggle
+          label={t('editor.audio.duckEnabled')}
+          checked={edit.audio.duck.enabled}
+          onChange={(enabled) => set('audio', { duck: { ...edit.audio.duck, enabled } })}
+          testId="audio-duck"
+        />
+        {edit.audio.duck.enabled && (
+          <SliderRow
+            defaultValue={0.3}
+            label={t('editor.audio.duckLevel')}
+            value={edit.audio.duck.level}
+            min={0.05}
+            max={0.8}
+            step={0.05}
+            format={pct}
+            onChange={(level) => set('audio', { duck: { ...edit.audio.duck, level } }, 'duck')}
+            testId="audio-duck-level"
+          />
+        )}
+        <p className="text-xs text-muted">{t('editor.audio.duckHint')}</p>
       </Section>
       <Section>
         <p className="text-xs text-muted">{t('editor.audio.hint')}</p>

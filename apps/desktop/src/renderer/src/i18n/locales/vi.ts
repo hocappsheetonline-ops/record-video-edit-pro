@@ -287,6 +287,7 @@ export const vi = {
       image: 'Ảnh',
       video: 'Video meme',
       shape: 'Hình vẽ',
+      blur: 'Vùng che',
       transform: 'Vị trí & kích thước',
       audio: 'Âm thanh',
       animation: 'Chuyển động',
@@ -320,6 +321,9 @@ export const vi = {
       prevFrame: 'Lùi 1 khung hình',
       nextFrame: 'Tới 1 khung hình',
       fullscreen: 'Toàn màn hình',
+      snapshot: 'Chụp khung hình (lưu PNG)',
+      snapshotSaved: 'Đã lưu ảnh khung hình vào thư mục exports của dự án.',
+      snapshotFailed: 'Không chụp được khung hình.',
     },
     preview: { resize: 'Kéo để đổi cỡ', rotate: 'Kéo để xoay' },
     frame: {
@@ -371,6 +375,16 @@ export const vi = {
       },
       positions: { top: 'Trên', center: 'Giữa', bottom: 'Dưới' },
       dragHint: 'Kéo trên khung xem trước để dời; kéo góc để đổi cỡ, nút tròn để xoay.',
+    },
+    blur: {
+      title: 'Che vùng riêng tư',
+      libraryHint:
+        'Che mật khẩu, email, tên người… Bấm để thêm vùng che 3 giây tại đầu phát; kéo trên khung xem trước để đặt vị trí, kéo góc để đổi cỡ, dùng keyframe để vùng che đi theo cửa sổ.',
+      mode: 'Kiểu che',
+      modes: { blur: 'Làm mờ vùng', pixelate: 'Khảm ô (mosaic)' },
+      strength: 'Độ mạnh',
+      aspect: 'Tỉ lệ rộng / cao',
+      hint: 'Kéo góc vùng che trên khung xem trước để đổi cả chiều rộng lẫn chiều cao.',
     },
     effects: {
       hint: 'Rê chuột để xem thử, bấm để thêm hiệu ứng tại đầu phát (2 giây). Kéo trên hàng Hiệu ứng để dời, kéo mép để đổi độ dài.',
@@ -431,6 +445,9 @@ export const vi = {
       smoothing: 'Độ mượt',
       clickEffect: 'Hiệu ứng khi click',
       hideIdle: 'Ẩn khi chuột đứng yên',
+      showKeys: 'Hiện phím tắt đã bấm',
+      showKeysHint:
+        'Phím tắt (Ctrl+C, Alt+Tab…) hiện dưới khung hình như Screen Studio. Chỉ ghi phím tắt, không ghi chữ bạn gõ.',
     },
     zoom: {
       count: '{{count}} đoạn zoom',
@@ -962,6 +979,11 @@ export const vi = {
       mic: 'Micro',
       system: 'Âm thanh máy',
       hint: 'Âm lượng nhạc nền, hiệu ứng âm thanh và video meme: chọn đoạn đó trên timeline.',
+      duck: 'Nhạc nền',
+      duckEnabled: 'Tự giảm nhạc khi có lời',
+      duckLevel: 'Âm lượng nhạc khi có lời',
+      duckHint:
+        'Nhạc nền tự nhỏ lại khi bạn nói (theo dạng sóng bản quay và các đoạn lồng tiếng) rồi to lại khi im lặng, như Audio ducking của CapCut / Descript.',
     },
     export: {
       open: 'Xuất',
@@ -1187,6 +1209,8 @@ export const vi = {
         text: 'Chữ',
         sticker: 'Nhãn dán',
         shape: 'Hình vẽ',
+        blur: 'Che vùng riêng tư',
+        duck: 'Tự giảm nhạc khi có lời',
         adjust: 'Điều chỉnh màu',
         captionsLayout: 'Vị trí / cỡ phụ đề',
         translate: 'Dịch phụ đề',

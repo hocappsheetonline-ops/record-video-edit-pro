@@ -74,14 +74,17 @@ export function buildOverlay(
           ? 0.18
           : init.kind === 'shape'
             ? 0.14
-            : 0.09,
+            : init.kind === 'blur'
+              ? 0.3
+              : 0.09,
     rotation: 0,
-    anim: video ? { ...NO_ANIM } : { ...DEFAULT_ANIM },
+    // Video meme và vùng che hiện ngay, không "bật ra".
+    anim: video || init.kind === 'blur' ? { ...NO_ANIM } : { ...DEFAULT_ANIM },
     text: '',
     style: 'meme',
     color: '#ffffff',
     file: '',
-    aspect: 1,
+    aspect: init.kind === 'blur' ? 1.6 : 1,
     mediaOffset: 0,
     sourceDuration: 0,
     hasAudio: false,

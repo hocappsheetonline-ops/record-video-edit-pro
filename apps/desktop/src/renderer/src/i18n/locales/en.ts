@@ -295,6 +295,7 @@ export const en: Messages = {
       image: 'Image',
       video: 'Meme video',
       shape: 'Shape',
+      blur: 'Blur region',
       transform: 'Position & size',
       audio: 'Audio',
       animation: 'Animation',
@@ -328,6 +329,9 @@ export const en: Messages = {
       prevFrame: 'Previous frame',
       nextFrame: 'Next frame',
       fullscreen: 'Full screen',
+      snapshot: 'Snapshot frame (save PNG)',
+      snapshotSaved: "Frame saved to the project's exports folder.",
+      snapshotFailed: 'Could not capture the frame.',
     },
     preview: { resize: 'Drag to resize', rotate: 'Drag to rotate' },
     frame: {
@@ -380,6 +384,16 @@ export const en: Messages = {
       },
       positions: { top: 'Top', center: 'Middle', bottom: 'Bottom' },
       dragHint: 'Drag on the preview to move; drag a corner to resize, the round knob to rotate.',
+    },
+    blur: {
+      title: 'Hide sensitive areas',
+      libraryHint:
+        'Hide passwords, emails, names… Click to add a 3-second region at the playhead; drag it on the preview, drag a corner to resize, use keyframes to follow a window.',
+      mode: 'Style',
+      modes: { blur: 'Blur region', pixelate: 'Mosaic (pixelate)' },
+      strength: 'Strength',
+      aspect: 'Width / height ratio',
+      hint: 'Drag a corner of the region on the preview to change both width and height.',
     },
     effects: {
       hint: 'Hover to preview, click to add an effect at the playhead (2 s). Drag on the Effects row to move it, drag its edges to resize.',
@@ -440,6 +454,9 @@ export const en: Messages = {
       smoothing: 'Smoothing',
       clickEffect: 'Click effect',
       hideIdle: 'Hide when idle',
+      showKeys: 'Show pressed shortcuts',
+      showKeysHint:
+        'Shortcuts (Ctrl+C, Alt+Tab…) appear under the frame like Screen Studio. Only shortcuts are recorded, never typed text.',
     },
     zoom: {
       count: '{{count}} zoom regions',
@@ -973,6 +990,11 @@ export const en: Messages = {
       mic: 'Microphone',
       system: 'Computer audio',
       hint: 'Music, sound effect and meme video volume: select that item on the timeline.',
+      duck: 'Background music',
+      duckEnabled: 'Auto-duck music under speech',
+      duckLevel: 'Music volume while speaking',
+      duckHint:
+        'Music drops while you speak (from the recording waveform and voice-over clips) and comes back in silence, like audio ducking in CapCut / Descript.',
     },
     export: {
       open: 'Export',
@@ -1198,6 +1220,8 @@ export const en: Messages = {
         text: 'Text',
         sticker: 'Sticker',
         shape: 'Shape',
+        blur: 'Hide sensitive area',
+        duck: 'Auto-duck music',
         adjust: 'Colour adjustment',
         captionsLayout: 'Caption position / size',
         translate: 'Translate captions',

@@ -345,6 +345,10 @@ export function createFakeApi(
     })),
     cancelExport: vi.fn<LumoraApi['cancelExport']>(async () => {}),
     revealFile: vi.fn<LumoraApi['revealFile']>(async () => {}),
+    saveSnapshot: vi.fn<LumoraApi['saveSnapshot']>(async () => ({
+      path: '/x/snapshot.png',
+      fileName: 'snapshot.png',
+    })),
     transcribe: vi.fn<LumoraApi['transcribe']>(async () => sampleTranscript),
     getTranscript: vi.fn<LumoraApi['getTranscript']>(async () => null),
     suggestCuts: vi.fn<LumoraApi['suggestCuts']>(async () => [

@@ -7,6 +7,8 @@ import {
   Camera,
   Contrast,
   Droplets,
+  EyeOff,
+  Grid3x3,
   PartyPopper,
   Sun,
   Tv,
@@ -111,9 +113,35 @@ export function StickersTab() {
 export function EffectsTab() {
   const { t } = useTranslation()
   const addEffect = useEditorStore((s) => s.addEffect)
+  const addOverlay = useEditorStore((s) => s.addOverlay)
   return (
     <div className="flex flex-col gap-3 p-3">
       <p className="text-[11px] text-muted">{t('editor.effects.hint')}</p>
+      <h3 className="text-xs font-medium text-text">{t('editor.blur.title')}</h3>
+      <p className="text-[11px] text-muted">{t('editor.blur.libraryHint')}</p>
+      <div className="grid grid-cols-3 gap-2">
+        {(
+          [
+            { mode: 'blur', Icon: EyeOff, tile: 'from-slate-500 to-slate-700' },
+            { mode: 'pixelate', Icon: Grid3x3, tile: 'from-zinc-500 to-zinc-800' },
+          ] as const
+        ).map(({ mode, Icon, tile }) => (
+          <Card
+            key={mode}
+            testId={`blur-add-${mode}`}
+            title={t('editor.library.clickToAdd')}
+            onClick={() => addOverlay({ kind: 'blur', blurMode: mode })}
+          >
+            <span
+              className={`flex aspect-square items-center justify-center rounded-md bg-gradient-to-br ${tile} text-white`}
+            >
+              <Icon size={22} aria-hidden />
+            </span>
+            <span className="truncate">{t(`editor.blur.modes.${mode}`)}</span>
+          </Card>
+        ))}
+      </div>
+      <h3 className="text-xs font-medium text-text">{t('editor.library.tabs.effects')}</h3>
       <div className="grid grid-cols-3 gap-2">
         {EFFECT_KINDS.map((kind) => {
           const Icon = EFFECT_ICONS[kind]

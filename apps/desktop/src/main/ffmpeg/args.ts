@@ -201,6 +201,8 @@ export interface MuxAudioPiece {
   fadeOut?: number
   /** Lặp lại file (nhạc nền ngắn hơn đoạn cần phát). */
   loop?: boolean
+  /** Biểu thức âm lượng theo thời gian (tự giảm nhạc khi có lời), xem `duckVolumeExpr`. */
+  duckExpr?: string
 }
 
 const sec = (n: number) => Number(n.toFixed(6))
@@ -267,6 +269,8 @@ export function buildExportMuxArgs(options: {
       'asetpts=PTS-STARTPTS',
       ...atempoChain(p.speed),
       `volume=${sec(p.volume)}`,
+      // Dấu nháy đơn bảo vệ dấu phẩy trong biểu thức khỏi cú pháp filtergraph.
+      ...(p.duckExpr ? [`volume=volume='${p.duckExpr}':eval=frame`] : []),
       ...(p.fadeIn ? [`afade=t=in:st=0:d=${sec(p.fadeIn)}`] : []),
       ...(p.fadeOut
         ? [

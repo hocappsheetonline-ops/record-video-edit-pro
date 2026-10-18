@@ -85,6 +85,7 @@ export const IPC = {
   exportFinish: 'export:finish',
   exportCancel: 'export:cancel',
   revealFile: 'files:reveal',
+  projectSnapshot: 'project:snapshot',
   projectImportVideo: 'project:import-video',
   projectMerge: 'project:merge',
   aiTranscribe: 'ai:transcribe',
@@ -535,6 +536,8 @@ export interface LumoraApi {
   cancelExport(id: string): Promise<void>
   /** Mở thư mục chứa một file đã xuất (chỉ trong thư mục dự án). */
   revealFile(path: string): Promise<void>
+  /** Lưu ảnh PNG của khung hình đang xem vào thư mục `exports` của dự án. */
+  saveSnapshot(folder: string, png: ArrayBuffer): Promise<ExportResult>
 
   /** Nhận dạng giọng nói (ElevenLabs). `language`: mã ISO hoặc rỗng để tự nhận diện. */
   transcribe(folder: string, language: string): Promise<Transcript>

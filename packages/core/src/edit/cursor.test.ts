@@ -6,6 +6,7 @@ import {
   clickAt,
   cursorAt,
   cursorOpacity,
+  keyCaptionAt,
   smoothPath,
   springOmega,
 } from './cursor'
@@ -78,5 +79,41 @@ describe('hiệu ứng click và ẩn con trỏ', () => {
     expect(cursorOpacity(track, 1000)).toBe(1)
     expect(cursorOpacity(track, 500 + 2500 + 150)).toBeCloseTo(0.5)
     expect(cursorOpacity(track, 3900)).toBe(0)
+  })
+})
+
+describe('keyCaptionAt', () => {
+  const track = {
+    combos: [
+      { s: 1000, combo: 'Ctrl+C' },
+      { s: 1400, combo: 'Ctrl+V' },
+      { s: 9000, combo: 'Alt+Tab' },
+    ],
+  }
+  it('không có gì trước lần bấm đầu và sau khi đã mờ hết', () => {
+    expect(keyCaptionAt(track, 500)).toBeNull()
+    expect(keyCaptionAt(track, 1400 + 1500 + 400)).toBeNull()
+  })
+  it('gộp phím bấm liên tiếp, cũ trước mới sau; giữ rồi mờ dần', () => {
+    expect(keyCaptionAt(track, 1500)).toEqual({ combos: ['Ctrl+C', 'Ctrl+V'], opacity: 1 })
+    const fading = keyCaptionAt(track, 1400 + 1500 + 175, 1500, 350)
+    expect(fading?.combos).toEqual(['Ctrl+C', 'Ctrl+V'])
+    expect(fading?.opacity).toBeCloseTo(0.5)
+  })
+  it('phím bấm cách xa không gộp vào', () => {
+    expect(keyCaptionAt(track, 9100)).toEqual({ combos: ['Alt+Tab'], opacity: 1 })
+  })
+  it('bản quay có phím tắt thì buildCursorTrack ghi lại', () => {
+    const t = buildCursorTrack(
+      [
+        { type: 'key', t: 2000, combo: 'Ctrl+S' },
+        { type: 'key', t: 2200 },
+      ],
+      segments,
+      rect,
+      0.5,
+    )
+    expect(t.combos).toEqual([{ s: 1000, combo: 'Ctrl+S' }])
+    expect(t.keys).toEqual([1000, 1200])
   })
 })

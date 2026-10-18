@@ -20,6 +20,7 @@ function trackWith(clicks: number[], keys: number[] = [], at = { x: 0.8, y: 0.3 
     samples,
     clicks: clicks.map((s) => ({ s, ...at, button: 'left' as const })),
     keys,
+    combos: [],
     moves: [],
   }
 }
@@ -137,6 +138,7 @@ describe('tốc độ chuyển động', () => {
       samples: Array.from({ length: 41 }, (_, i) => ({ s: i * 50, x: i < 10 ? 0.2 : 0.8, y: 0.5 })),
       clicks: [],
       keys: [],
+      combos: [],
       moves: [],
     }
     const fast = cameraFollowTrack(jump, 1).samples[15]!.x

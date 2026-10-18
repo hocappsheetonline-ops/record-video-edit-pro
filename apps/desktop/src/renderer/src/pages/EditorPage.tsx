@@ -5,6 +5,7 @@ import {
   ChevronLeft,
   Download,
   Grid3x3,
+  ImageDown,
   Keyboard,
   Maximize2,
   Pause,
@@ -27,6 +28,7 @@ import { PropertiesPanel } from '../editor/PropertiesPanel'
 import { ContextMenuLayer } from '../editor/ContextMenu'
 import { Onboarding, ShortcutsDialog } from '../editor/HelpUi'
 import { JobsButton, ToastLayer } from '../editor/JobsUi'
+import { useJobs } from '../editor/jobs'
 import { useEditorStore } from '../editor/store'
 import { Timeline } from '../editor/Timeline'
 import { formatTimecode } from '../editor/timeline-math'
@@ -248,7 +250,42 @@ function usePaneSizes() {
 }
 
 /** Thanh điều khiển dưới khung xem trước: thời gian, phát/dừng, nhảy, tỉ lệ khung, toàn màn hình. */
-function PlayerBar({ onFullscreen }: { onFullscreen: () => void }) {
+/**
+ * Chụp khung hình đang xem (như nút "Snapshot" của CapCut): lưu PNG vào thư mục `exports` của dự án.
+ * Dùng chính canvas xem trước nên thấy sao chụp vậy (kể cả chữ, nhãn dán, vùng che).
+ */
+async function saveSnapshot(player: HTMLElement | null, t: (k: string) => string) {
+  const canvas = player?.querySelector('canvas')
+  const folder = useEditorStore.getState().folder
+  const jobs = useJobs.getState()
+  if (!canvas || !folder) return
+  try {
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
+    if (!blob) throw new Error('snapshot_failed')
+    const result = await lumora().saveSnapshot(folder, await blob.arrayBuffer())
+    jobs.toast(
+      {
+        kind: 'success',
+        text: t('editor.player.snapshotSaved'),
+        action: {
+          label: t('editor.export.reveal'),
+          run: () => void lumora().revealFile(result.path),
+        },
+      },
+      6000,
+    )
+  } catch {
+    jobs.toast({ kind: 'error', text: t('editor.player.snapshotFailed') })
+  }
+}
+
+function PlayerBar({
+  onFullscreen,
+  onSnapshot,
+}: {
+  onFullscreen: () => void
+  onSnapshot: () => void
+}) {
   const { t } = useTranslation()
   const guides = useEditorStore((s) => s.guides)
   const zoom = useEditorStore((s) => s.previewZoom)
@@ -394,6 +431,16 @@ function PlayerBar({ onFullscreen }: { onFullscreen: () => void }) {
             </option>
           ))}
         </select>
+        <button
+          type="button"
+          className={iconButton}
+          data-testid="snapshot"
+          aria-label={t('editor.player.snapshot')}
+          data-tooltip={t('editor.player.snapshot')}
+          onClick={onSnapshot}
+        >
+          <ImageDown size={15} aria-hidden />
+        </button>
         <button
           type="button"
           className={iconButton}
@@ -626,7 +673,10 @@ export function EditorPage() {
           >
             <PreviewCanvas project={project} folder={folder} />
           </div>
-          <PlayerBar onFullscreen={() => void playerRef.current?.requestFullscreen?.()} />
+          <PlayerBar
+            onFullscreen={() => void playerRef.current?.requestFullscreen?.()}
+            onSnapshot={() => void saveSnapshot(playerRef.current, t)}
+          />
         </section>
         <Splitter
           orientation="vertical"

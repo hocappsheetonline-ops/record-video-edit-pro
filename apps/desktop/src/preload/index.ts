@@ -93,6 +93,7 @@ const api: LumoraApi = {
   finishExport: (id, folder, edit) => ipcRenderer.invoke(IPC.exportFinish, id, folder, edit),
   cancelExport: (id) => ipcRenderer.invoke(IPC.exportCancel, id),
   revealFile: (path) => ipcRenderer.invoke(IPC.revealFile, path),
+  saveSnapshot: (folder, png) => ipcRenderer.invoke(IPC.projectSnapshot, folder, png),
 
   importVideo: (folder, file) => ipcRenderer.invoke(IPC.projectImportVideo, folder, file),
   mergeProject: (folder, other) => ipcRenderer.invoke(IPC.projectMerge, folder, other),

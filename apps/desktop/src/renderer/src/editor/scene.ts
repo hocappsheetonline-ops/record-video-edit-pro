@@ -7,6 +7,7 @@ import {
   clickAt,
   cursorAt,
   cursorOpacity,
+  keyCaptionAt,
   fillBaseView,
   fillViewRect,
   frameLayout,
@@ -61,6 +62,8 @@ export interface FrameScene {
   opacity: number
   cursor: { x: number; y: number; size: number; opacity: number } | null
   ripple: { x: number; y: number; radius: number; opacity: number } | null
+  /** Phím tắt vừa bấm (Ctrl+C…) hiện dưới khung hình, mờ dần; cỡ chữ theo pixel video xuất. */
+  keys: { combos: string[]; opacity: number; fontSize: number } | null
   /** Webcam: bong bóng nổi (`circle`/`rounded`/`square`) hoặc dải ngang (`strip`, không bo góc). */
   camera: {
     rect: Rect
@@ -175,6 +178,13 @@ export function computeScene(input: SceneInput): FrameScene {
     }
   }
 
+  let keys: FrameScene['keys'] = null
+  if (!input.imported && edit.cursor.showKeys && input.cursor) {
+    const hit = keyCaptionAt(input.cursor, source)
+    if (hit && hit.opacity > 0)
+      keys = { ...hit, fontSize: Math.round(Math.min(output.width, output.height) * 0.04) }
+  }
+
   let captions: FrameScene['captions'] = null
   const cap = edit.captions
   if (cap.enabled && cap.lines.length > 0) {
@@ -229,6 +239,7 @@ export function computeScene(input: SceneInput): FrameScene {
     opacity: clip?.opacity ?? 1,
     cursor,
     ripple,
+    keys,
     camera: !showCamera ? null : cameraScene(edit.camera, output, layout.strip),
   }
 }

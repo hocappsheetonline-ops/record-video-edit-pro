@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import {
   ADJUST_KEYS,
   ASSISTANT_KINDS,
+  BLUR_MODES,
   CAMERA_BG_MODES,
   CAMERA_LAYOUTS,
   CAMERA_SHAPES,
@@ -244,7 +245,13 @@ const COMMAND_SCHEMA: Schema = {
       enum: [...new Set<string>([...VOLUME_TARGETS, ...CLEAR_TARGETS])],
       description: `volume: ${VOLUME_TARGETS.join(' / ')}; clear: ${CLEAR_TARGETS.join(' / ')}`,
     },
-    level: { type: 'number', description: 'volume: 0 (mute) to 2 (1 = unchanged)' },
+    level: {
+      type: 'number',
+      description:
+        'volume: 0 (mute) to 2 (1 = unchanged); duck: music level while speaking 0.05-0.8',
+    },
+    enabled: { type: 'boolean', description: 'duck: turn auto-ducking on or off' },
+    showKeys: { type: 'boolean', description: 'cursor: show pressed keyboard shortcuts' },
     voice: { type: 'string', enum: [...VOICE_FX], description: 'voiceFx: voice effect' },
     sound: { type: 'string', enum: [...SOUND_EFFECT_IDS], description: 'sound: sound effect id' },
     scale: { type: 'number', description: 'zoomLevel / zoomAt: zoom factor 1.1-5 (2 = twice)' },
@@ -269,7 +276,7 @@ const COMMAND_SCHEMA: Schema = {
     size: {
       type: 'number',
       description:
-        'cursor: pointer scale 0.5-4; camera: bubble size 0.05-0.6; captionsLayout: text size 0.5-2.5',
+        'cursor: pointer scale 0.5-4; camera: bubble size 0.05-0.6; captionsLayout: text size 0.5-2.5; blur: region height 0.05-1 of the frame',
     },
     clickEffect: { type: 'boolean', description: 'cursor: ripple on clicks' },
     hideIdle: { type: 'boolean', description: 'cursor: hide when idle' },
@@ -291,8 +298,8 @@ const COMMAND_SCHEMA: Schema = {
       description: 'camera: webcam background (none, remove, blur, color)',
     },
     emoji: { type: 'string', description: 'sticker: one emoji' },
-    x: { type: 'number', description: 'shape: horizontal centre 0-1' },
-    y: { type: 'number', description: 'shape: vertical centre 0-1' },
+    x: { type: 'number', description: 'shape / blur: horizontal centre 0-1' },
+    y: { type: 'number', description: 'shape / blur: vertical centre 0-1' },
     setting: { type: 'string', enum: [...ADJUST_KEYS], description: 'adjust: which setting' },
     value: {
       type: 'number',
@@ -308,7 +315,11 @@ const COMMAND_SCHEMA: Schema = {
     hidden: { type: 'boolean', description: 'track: hide the row' },
     muted: { type: 'boolean', description: 'track: mute the row' },
     locked: { type: 'boolean', description: 'track: lock the row' },
-    mode: { type: 'string', enum: ['fixed', 'chapters'], description: 'shorts: how to split' },
+    mode: {
+      type: 'string',
+      enum: ['fixed', 'chapters', ...BLUR_MODES],
+      description: 'shorts: how to split (fixed / chapters); blur: blur or pixelate (mosaic)',
+    },
     seconds: { type: 'integer', description: 'shorts: length of each short in seconds (fixed)' },
     vertical: { type: 'boolean', description: 'shorts: 9:16 frame for each short' },
   },
@@ -341,16 +352,17 @@ const COMMAND_GUIDE = `- cutSilences: remove long pauses. removeFillers: remove 
 Timeline (all times are on the output video, in milliseconds):
 - cutRange {fromMs, toMs}: cut out that span. freeze {atMs, ms}: freeze frame at a time for ms. flip {axis}: mirror the screen video. rotate {degrees}: 90 / 180 / 270 clockwise.
 Audio:
-- volume {target, level}: ${VOLUME_TARGETS.join(' / ')}; level 0 = mute, 1 = unchanged, up to 2. voiceFx {voice}: microphone voice effect (${VOICE_FX.join(', ')}). fade {ms}: fade the background music in and out. sound {sound, atMs}: built-in sound effect (${SOUND_EFFECT_IDS.join(', ')}) at a time.
+- volume {target, level}: ${VOLUME_TARGETS.join(' / ')}; level 0 = mute, 1 = unchanged, up to 2. voiceFx {voice}: microphone voice effect (${VOICE_FX.join(', ')}). fade {ms}: fade the background music in and out. sound {sound, atMs}: built-in sound effect (${SOUND_EFFECT_IDS.join(', ')}) at a time. duck {enabled, level}: automatically lower background music while the narrator speaks (level = music volume while speaking, 0.3 by default).
 Zoom & motion:
 - zoomLevel {scale}: set the zoom factor of every existing zoom (1.1-5). zoomAt {atMs, ms, scale}: add one zoom following the cursor. motion {cameraSpeed, zoomMs}: how fast the view follows the cursor (0-1) and how long zooming in/out takes (250-1500 ms).
 Frame & look:
 - frame {padding, radius, shadow, fill}: margin, rounded corners, shadow (0-1) and fill-the-frame. background {color, color2}: colour behind the video (hex), gradient when color2 is given.
-- cursor {visible, size, clickEffect, hideIdle}: drawn mouse pointer. camera {visible, shape, size, position, layout, beauty, background}: webcam bubble (shape ${CAMERA_SHAPES.join(' / ')}, position ${CORNERS.join(' / ')}, layout ${CAMERA_LAYOUTS.join(' / ')}, background ${CAMERA_BG_MODES.join(' / ')}).
+- cursor {visible, size, clickEffect, hideIdle, showKeys}: drawn mouse pointer (showKeys = show pressed keyboard shortcuts like Ctrl+C under the frame). camera {visible, shape, size, position, layout, beauty, background}: webcam bubble (shape ${CAMERA_SHAPES.join(' / ')}, position ${CORNERS.join(' / ')}, layout ${CAMERA_LAYOUTS.join(' / ')}, background ${CAMERA_BG_MODES.join(' / ')}).
 - adjust {setting, value}: one colour adjustment (${ADJUST_KEYS.join(', ')}), -1..1; one command per setting.
 Overlays:
 - text {text, atMs, ms, template, position}: text on the video with a text template (${TEXT_TEMPLATE_IDS.join(', ')}), position ${OVERLAY_POSITIONS.join(' / ')} (use "title" for an opening title, "text" for anything at a given time).
 - sticker {emoji, atMs, ms, position}: an emoji sticker. shape {shape, atMs, ms, x, y, color}: a drawn shape (${SHAPES.join(', ')}) centred at x, y (0-1) — e.g. an arrow pointing at something the narration mentions.
+- blur {mode, atMs, ms, x, y, size}: hide a sensitive area (password, email, name) by blurring or pixelating a region centred at x, y with height size (0-1 of the frame), from atMs for ms; mode ${BLUR_MODES.join(' / ')}.
 Captions:
 - captionsLayout {position, size}: captions at the top or bottom, text size 0.5-2.5. translate {language, bilingual}: translate the existing captions (language code), bilingual = keep the original and show the translation under it.
 Markers & rows:

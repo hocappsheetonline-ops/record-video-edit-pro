@@ -177,6 +177,84 @@ describe('ExportManager', () => {
     expect(fadingOut).toBeLessThan(full - 6)
   }, 60_000)
 
+  it('tự giảm nhạc khi có lời: nhạc nhỏ đi đúng lúc micro có tiếng, to lại khi im lặng', async () => {
+    // Micro: im lặng 0–1.5s, nói 1.5–3s, im lặng 3–4s.
+    await ffmpeg([
+      '-f',
+      'lavfi',
+      '-i',
+      "sine=frequency=440:duration=4,volume=enable='between(t,1.5,3)':volume=1:eval=frame,volume=enable='not(between(t,1.5,3))':volume=0:eval=frame",
+      '-c:a',
+      'libopus',
+      join(dir, 'seg0-mic.webm'),
+    ])
+    const rendered = join(dir, 'rendered.mp4')
+    await ffmpeg([
+      '-f',
+      'lavfi',
+      '-i',
+      'testsrc=size=320x240:rate=30:duration=4',
+      '-pix_fmt',
+      'yuv420p',
+      '-c:v',
+      'libx264',
+      rendered,
+    ])
+    await ffmpeg([
+      '-f',
+      'lavfi',
+      '-i',
+      'sine=frequency=800:duration=4',
+      '-c:a',
+      'aac',
+      join(dir, 'asset-song.m4a'),
+    ])
+    const manager = new ExportManager(runFfmpeg)
+    const id = await manager.start(dir)
+    const bytes = await readFile(rendered)
+    await manager.write(id, 0, bytes)
+    const edit = createDefaultEdit(project)
+    // Tắt micro trong bản xuất để đo riêng nhạc; khoảng có lời vẫn lấy từ dạng sóng micro.
+    edit.audio = { ...edit.audio, mic: 0, duck: { enabled: true, level: 0.25 } }
+    edit.audioClips = [
+      {
+        id: 'm',
+        file: 'asset-song.m4a',
+        name: 'song',
+        kind: 'music',
+        start: 0,
+        offset: 0,
+        duration: 4000,
+        sourceDuration: 4000,
+        volume: 1,
+        fadeIn: 0,
+        fadeOut: 0,
+        loop: false,
+      },
+    ]
+    const result = await manager.finish(id, project, edit, dir, 'Duck')
+    const meanDb = async (from: number, to: number) => {
+      const r = await runFfmpeg([
+        '-hide_banner',
+        '-i',
+        result.path,
+        '-af',
+        `atrim=${from}:${to},volumedetect`,
+        '-f',
+        'null',
+        '-',
+      ])
+      return Number(/mean_volume:\s*(-?[\d.]+) dB/.exec(r.stderr)?.[1])
+    }
+    const quiet = await meanDb(0.2, 1.0)
+    const speaking = await meanDb(2.0, 2.7)
+    const after = await meanDb(3.5, 3.9)
+    // 0.25 ≈ -12 dB.
+    expect(quiet - speaking).toBeGreaterThan(9)
+    expect(quiet - speaking).toBeLessThan(15)
+    expect(Math.abs(quiet - after)).toBeLessThan(2)
+  }, 60_000)
+
   it('tiếng của video meme được trộn đúng đoạn (bỏ phần đã cắt đầu, dừng khi hết lớp)', async () => {
     const rendered = join(dir, 'rendered.mp4')
     await ffmpeg([

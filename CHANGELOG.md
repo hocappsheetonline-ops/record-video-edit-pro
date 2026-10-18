@@ -2,6 +2,14 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.8.0
+
+- **Che vùng riêng tư** (Thư viện → Hiệu ứng → Che vùng riêng tư): thêm vùng **Làm mờ** hoặc **Khảm ô (mosaic)** lên video như CapCut để giấu mật khẩu, email, tên người; kéo trên khung xem trước để đặt, kéo góc để đổi cả chiều rộng lẫn chiều cao, chỉnh độ mạnh, dùng **keyframe** để vùng che đi theo cửa sổ. Xuất giống hệt xem trước.
+- **Tự giảm nhạc khi có lời** (Cài đặt video → Âm lượng → Nhạc nền): nhạc nền tự nhỏ lại (mức chỉnh được, mặc định 30 %) khi micro có tiếng hoặc ở các đoạn lồng tiếng, to lại khi im lặng — audio ducking như CapCut / Descript / Camtasia. Khoảng có lời lấy từ dạng sóng bản quay nên không cần AI; xem trước và video xuất giảm như nhau.
+- **Hiện phím tắt đã bấm** (Cài đặt video → Con trỏ): phím tắt (Ctrl+C, Alt+Tab, Win+Shift+S…) hiện thành viên thuốc dưới khung hình rồi mờ dần, như Screen Studio / Camtasia; chỉ hiện phím tắt, không ghi chữ bạn gõ (bản quay vốn không lưu).
+- **Chụp khung hình** (nút ảnh cạnh Toàn màn hình dưới khung xem trước): lưu khung đang xem thành PNG trong thư mục `exports` của dự án, có nút mở thư mục — như "Snapshot" của CapCut, tiện làm ảnh bìa / thumbnail.
+- **Đạo diễn AI** hiểu thêm ba lệnh: che vùng (`blur`: làm mờ / khảm ô tại vị trí và thời điểm), tự giảm nhạc khi có lời (`duck`) và hiện phím tắt (`cursor.showKeys`); bộ hiểu từ khóa (không có AI) cũng nhận "hiện phím tắt", "giảm nhạc khi nói", "khảm vùng…".
+
 ## 1.7.0
 
 - **Đạo diễn AI điều khiển hầu hết tính năng chỉnh sửa**: ngoài cắt / phụ đề / zoom / nhạc / bộ lọc / xuất, AI (Claude hoặc Ollama) giờ ra được lệnh cho **timeline** (cắt một đoạn theo thời gian, đóng băng khung hình, lật, xoay), **âm thanh** (âm lượng micro / máy / nhạc / hiệu ứng, tắt tiếng, hiệu ứng giọng, nhạc tăng giảm dần, chèn hiệu ứng âm thanh), **zoom** (đặt mức zoom cho tất cả, thêm đoạn zoom tại thời điểm, tốc độ khung nhìn), **khung hình** (lề, bo góc, bóng, nền màu / chuyển màu, phủ kín), **con trỏ** và **webcam** (ẩn / hiện, hình dạng, cỡ, góc, bố cục, làm đẹp, xóa phông), **lớp nổi** (chữ theo mẫu, nhãn dán emoji, mũi tên / vòng tròn… tại vị trí), **điều chỉnh màu** từng thông số, **phụ đề** (vị trí trên / dưới, cỡ chữ, dịch hoặc song ngữ), **điểm đánh dấu** và **mốc chương** từ lời thoại, ẩn / tắt tiếng / khóa hàng timeline, **xóa sạch** một loại mục (zoom, hiệu ứng, nhạc, phụ đề, bộ lọc… hoặc khôi phục bản quay đầy đủ), **chia thành video ngắn**, và xuất kèm số khung hình / giây.
