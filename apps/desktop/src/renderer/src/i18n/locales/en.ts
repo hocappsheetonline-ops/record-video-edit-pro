@@ -452,6 +452,16 @@ export const en: Messages = {
       x: 'Horizontal center',
       y: 'Vertical center',
       delete: 'Delete zoom',
+      all: 'All zoom regions',
+      allScale: 'Zoom level for all',
+      applyAll: 'Set {{scale}}× on all {{count}} regions',
+      applyThisAll: 'Apply {{scale}}× to all zoom regions',
+      mixed: 'The regions currently have different zoom levels.',
+      allMode: 'Zoom type for all',
+      selectAll: 'Edit all zoom regions…',
+      aiHint:
+        'Want zooms that follow the narration, or a custom request (drop short zooms, zoom when a topic is mentioned…)?',
+      openAi: 'Edit zooms with Claude',
     },
     camera: {
       visible: 'Show webcam',
@@ -1040,6 +1050,27 @@ export const en: Messages = {
     merge: 'Merge with next line',
     translation: 'Translation',
     reset: 'Start over',
+    findReplace: 'Find and replace',
+    find: 'Find',
+    findPlaceholder: 'Word or phrase to find',
+    replaceWith: 'Replace with',
+    replacePlaceholder: 'Leave empty to delete',
+    matchCase: 'Match case',
+    wholeWord: 'Whole word',
+    matches: '{{count}} matching lines',
+    noMatches: 'No matching lines.',
+    replaceAll: 'Replace all',
+    replaced: 'Replaced in {{count}} lines.',
+    ai: 'Edit captions with Claude',
+    aiIntro:
+      'Claude rewrites the lines as you ask (timing stays the same). Changed lines are marked as edited.',
+    aiPlaceholder:
+      'For example: capitalise product names, remove filler words, replace "app" with "application", make the tone more formal…',
+    aiFix: 'Fix spelling & punctuation',
+    aiRun: 'Apply request',
+    aiWorking: 'Claude is editing…',
+    aiChanged: 'Claude changed {{count}} lines.',
+    aiUnchanged: 'Claude found nothing to change.',
   },
   ai: {
     quick: {
@@ -1218,6 +1249,24 @@ export const en: Messages = {
       make: 'Generate with Claude',
       copy: 'Copy',
       save: 'Save as .txt',
+    },
+    zoom: {
+      title: 'Edit zooms with Claude',
+      intro:
+        'Describe how you want the zooms; Claude replans the zoom regions from the current ones, the mouse clicks and the narration (when captions exist). Preview before applying.',
+      placeholder:
+        'For example: set every zoom to 2.5×, drop zooms shorter than 2 seconds, zoom in when the settings are mentioned…',
+      presets: {
+        narration: 'Zoom with the narration',
+        tidy: 'Tidier: drop short zooms, merge nearby ones',
+        calmer: 'Calmer: fewer zooms, lower level',
+      },
+      plan: 'Ask Claude to edit zooms',
+      proposal: 'Claude proposes {{count}} zoom regions (currently {{current}}).',
+      apply: 'Apply',
+      discard: 'Discard',
+      empty: 'Describe how you want the zooms.',
+      current: 'Currently {{count}} zoom regions.',
     },
     errors: {
       missingKey:

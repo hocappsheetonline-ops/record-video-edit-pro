@@ -27,6 +27,8 @@ const importVideo = vi.fn(async (_dir: string, project: Project, source: string)
   ...project,
   name: `${project.name}+${source}`,
 }))
+const editCaptions = vi.fn(async (lines: { id: string; text: string }[]) => lines)
+const planZooms = vi.fn(async () => [])
 let trashed: string[]
 const recording = {
   capabilities: vi.fn(),
@@ -109,6 +111,8 @@ beforeEach(async () => {
     ),
     summarize: vi.fn(async () => ({ titles: [], description: '', hashtags: [], chapters: [] })),
     translate: vi.fn(async (lines: { id: string; text: string }[]) => lines),
+    editCaptions,
+    planZooms,
     voices: vi.fn(async () => [{ id: 'v1', name: 'Anna' }]),
     speak: vi.fn(async (_dir: string, text: string) => ({
       file: 'asset-tts-x.mp3',
@@ -408,6 +412,39 @@ describe('registerIpc', () => {
     )
     await expect(call(IPC.projectImportVideo, '../x.lumora', 'a.mp4')).rejects.toThrow()
     await expect(call(IPC.projectImportVideo, 'a.lumora', 42)).rejects.toThrow('import_no_video')
+  })
+
+  it('AI sửa phụ đề và chỉnh zoom: lọc dữ liệu trước khi gọi dịch vụ', async () => {
+    const { mkdir: mk, writeFile: wf } = await import('node:fs/promises')
+    await mk(join(dir, 'z.lumora'))
+    await wf(
+      join(dir, 'z.lumora', 'project.json'),
+      JSON.stringify({
+        version: 1,
+        id: 'z',
+        name: 'Z',
+        createdAt: 'x',
+        source: { kind: 'display' },
+        engine: 'ffmpeg',
+        segments: [{ index: 0, startedAt: 0, endedAt: 10_000, tracks: {} }],
+      }),
+    )
+    await call(IPC.aiEditCaptions, [{ id: 'l0', text: 'a' }, { bad: 1 }], 'viết hoa', 'vi')
+    expect(editCaptions).toHaveBeenCalledWith([{ id: 'l0', text: 'a' }], 'viết hoa', 'vi')
+    await expect(call(IPC.aiEditCaptions, 'x', '', '')).rejects.toThrow(/không hợp lệ/)
+
+    await call(IPC.aiPlanZooms, 'z.lumora', {
+      instruction: 'đặt 2.5×',
+      zooms: [{ id: 'a', start: 0, end: 2000, scale: 9, mode: 'fixed', x: 0.2, y: 0.3 }, 'rác'],
+      durationMs: 999_999,
+      clicks: [500, 'x', NaN],
+    })
+    expect(planZooms).toHaveBeenCalledWith(join(dir, 'z.lumora'), {
+      instruction: 'đặt 2.5×',
+      zooms: [{ id: 'a', start: 0, end: 2000, scale: 5, mode: 'fixed', x: 0.2, y: 0.3 }],
+      durationMs: 10_000,
+      clicks: [500],
+    })
   })
 
   it('lưu phụ đề vào thư mục exports, chỉ cho phép đuôi văn bản', async () => {

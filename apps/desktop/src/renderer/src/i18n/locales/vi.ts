@@ -443,6 +443,15 @@ export const vi = {
       x: 'Tâm ngang',
       y: 'Tâm dọc',
       delete: 'Xóa đoạn zoom',
+      all: 'Tất cả đoạn zoom',
+      allScale: 'Mức zoom chung',
+      applyAll: 'Đặt {{scale}}× cho cả {{count}} đoạn',
+      applyThisAll: 'Áp dụng {{scale}}× cho tất cả đoạn zoom',
+      mixed: 'Các đoạn đang có mức zoom khác nhau.',
+      allMode: 'Kiểu zoom cho tất cả',
+      selectAll: 'Chỉnh tất cả đoạn zoom…',
+      aiHint: 'Muốn chỉnh theo lời nói hay yêu cầu riêng (bỏ zoom ngắn, zoom lúc nói tới…)?',
+      openAi: 'Chỉnh zoom bằng Claude',
     },
     camera: {
       visible: 'Hiện webcam',
@@ -1030,6 +1039,27 @@ export const vi = {
     merge: 'Gộp với dòng sau',
     translation: 'Bản dịch',
     reset: 'Tạo lại',
+    findReplace: 'Tìm và thay thế',
+    find: 'Tìm',
+    findPlaceholder: 'Từ hoặc cụm từ cần tìm',
+    replaceWith: 'Thay bằng',
+    replacePlaceholder: 'Để trống để xóa',
+    matchCase: 'Phân biệt hoa thường',
+    wholeWord: 'Cả từ',
+    matches: '{{count}} dòng khớp',
+    noMatches: 'Không có dòng nào khớp.',
+    replaceAll: 'Thay tất cả',
+    replaced: 'Đã thay trong {{count}} dòng.',
+    ai: 'Sửa phụ đề bằng Claude',
+    aiIntro:
+      'Claude sửa nội dung các dòng theo yêu cầu của bạn (giữ nguyên thời gian). Dòng nào đổi sẽ được đánh dấu đã sửa.',
+    aiPlaceholder:
+      'Ví dụ: viết hoa tên sản phẩm, bỏ từ đệm, đổi "app" thành "ứng dụng", đổi giọng văn trang trọng hơn…',
+    aiFix: 'Sửa chính tả & dấu câu',
+    aiRun: 'Thực hiện yêu cầu',
+    aiWorking: 'Claude đang sửa…',
+    aiChanged: 'Claude đã sửa {{count}} dòng.',
+    aiUnchanged: 'Claude không thấy gì cần sửa.',
   },
   ai: {
     quick: {
@@ -1208,6 +1238,24 @@ export const vi = {
       make: 'Tạo bằng Claude',
       copy: 'Sao chép',
       save: 'Lưu thành .txt',
+    },
+    zoom: {
+      title: 'Chỉnh zoom bằng Claude',
+      intro:
+        'Mô tả cách bạn muốn zoom; Claude lập lại danh sách đoạn zoom dựa trên các đoạn hiện có, các lần click chuột và lời nói (nếu đã có phụ đề). Bạn xem trước rồi mới áp dụng.',
+      placeholder:
+        'Ví dụ: đặt mọi zoom 2.5×, bỏ các đoạn zoom ngắn hơn 2 giây, zoom vào lúc nói tới phần cài đặt…',
+      presets: {
+        narration: 'Zoom theo lời nói',
+        tidy: 'Gọn hơn: bỏ zoom ngắn, gộp zoom gần nhau',
+        calmer: 'Nhẹ hơn: ít zoom, mức thấp hơn',
+      },
+      plan: 'Nhờ Claude chỉnh zoom',
+      proposal: 'Claude đề xuất {{count}} đoạn zoom (hiện có {{current}}).',
+      apply: 'Áp dụng',
+      discard: 'Bỏ',
+      empty: 'Hãy mô tả cách bạn muốn zoom.',
+      current: 'Hiện có {{count}} đoạn zoom.',
     },
     errors: {
       missingKey:

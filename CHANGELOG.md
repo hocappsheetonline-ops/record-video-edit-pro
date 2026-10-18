@@ -2,6 +2,12 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.6.0
+
+- **Tất cả đoạn zoom** (tab Zoom): đặt một mức zoom cố định cho mọi đoạn, đổi kiểu zoom cho tất cả; nút **Áp dụng mức này cho tất cả** khi đang chọn một đoạn; menu chuột phải trên đoạn zoom.
+- **Chỉnh zoom bằng Claude** (mục AI): mô tả cách muốn zoom hoặc chọn gợi ý sẵn, xem trước danh sách đề xuất rồi áp dụng.
+- **Phụ đề**: **Tìm và thay thế** (phân biệt hoa thường, cả từ, cả trong bản dịch) và **Sửa phụ đề bằng Claude** (sửa chính tả & dấu câu, hoặc theo yêu cầu).
+
 ## 1.5.1
 
 - **Biết AI đang làm gì**: huy hiệu trạng thái AI trên thanh tiêu đề trình chỉnh sửa và thanh trạng thái ở đầu bảng AI cho biết đang dùng gì (Ollama + model nào / Claude / whisper.cpp + Piper / ElevenLabs), sẵn sàng chưa (lý do cụ thể nếu chưa, kèm nút **Thiết lập** mở đúng mục), và việc AI nào đang chạy được bao lâu (tiến độ, hủy được). Tự kiểm tra lại khi đổi cài đặt hoặc key.

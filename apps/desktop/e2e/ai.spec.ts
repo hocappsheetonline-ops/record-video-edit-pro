@@ -85,6 +85,21 @@ test('AI: nhập key, tạo phụ đề, cắt từ thừa, tạo chương, lưu
   expect(srt).toContain('1\n00:00:00,100 --> 00:00:01,500\nXin chào các bạn.')
   expect(srt).toContain('2\n00:00:02,600 --> 00:00:03,550\nHôm nay mình demo.')
 
+  // Tìm và thay thế: "bạn" → "nhà" ngay trong từ (vẫn tô sáng từng từ được).
+  await page.getByTestId('caption-find').fill('bạn')
+  await expect(page.getByTestId('caption-match-count')).toHaveText('1 dòng khớp')
+  await page.getByTestId('caption-replace').fill('nhà')
+  await page.getByTestId('caption-replace-all').click()
+  await expect(page.getByTestId('caption-line').first()).toHaveValue('Xin chào ừm các nhà.')
+  await expect(page.getByTestId('caption-match-count')).toHaveText('Đã thay trong 1 dòng.')
+
+  // Claude sửa phụ đề (máy chủ giả bỏ "ừm").
+  await page.getByTestId('caption-ai-fix').click()
+  await expect(page.getByTestId('caption-ai-result')).toHaveText('Claude đã sửa 1 dòng.')
+  await expect(page.getByTestId('caption-line').first()).toHaveValue('Xin chào các nhà.')
+  const edit = mock.requests.filter((r) => r.path === '/v1/messages').at(-1)!
+  expect(String(JSON.parse(edit.body.toString('utf8')).system)).toContain('Vietnamese')
+
   // Xuất video có in phụ đề ở phía trên, trên nền sáng.
   await page.getByTestId('caption-pos-top').click()
   await page.getByTestId('tab-frame').click()
@@ -102,6 +117,25 @@ test('AI: nhập key, tạo phụ đề, cắt từ thừa, tạo chương, lưu
   const outside = pixelAt(file, 640, 135, 0.5)
   expect(Math.max(...inBox)).toBeLessThan(120)
   expect(Math.min(...outside)).toBeGreaterThan(220)
+
+  // Tất cả đoạn zoom về một mức cố định, rồi nhờ Claude lập lại (máy chủ giả trả một đoạn 3×).
+  await page.getByTestId('export-close').click()
+  await page.getByTestId('tab-zoom').click()
+  await expect(page.getByTestId('zoom-count')).toHaveText('1 đoạn zoom')
+  await page.getByTestId('zoom-all-scale').fill('2.5')
+  await page.getByTestId('zoom-all-apply').click()
+  await expect(page.getByTestId('timeline-zoom').first()).toHaveText('2.5×')
+  await page.getByTestId('lib-ai').click()
+  await page.getByTestId('ai-advanced-toggle').click()
+  await page.getByTestId('ai-zoom-preset-tidy').click()
+  await page.getByTestId('ai-zoom-plan').click()
+  await expect(page.getByTestId('ai-zoom-proposal')).toContainText('Claude đề xuất 1 đoạn zoom')
+  await page.getByTestId('ai-zoom-apply').click()
+  await expect(page.getByTestId('timeline-zoom').first()).toHaveText('3.0×')
+  const plan = mock.requests.filter((r) => r.path === '/v1/messages').at(-1)!
+  const planBody = JSON.parse(plan.body.toString('utf8'))
+  expect(String(planBody.system)).toContain('zoom-in regions')
+  expect(String(planBody.messages[0].content)).toContain('Mouse clicks (seconds)')
 
   expect(errors).toEqual([])
   await app.close()

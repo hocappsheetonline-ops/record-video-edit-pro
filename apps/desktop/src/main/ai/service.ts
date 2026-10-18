@@ -24,8 +24,10 @@ import {
   type Project,
   type Transcript,
   type TranscriptWord,
+  type ZoomRegion,
+  zoomsFromProposals,
 } from '@lumora/core'
-import type { AiSummary, AudioAsset } from '@shared/ipc'
+import type { AiSummary, AudioAsset, ZoomPlanInput } from '@shared/ipc'
 import { buildSpeechAudioArgs } from '../ffmpeg/args'
 import { parseDurationMs } from '../ffmpeg/parse'
 import type { FfmpegRunner } from '../ffmpeg/runner'
@@ -35,6 +37,9 @@ import {
   askJson,
   ASSISTANT_SCHEMA,
   assistantSystem,
+  CAPTION_EDIT_SCHEMA,
+  CAPTION_FIX_INSTRUCTION,
+  captionEditSystem,
   createClaude,
   CUTS_SCHEMA,
   CUTS_SYSTEM,
@@ -45,9 +50,13 @@ import {
   TRANSLATE_SCHEMA,
   translateSystem,
   type AssistantResponse,
+  ZOOM_PLAN_SCHEMA,
+  ZOOM_PLAN_SYSTEM,
+  type CaptionEditResponse,
   type CutResponse,
   type SummaryResponse,
   type TranslateResponse,
+  type ZoomPlanResponse,
 } from './claude'
 import {
   cleanSpeechOptions,
@@ -132,6 +141,8 @@ function trimDirectorContext(context: DirectorContext): DirectorContext {
       .map((m) => ({ ...m, text: m.text.trim().slice(0, DIRECTOR_MAX_MESSAGE_CHARS) })),
   }
 }
+/** Yêu cầu gửi Claude tối đa (ký tự). */
+export const MAX_INSTRUCTION_CHARS = 1000
 
 function parseTranscript(value: unknown): Transcript | null {
   if (typeof value !== 'object' || value === null) return null
@@ -530,5 +541,63 @@ export class AiService {
     })
     const byId = new Map((answer.lines ?? []).map((l) => [l.id, l.text]))
     return lines.map((l) => ({ id: l.id, text: byId.get(l.id) ?? l.text }))
+  }
+
+  /**
+   * Sửa nội dung phụ đề theo yêu cầu (sửa chính tả, viết hoa tên riêng, bỏ từ đệm, đổi một từ
+   * ở mọi chỗ...). `instruction` rỗng thì sửa chính tả và dấu câu. Trả về nội dung theo id.
+   */
+  async editCaptions(
+    lines: { id: string; text: string }[],
+    instruction: string,
+    language: string,
+  ): Promise<{ id: string; text: string }[]> {
+    if (lines.length === 0) return []
+    const ask = instruction.trim().slice(0, MAX_INSTRUCTION_CHARS) || CAPTION_FIX_INSTRUCTION
+    const client = createClaude(await this.key('anthropic'), this.deps.fetchImpl)
+    const answer = await askJson<CaptionEditResponse>(client, {
+      system: captionEditSystem(language),
+      user: JSON.stringify({ instruction: ask, lines }),
+      schema: CAPTION_EDIT_SCHEMA,
+      effort: 'low',
+    })
+    const byId = new Map((answer.lines ?? []).map((l) => [l.id, l.text]))
+    return lines.map((l) => ({ id: l.id, text: byId.get(l.id) ?? l.text }))
+  }
+
+  /**
+   * Lập lại danh sách đoạn zoom theo yêu cầu bằng Claude (tăng mức zoom, bỏ zoom ngắn, zoom lúc
+   * nói tới một điều gì...), dựa trên các đoạn hiện có, các lần click chuột và lời nói (nếu có).
+   */
+  async planZooms(dir: string, input: ZoomPlanInput): Promise<ZoomRegion[]> {
+    const instruction = input.instruction.trim().slice(0, MAX_INSTRUCTION_CHARS)
+    if (!instruction) throw new Error('instruction_empty')
+    const transcript = await this.getTranscript(dir)
+    const client = createClaude(await this.key('anthropic'), this.deps.fetchImpl)
+    const seconds = (ms: number) => Math.round(ms / 100) / 10
+    const current = input.zooms.map((z) => ({
+      id: z.id,
+      start_seconds: seconds(z.start),
+      end_seconds: seconds(z.end),
+      scale: z.scale,
+      mode: z.mode,
+      ...(z.mode === 'fixed' ? { x: z.x, y: z.y } : {}),
+    }))
+    const clicks = input.clicks.slice(0, 400).map(seconds)
+    const user = [
+      `Instruction: ${instruction}`,
+      `Duration: ${seconds(input.durationMs)} seconds`,
+      `Current zoom regions: ${JSON.stringify(current)}`,
+      `Mouse clicks (seconds): ${JSON.stringify(clicks)}`,
+      transcript && transcript.words.length > 0
+        ? `Transcript:\n${timestampedTranscript(transcript.words)}`
+        : 'Transcript: none',
+    ].join('\n')
+    const answer = await askJson<ZoomPlanResponse>(client, {
+      system: ZOOM_PLAN_SYSTEM,
+      user,
+      schema: ZOOM_PLAN_SCHEMA,
+    })
+    return zoomsFromProposals(answer.zooms ?? [], input.zooms, input.durationMs)
   }
 }

@@ -13,6 +13,8 @@ import {
   type Waveform,
   type Filmstrip,
   parseAudioFx,
+  parseZoomRegions,
+  sourceDuration,
   type AudioFx,
   normalizeLocalAi,
   type DirectorMessage,
@@ -146,6 +148,8 @@ export interface IpcDeps {
     | 'pullLocalModel'
     | 'benchmarkLocalModel'
     | 'translate'
+    | 'editCaptions'
+    | 'planZooms'
     | 'voices'
     | 'speak'
   >
@@ -668,16 +672,42 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
     await deps.cache.clear()
     return deps.cache.size()
   })
-  ipcMain.handle(IPC.aiTranslate, (_event, lines: unknown, target: unknown) => {
-    if (!Array.isArray(lines) || typeof target !== 'string')
-      throw new Error('Dữ liệu dịch không hợp lệ')
-    const clean = lines
+  const cleanLines = (lines: unknown) => {
+    if (!Array.isArray(lines)) throw new Error('Dữ liệu phụ đề không hợp lệ')
+    return lines
       .filter(
         (l): l is { id: string; text: string } =>
           typeof l?.id === 'string' && typeof l?.text === 'string',
       )
       .slice(0, 2000)
-    return deps.ai.translate(clean, target.slice(0, 8))
+  }
+  ipcMain.handle(IPC.aiTranslate, (_event, lines: unknown, target: unknown) => {
+    if (typeof target !== 'string') throw new Error('Dữ liệu dịch không hợp lệ')
+    return deps.ai.translate(cleanLines(lines), target.slice(0, 8))
+  })
+  ipcMain.handle(
+    IPC.aiEditCaptions,
+    (_event, lines: unknown, instruction: unknown, language: unknown) =>
+      deps.ai.editCaptions(
+        cleanLines(lines),
+        typeof instruction === 'string' ? instruction : '',
+        typeof language === 'string' ? language.slice(0, 8) : '',
+      ),
+  )
+  ipcMain.handle(IPC.aiPlanZooms, async (_event, folder: unknown, input: unknown) => {
+    const { path, project } = await projectPath(folder)
+    const i = typeof input === 'object' && input !== null ? (input as Record<string, unknown>) : {}
+    const durationMs = sourceDuration(project.segments)
+    const zooms = parseZoomRegions(i.zooms, durationMs)
+    const clicks = Array.isArray(i.clicks)
+      ? i.clicks.filter((c): c is number => typeof c === 'number' && Number.isFinite(c))
+      : []
+    return deps.ai.planZooms(path, {
+      instruction: typeof i.instruction === 'string' ? i.instruction : '',
+      zooms,
+      durationMs,
+      clicks,
+    })
   })
   ipcMain.handle(
     IPC.saveExportText,
