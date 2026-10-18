@@ -132,7 +132,7 @@ function ReportChips({ report, testId }: { report: AutoEditReport[]; testId: str
 }
 
 /**
- * Tự dựng một nút (1.10.0): quay xong bấm một nút, AI lập kế hoạch dựng chuyên nghiệp → app làm →
+ * Tự dựng một nút (1.12.0): quay xong bấm một nút, AI lập kế hoạch dựng chuyên nghiệp → app làm →
  * rà soát theo sổ tay; tuỳ chọn tự tìm nhạc nền (Jamendo), chèn tư liệu (Pixabay), tách shorts.
  */
 function AutoBuild() {

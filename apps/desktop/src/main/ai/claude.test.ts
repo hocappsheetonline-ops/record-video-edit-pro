@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { ASSISTANT_KINDS, type DirectorContext } from '@lumora/core'
+import {
+  ASSISTANT_KINDS,
+  EFFECT_INFO,
+  EFFECT_KINDS,
+  TRANSITION_INFO,
+  TRANSITION_KINDS,
+  type DirectorContext,
+} from '@lumora/core'
 import {
   ASSISTANT_SCHEMA,
   assistantSystem,
@@ -47,6 +54,20 @@ describe('lời nhắc đạo diễn AI (1.9.0)', () => {
     ).toEqual([...ASSISTANT_KINDS])
   })
 
+  it('thư viện hiệu ứng và chuyển cảnh: mọi tên có trong schema và được mô tả trong lời nhắc', () => {
+    const props = DIRECTOR_SCHEMA.properties as {
+      commands: {
+        items: { properties: { effect: { enum: string[] }; transition: { enum: string[] } } }
+      }
+    }
+    expect(props.commands.items.properties.effect.enum).toEqual([...EFFECT_KINDS])
+    expect(props.commands.items.properties.transition.enum).toEqual([...TRANSITION_KINDS])
+    const director = directorSystem(base)
+    for (const kind of EFFECT_KINDS) expect(director).toContain(`${kind}: ${EFFECT_INFO[kind]}`)
+    for (const kind of TRANSITION_KINDS)
+      expect(director).toContain(`${kind}: ${TRANSITION_INFO[kind]}`)
+  })
+
   it('đạo diễn nhận sổ tay dựng chuyên nghiệp và ngữ cảnh thời gian thật', () => {
     const system = directorSystem(base)
     expect(system).toContain('AI director')
@@ -86,7 +107,7 @@ describe('lời nhắc đạo diễn AI (1.9.0)', () => {
   })
 })
 
-describe('tự dựng một nút 1.10.0: lời nhắc tách để cache, lệnh mới, chọn highlights', async () => {
+describe('tự dựng một nút 1.12.0: lời nhắc tách để cache, lệnh mới, chọn highlights', async () => {
   const { directorPrompt, HIGHLIGHTS_SCHEMA, highlightsSystem, systemBlocks, systemText } =
     await import('./claude')
 

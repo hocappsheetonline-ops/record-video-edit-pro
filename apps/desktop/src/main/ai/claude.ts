@@ -9,6 +9,7 @@ import {
   CAPTION_TEMPLATES,
   CLEAR_TARGETS,
   CORNERS,
+  EFFECT_INFO,
   EFFECT_KINDS,
   FONT_IDS,
   MUSIC_TEMPOS,
@@ -21,6 +22,7 @@ import {
   SPEED_CURVE_PRESETS,
   TEXT_TEMPLATE_IDS,
   TIMELINE_ROWS,
+  TRANSITION_INFO,
   TRANSITION_KINDS,
   VOICE_FX,
   VOLUME_TARGETS,
@@ -451,13 +453,17 @@ Markers & rows:
 - shorts {mode, seconds, vertical, count}: split the video into short clips, each becoming its own project (mode fixed = every N seconds, chapters = by AI chapters, highlights = AI picks the count best self-contained moments of 15-90 s, each with a hook, vertical TikTok captions and the same look).
 Pro editing (1.9.0):
 - recipe {style}: a whole professional recipe in one command (${RECIPE_STYLES.join(' / ')}): youtube = long-form 16:9 tutorial (silence + filler cuts, clean voice, smooth cursor zoom, pressed keys, box captions, quiet ducked music, chapters); shorts = vertical TikTok / Shorts / Reels (9:16, fast pacing, big TikTok captions, zoom transitions, ducked music); vlog = talking head (karaoke captions, warm look, soft music); clean = minimal (silence cuts, clean voice, outline captions). Explicit commands in the same plan override the recipe's.
-- effectAt {effect, atMs, ms, intensity}: one visual effect at a time (a pattern interrupt: flash / shake / pulse on a reveal, confetti on a success).
+- effectAt {effect, atMs, ms, intensity}: one visual effect at a time (a pattern interrupt: flash / shake / zoomPunch on a reveal, confetti / sparkle on a success, bw / vintage for a flashback, spotlight to focus one spot). Keep most effects 0.5-3 s; strobe / shake under 1 s; colour tints (warm, cool, bw, letterbox, grain) may run over a whole segment.
 - speedRange {fromMs, toMs, factor}: speed up a boring span (loading, typing, waiting: 2-4×) or slow down a key moment (0.5×).
 - speedCurve {preset, atMs}: a CapCut-style speed curve on the clip at atMs (${SPEED_CURVE_PRESETS.join(', ')}).
-- transitionAt {atMs, transition, ms}: a transition at the cut nearest atMs only (use for section changes; hard cuts elsewhere).
+- transitionAt {atMs, transition, ms}: a transition at the cut nearest atMs only (use for section changes; hard cuts elsewhere). Pick by meaning: fadeBlack / wipe for calm section changes, zoom / flash / whip for energetic short-form, slide* for next / previous step, flip for before / after, iris to focus one thing.
+Effect catalogue (name: look; when to use):
+${EFFECT_KINDS.map((k) => `  ${k}: ${EFFECT_INFO[k]}`).join('\n')}
+Transition catalogue (name: look; when to use):
+${TRANSITION_KINDS.map((k) => `  ${k}: ${TRANSITION_INFO[k]}`).join('\n')}
 - captionsLook {font, color, highlightColor, uppercase, maxWords, style}: caption typography; style highlight = word by word (short-form), classic = whole line (long-form, tutorials).
 - outro {text, ms, template}: an end card shown during the last ms of the video (call to action: subscribe / follow / next video); always anchored to the end, even after cuts.
-Auto build (1.10.0):
+Auto build (1.12.0):
 - findMusic {mood, tempo, volume}: the app searches a royalty-free music catalogue (Jamendo, Creative Commons licences that allow commercial use), downloads the best match for the mood (2-4 English words) and tempo (${MUSIC_TEMPOS.join(' / ')}), adds it as background music at volume and ducks it under speech. Prefer it over music when the user has no suitable track in the library or asks the AI to find / pick music. Mood by content: tutorial / demo = "calm corporate" or "soft lofi"; energetic short-form = "upbeat pop" or "electronic"; vlog = "warm acoustic"; reveal / launch = "epic cinematic".
 - broll {query, atMs, ms}: cover the frame with a stock video clip (Pixabay, free licence) from atMs for ms (3-6 s); query = 2-4 English keywords ("typing on laptop", "city traffic", "team meeting"). Use only while the narration is generic (an intro, a concept, a conclusion) and nothing on screen matters; never over a click, a demo step or a zoom.`
 

@@ -920,7 +920,7 @@ describe('lệnh AI 1.9.0: công thức dựng, hiệu ứng / tốc độ / chu
   })
 })
 
-describe('tự dựng một nút 1.10.0', () => {
+describe('tự dựng một nút 1.12.0', () => {
   const s = useEditorStore.getState
 
   it('findMusic: tải bài Jamendo vào kho, chèn làm nhạc nền đúng âm lượng và bật tự giảm khi nói', async () => {

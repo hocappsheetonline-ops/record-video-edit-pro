@@ -283,7 +283,7 @@ describe('dựng chuyên nghiệp 1.9.0: công thức, lời thoại có mốc, 
   })
 })
 
-describe('tự dựng một nút 1.10.0', async () => {
+describe('tự dựng một nút 1.12.0', async () => {
   const {
     autoBuildGoal,
     normalizeAutoBuildOptions,

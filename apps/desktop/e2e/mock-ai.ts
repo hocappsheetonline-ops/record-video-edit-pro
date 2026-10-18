@@ -111,7 +111,7 @@ export async function startMockAi(): Promise<{
       }
       if (path === '/v1/messages') {
         const request = JSON.parse(body.toString('utf8'))
-        // Lời nhắc hệ thống là chuỗi hoặc các khối (phần tĩnh gắn cache_control từ 1.10.0).
+        // Lời nhắc hệ thống là chuỗi hoặc các khối (phần tĩnh gắn cache_control từ 1.12.0).
         const system = Array.isArray(request.system)
           ? request.system.map((b: { text: string }) => b.text).join('\n\n')
           : String(request.system)
@@ -137,7 +137,7 @@ export async function startMockAi(): Promise<{
         }
         if (system.includes('AI director')) {
           const goal = String(request.messages[0].content)
-          // Tự dựng một nút 1.10.0: công thức + hook + tự tìm nhạc + thẻ kết, không câu hỏi.
+          // Tự dựng một nút 1.12.0: công thức + hook + tự tìm nhạc + thẻ kết, không câu hỏi.
           if (goal.startsWith('AUTO BUILD'))
             return json(
               200,

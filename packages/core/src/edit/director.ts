@@ -362,7 +362,7 @@ export function memorySummary(memory: StyleMemory, language = 'vi'): string {
  * học (phụ đề thì dùng mẫu quen, nhạc thì âm lượng quen) + câu hỏi làm rõ khi thiếu thông tin.
  */
 // ---------------------------------------------------------------------------------------------
-// Tự dựng một nút (1.10.0): quay xong, bấm một nút, AI tự lập kế hoạch → app làm → rà soát.
+// Tự dựng một nút (1.12.0): quay xong, bấm một nút, AI tự lập kế hoạch → app làm → rà soát.
 // ---------------------------------------------------------------------------------------------
 
 /** Định dạng đích của bản tự dựng: `auto` = AI chọn theo thời lượng / nội dung. */

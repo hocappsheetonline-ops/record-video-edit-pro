@@ -499,6 +499,150 @@ export function applyTransition(ctx: Ctx, scene: FrameScene) {
     case 'glitch':
       drawGlitch(ctx, snapshot(ctx, w, h), w, h, s, Math.floor(tr.progress * 24) + 1)
       break
+    case 'lightLeak': {
+      const cx = w * (tr.after ? 0.2 : 0.8)
+      const g = ctx.createRadialGradient(cx, h * 0.2, 0, cx, h * 0.2, Math.max(w, h))
+      g.addColorStop(0, `rgba(255,190,80,${0.95 * s})`)
+      g.addColorStop(0.5, `rgba(255,90,120,${0.5 * s})`)
+      g.addColorStop(1, 'rgba(255,90,120,0)')
+      ctx.globalCompositeOperation = 'screen'
+      ctx.fillStyle = g
+      ctx.fillRect(0, 0, w, h)
+      break
+    }
+    case 'zoomOut': {
+      const copy = snapshot(ctx, w, h)
+      const scale = 1 - 0.4 * s
+      ctx.fillStyle = '#000'
+      ctx.fillRect(0, 0, w, h)
+      ctx.filter = `blur(${(s * w) / 600}px)`
+      ctx.translate(w / 2, h / 2)
+      ctx.scale(scale, scale)
+      ctx.drawImage(copy, -w / 2, -h / 2)
+      break
+    }
+    case 'whip': {
+      // Lia máy nhanh: khung bay ngang và nhòe mạnh theo chiều ngang (vẽ nhiều bản lệch).
+      const copy = snapshot(ctx, w, h)
+      const dir = tr.after ? 1 : -1
+      const offset = dir * w * 0.8 * s
+      ctx.fillStyle = '#000'
+      ctx.fillRect(0, 0, w, h)
+      ctx.filter = `blur(${(s * w) / 300}px)`
+      const steps = 6
+      for (let k = 0; k < steps; k++) {
+        ctx.globalAlpha = 1 / steps + (k === 0 ? 0.3 : 0)
+        ctx.drawImage(copy, offset - dir * (k / steps) * w * 0.3 * s, 0)
+      }
+      break
+    }
+    case 'spin': {
+      const copy = snapshot(ctx, w, h)
+      const dir = tr.after ? 1 : -1
+      ctx.fillStyle = '#000'
+      ctx.fillRect(0, 0, w, h)
+      ctx.filter = `blur(${(s * w) / 400}px)`
+      ctx.translate(w / 2, h / 2)
+      ctx.rotate(dir * s * 0.6)
+      const scale = 1 + 0.4 * s
+      ctx.scale(scale, scale)
+      ctx.drawImage(copy, -w / 2, -h / 2)
+      break
+    }
+    case 'slideRight':
+    case 'slideUp':
+    case 'slideDown': {
+      const copy = snapshot(ctx, w, h)
+      // Trước chỗ nối khung cũ trôi ra theo hướng; sau chỗ nối khung mới trượt vào từ phía ngược lại.
+      const sign = tr.after ? -1 : 1
+      const dx = tr.kind === 'slideRight' ? sign * w * 0.45 * s : 0
+      const dy =
+        tr.kind === 'slideUp'
+          ? -sign * h * 0.45 * s
+          : tr.kind === 'slideDown'
+            ? sign * h * 0.45 * s
+            : 0
+      ctx.fillStyle = '#000'
+      ctx.fillRect(0, 0, w, h)
+      ctx.filter = `blur(${(s * w) / 120}px)`
+      ctx.drawImage(copy, dx, dy)
+      break
+    }
+    case 'shake': {
+      const copy = snapshot(ctx, w, h)
+      const rand = seeded(Math.floor(tr.progress * 30) + 5)
+      const dx = (rand() - 0.5) * w * 0.08 * s
+      const dy = (rand() - 0.5) * h * 0.08 * s
+      ctx.fillStyle = '#000'
+      ctx.fillRect(0, 0, w, h)
+      ctx.translate(w / 2 + dx, h / 2 + dy)
+      const scale = 1 + 0.1 * s
+      ctx.scale(scale, scale)
+      ctx.drawImage(copy, -w / 2, -h / 2)
+      break
+    }
+    case 'wipe': {
+      // Rèm đen kéo từ trái sang phủ hết ở chỗ nối, rồi tiếp tục sang phải lộ khung mới.
+      ctx.fillStyle = '#000'
+      if (tr.after) ctx.fillRect(w * (1 - s), 0, w * s, h)
+      else ctx.fillRect(0, 0, w * s, h)
+      break
+    }
+    case 'iris': {
+      // Vòng tròn đóng lại tới chỗ nối rồi mở ra.
+      const r = Math.hypot(w, h) * 0.5 * (1 - s)
+      ctx.fillStyle = '#000'
+      ctx.beginPath()
+      ctx.rect(0, 0, w, h)
+      ctx.arc(w / 2, h / 2, Math.max(0, r), 0, Math.PI * 2, true)
+      ctx.fill('evenodd')
+      break
+    }
+    case 'blinds': {
+      // 8 dải ngang đóng dần (trước) / mở dần (sau).
+      const n = 8
+      const slot = h / n
+      ctx.fillStyle = '#000'
+      for (let k = 0; k < n; k++) {
+        const bar = slot * s
+        ctx.fillRect(0, k * slot + (tr.after ? slot - bar : 0), w, bar)
+      }
+      break
+    }
+    case 'squeeze': {
+      const copy = snapshot(ctx, w, h)
+      ctx.fillStyle = '#000'
+      ctx.fillRect(0, 0, w, h)
+      const sy = Math.max(0.02, 1 - s)
+      ctx.translate(w / 2, h / 2)
+      ctx.scale(1 + 0.15 * s, sy)
+      ctx.drawImage(copy, -w / 2, -h / 2)
+      break
+    }
+    case 'flip': {
+      // Lật thẻ ngang: co theo chiều ngang về một đường rồi nở ra; tối dần ở giữa.
+      const copy = snapshot(ctx, w, h)
+      ctx.fillStyle = '#000'
+      ctx.fillRect(0, 0, w, h)
+      const sx = Math.max(0.02, Math.cos((s * Math.PI) / 2))
+      ctx.translate(w / 2, h / 2)
+      ctx.scale(sx, 1 + 0.08 * s)
+      ctx.filter = `brightness(${1 - 0.5 * s})`
+      ctx.drawImage(copy, -w / 2, -h / 2)
+      break
+    }
+    case 'pixelate': {
+      const copy = snapshot(ctx, w, h)
+      const block = Math.max(1, Math.round((w / 24) * s))
+      if (block <= 1) break
+      const sw = Math.max(1, Math.round(w / block))
+      const sh = Math.max(1, Math.round(h / block))
+      ctx.imageSmoothingEnabled = false
+      ctx.drawImage(copy, 0, 0, w, h, 0, 0, sw, sh)
+      ctx.drawImage(ctx.canvas, 0, 0, sw, sh, 0, 0, w, h)
+      ctx.imageSmoothingEnabled = true
+      break
+    }
   }
   ctx.restore()
 }

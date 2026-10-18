@@ -234,7 +234,7 @@ export type AssistantCommand =
     }
   /** Thẻ kết (CTA: "Đăng ký", "Xem video tiếp") hiện trong `ms` cuối video, luôn bám cuối. */
   | { kind: 'outro'; text: string; ms: number; template: TextTemplateId }
-  // ---- Tự dựng một nút (1.10.0) ----
+  // ---- Tự dựng một nút (1.12.0) ----
   /**
    * AI tự tìm nhạc nền miễn phí bản quyền (Jamendo, giấy phép Creative Commons cho phép dùng
    * thương mại) theo tâm trạng (`mood`: vài từ tiếng Anh như "upbeat corporate", "calm lofi") và
@@ -929,12 +929,16 @@ export function parseAssistantRequest(text: string): AssistantCommand[] {
   const endMs = end ? parseSeconds(end[1]!) : null
   if (endMs) push({ kind: 'trimEnd', ms: endMs })
 
-  if (!cleared.has('effects'))
-    for (const [re, effect] of EFFECT_WORDS)
+  if (!cleared.has('effects')) {
+    const words = /hiệu ứng|effect/i.test(t)
+      ? [...EFFECT_WORDS, ...COLOR_EFFECT_WORDS]
+      : EFFECT_WORDS
+    for (const [re, effect] of words)
       if (re.test(t)) {
         push({ kind: 'effect', effect })
         break
       }
+  }
   if (/chuyển cảnh|transition/i.test(t) && !cleared.has('transitions')) {
     const transition = TRANSITION_WORDS.find(([re]) => re.test(t))?.[1] ?? 'fadeBlack'
     push({ kind: 'transitions', transition })
@@ -1131,17 +1135,53 @@ const EFFECT_WORDS: [RegExp, EffectKind][] = [
   [/rung lắc|rung|shake/i, 'shake'],
   [/glitch|nhiễu số/i, 'glitch'],
   [/\bvhs\b|băng cũ/i, 'vhs'],
+  [/tách màu|rgb|sắc sai|chromatic/i, 'rgbSplit'],
+  [/khảm ô|pixel/i, 'pixelate'],
+  [/hạt phim|film grain|\bgrain\b|nhiễu hạt/i, 'grain'],
   [/pháo giấy|confetti|ăn mừng|celebrat/i, 'confetti'],
+  [/lấp lánh|sparkle|kim tuyến/i, 'sparkle'],
+  [/tuyết|snow/i, 'snow'],
+  [/nhấp nháy|strobe/i, 'strobe'],
   [/lóe sáng|flash/i, 'flash'],
+  [/phóng nhấn|punch/i, 'zoomPunch'],
+  [/nhảy nhún|bounce/i, 'bounce'],
+  [/gương|mirror/i, 'mirror'],
   [/nhún theo nhịp|pulse|beat/i, 'pulse'],
+  [/lọt sáng|light ?leak/i, 'lightLeak'],
+  [/tỏa sáng|\bglow\b|bloom/i, 'glow'],
+  [/đèn rọi|spotlight/i, 'spotlight'],
+  [/dải điện ảnh|letterbox|cinematic bars|dải đen/i, 'letterbox'],
   [/viền tối|vignette/i, 'vignette'],
 ]
+/** Hiệu ứng màu trùng tên với bộ lọc ("bộ lọc cổ điển"): chỉ nhận khi câu có nói "hiệu ứng". */
+const COLOR_EFFECT_WORDS: [RegExp, EffectKind][] = [
+  [/đảo màu|invert/i, 'invert'],
+  [/hai tông|duotone/i, 'duotone'],
+  [/tông ấm|màu ấm|warm/i, 'warm'],
+  [/tông lạnh|màu lạnh|\bcool\b|teal/i, 'cool'],
+  [/đen trắng|black.?(?:and|&)?.?white|\bb&w\b|\bbw\b/i, 'bw'],
+  [/cổ điển|vintage|sepia|retro/i, 'vintage'],
+]
 const TRANSITION_WORDS: [RegExp, TransitionKind][] = [
+  [/lọt sáng|light ?leak/i, 'lightLeak'],
   [/trắng|white/i, 'fadeWhite'],
   [/lóe|flash/i, 'flash'],
+  [/thu nhỏ|zoom ?out/i, 'zoomOut'],
   [/phóng|zoom/i, 'zoom'],
+  [/lia máy|whip/i, 'whip'],
+  [/xoay|spin|rotate/i, 'spin'],
+  [/rung|shake/i, 'shake'],
+  [/khảm ô|pixel/i, 'pixelate'],
   [/nhòe|mờ dần|blur/i, 'blur'],
-  [/lướt|slide/i, 'slide'],
+  [/lướt (?:sang )?phải|slide ?right/i, 'slideRight'],
+  [/lướt lên|slide ?up/i, 'slideUp'],
+  [/lướt xuống|slide ?down/i, 'slideDown'],
+  [/lướt|slide|trượt/i, 'slide'],
+  [/kéo rèm|\bwipe\b/i, 'wipe'],
+  [/vòng tròn|iris|circle/i, 'iris'],
+  [/rèm sáo|blinds/i, 'blinds'],
+  [/ép dẹt|squeeze/i, 'squeeze'],
+  [/lật|flip/i, 'flip'],
   [/glitch/i, 'glitch'],
   [/đen|black|mờ/i, 'fadeBlack'],
 ]
