@@ -352,7 +352,30 @@ function TransitionTile({ kind }: { kind: string }) {
     slide: 'linear-gradient(90deg,#2563eb 0 40%,#9333ea 40%)',
     glitch: 'repeating-linear-gradient(0deg,#2563eb 0 4px,#ec4899 4px 6px,#9333ea 6px 10px)',
   }
-  return <span className="block h-8 w-full rounded" style={{ background: style[kind] }} />
+  const fallback: Record<string, string> = {
+    lightLeak: 'linear-gradient(135deg,#2563eb,#f59e0b 50%,#9333ea)',
+    zoomOut: 'radial-gradient(circle,#2563eb 0 30%,#9333ea 31%)',
+    whip: 'linear-gradient(90deg,#2563eb,#60a5fa 45%,#c4b5fd 55%,#9333ea)',
+    spin: 'conic-gradient(#2563eb,#9333ea,#2563eb)',
+    slideRight: 'linear-gradient(90deg,#9333ea 0 60%,#2563eb 60%)',
+    slideUp: 'linear-gradient(0deg,#2563eb 0 40%,#9333ea 40%)',
+    slideDown: 'linear-gradient(180deg,#2563eb 0 40%,#9333ea 40%)',
+    shake: 'repeating-linear-gradient(90deg,#2563eb 0 6px,#9333ea 6px 10px)',
+    wipe: 'linear-gradient(90deg,#2563eb 0 45%,#000 45% 55%,#9333ea 55%)',
+    iris: 'radial-gradient(circle,#2563eb 0 35%,#000 36%)',
+    blinds: 'repeating-linear-gradient(0deg,#000 0 3px,#2563eb 3px 8px)',
+    squeeze: 'linear-gradient(180deg,#000 0 35%,#2563eb 35% 65%,#000 65%)',
+    flip: 'linear-gradient(90deg,#2563eb,#000 50%,#9333ea)',
+    pixelate: 'repeating-conic-gradient(#2563eb 0 25%,#9333ea 0 50%) 0 0 / 8px 8px',
+  }
+  return (
+    <span
+      className="block h-8 w-full rounded"
+      style={{
+        background: style[kind] ?? fallback[kind] ?? 'linear-gradient(90deg,#2563eb,#9333ea)',
+      }}
+    />
+  )
 }
 
 export function TransitionProps({ afterClip, edit }: { afterClip: string; edit: EditState }) {

@@ -1,17 +1,104 @@
 /** Hiệu ứng hình áp lên một khoảng thời gian của video xuất (kiểu CapCut "Hiệu ứng"). */
 export const EFFECT_KINDS = [
+  // Chuyển động
   'shake',
+  'pulse',
+  'zoomPunch',
+  'bounce',
+  'mirror',
+  // Glitch / retro
   'glitch',
   'vhs',
+  'rgbSplit',
+  'pixelate',
+  'grain',
+  // Màu sắc
   'bw',
   'vintage',
-  'vignette',
-  'blur',
+  'invert',
+  'duotone',
+  'warm',
+  'cool',
+  // Ánh sáng & khung
   'flash',
-  'pulse',
+  'strobe',
+  'glow',
+  'lightLeak',
+  'vignette',
+  'spotlight',
+  'letterbox',
+  'blur',
+  // Hạt
   'confetti',
+  'sparkle',
+  'snow',
 ] as const
 export type EffectKind = (typeof EFFECT_KINDS)[number]
+
+export const EFFECT_CATEGORIES = ['motion', 'glitch', 'color', 'light', 'particles'] as const
+export type EffectCategory = (typeof EFFECT_CATEGORIES)[number]
+
+/** Nhóm của từng hiệu ứng (để bày trong Thư viện và cho AI chọn theo mục đích). */
+export const EFFECT_CATEGORY: Record<EffectKind, EffectCategory> = {
+  shake: 'motion',
+  pulse: 'motion',
+  zoomPunch: 'motion',
+  bounce: 'motion',
+  mirror: 'motion',
+  glitch: 'glitch',
+  vhs: 'glitch',
+  rgbSplit: 'glitch',
+  pixelate: 'glitch',
+  grain: 'glitch',
+  bw: 'color',
+  vintage: 'color',
+  invert: 'color',
+  duotone: 'color',
+  warm: 'color',
+  cool: 'color',
+  flash: 'light',
+  strobe: 'light',
+  glow: 'light',
+  lightLeak: 'light',
+  vignette: 'light',
+  spotlight: 'light',
+  letterbox: 'light',
+  blur: 'light',
+  confetti: 'particles',
+  sparkle: 'particles',
+  snow: 'particles',
+}
+
+/** Mô tả ngắn (tiếng Anh, cho lời nhắc AI) — khi nào nên dùng hiệu ứng này. */
+export const EFFECT_INFO: Record<EffectKind, string> = {
+  shake: 'camera shake; impact, surprise, "boom" moments',
+  pulse: 'rhythmic zoom pulse every 0.5 s; music beats, energetic intros',
+  zoomPunch: 'one quick punch-in that settles back; emphasise a reveal or a key word',
+  bounce: 'frame bobs up and down; playful, meme-like moments',
+  mirror: 'left half mirrored to the right; abstract, music-video look',
+  glitch: 'digital glitch bursts; errors, bugs, tech transitions',
+  vhs: 'retro VHS tape: scanlines, noise, colour bleed; nostalgia',
+  rgbSplit: 'chromatic aberration (red / blue offset); edgy, cyber feel',
+  pixelate: 'whole frame pixelated to big blocks; "loading", 8-bit, censor jokes',
+  grain: 'film grain; cinematic, documentary feel',
+  bw: 'black & white; flashbacks, serious or "before" segments',
+  vintage: 'sepia faded film; old memories',
+  invert: 'inverted colours; shock, "wrong!" moments',
+  duotone: 'two-colour poster look (purple / orange); stylised intros',
+  warm: 'warm golden tint; cosy, friendly segments',
+  cool: 'cool teal / blue tint; calm, professional, night mood',
+  flash: 'white flash every 0.5 s fading out; beat drops',
+  strobe: 'fast strobe flashes (6 / s); hype, countdowns (use briefly)',
+  glow: 'soft bloom glow; dreamy, highlight something beautiful',
+  lightLeak: 'drifting warm light leak; vlogs, summer, memories',
+  vignette: 'dark edges; focus the centre, cinematic',
+  spotlight: 'darken everything except the centre; focus attention on one spot',
+  letterbox: 'cinematic black bars (2.35:1); film-like segments',
+  blur: 'whole frame blurred; dreamy or "unfocused" segments, behind text',
+  confetti: 'falling confetti; success, celebration, "done!"',
+  sparkle: 'twinkling sparkles; premium, magic, beautiful results',
+  snow: 'falling snow; winter, holidays, calm',
+}
 
 export interface EffectRegion {
   id: string

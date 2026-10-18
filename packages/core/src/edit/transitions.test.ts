@@ -64,3 +64,26 @@ describe('transitions', () => {
     expect(parseEditState(old, project as never).transitions).toEqual([])
   })
 })
+
+describe('thư viện chuyển cảnh', () => {
+  it('mỗi chuyển cảnh có nhóm, mô tả cho AI và phân tích được từ file dự án', async () => {
+    const { TRANSITION_CATEGORIES, TRANSITION_CATEGORY, TRANSITION_INFO, TRANSITION_KINDS } =
+      await import('./transitions')
+    expect(TRANSITION_KINDS.length).toBeGreaterThanOrEqual(21)
+    expect(new Set(TRANSITION_KINDS).size).toBe(TRANSITION_KINDS.length)
+    for (const kind of TRANSITION_KINDS) {
+      expect(TRANSITION_CATEGORIES).toContain(TRANSITION_CATEGORY[kind])
+      expect(TRANSITION_INFO[kind].length).toBeGreaterThan(10)
+    }
+    for (const cat of TRANSITION_CATEGORIES)
+      expect(
+        TRANSITION_KINDS.some((k) => TRANSITION_CATEGORY[k] === cat),
+        cat,
+      ).toBe(true)
+    const parsed = parseTransitions(
+      TRANSITION_KINDS.map((kind) => ({ afterClip: `c-${kind}`, kind, durationMs: 400 })),
+    )
+    expect(parsed.map((t) => t.kind)).toEqual([...TRANSITION_KINDS])
+    expect(parseTransitions([{ afterClip: 'a', kind: 'crossfade' }])).toEqual([])
+  })
+})

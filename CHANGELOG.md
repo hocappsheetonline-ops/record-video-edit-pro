@@ -2,6 +2,12 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.11.0
+
+- **Thư viện hiệu ứng 27 kiểu, chia 5 nhóm** (Thư viện → Hiệu ứng): thêm 17 hiệu ứng mới kiểu CapCut — **Chuyển động**: Phóng nhấn, Nhảy nhún, Gương đối xứng; **Glitch & retro**: Tách màu RGB, Khảm ô, Hạt phim; **Màu sắc**: Đảo màu, Hai tông màu, Tông ấm, Tông lạnh; **Ánh sáng & khung**: Nhấp nháy nhanh, Tỏa sáng, Lọt sáng, Đèn rọi, Dải điện ảnh; **Hạt bay**: Lấp lánh, Tuyết rơi. Mọi hiệu ứng tính theo thời gian trên cùng một canvas nên tua tới đâu cũng đúng và **video xuất giống hệt xem trước**.
+- **Thư viện chuyển cảnh 21 kiểu, chia 4 nhóm** (Thư viện → Chuyển cảnh hoặc nút ◆ ở chỗ nối): thêm 14 chuyển cảnh mới — Lọt sáng, Thu nhỏ, Lia máy (whip pan), Xoay, Lướt phải / lên / xuống, Rung lắc, Kéo rèm, Vòng tròn (iris), Rèm sáo, Ép dẹt, Lật thẻ, Khảm ô. Ô trong thư viện có biểu tượng và đánh dấu kiểu đang dùng; **Áp dụng cho tất cả chỗ nối** dùng đúng kiểu và thời gian đang chọn thay vì luôn là Mờ qua đen.
+- **Đạo diễn AI chọn hiệu ứng theo ý nghĩa**: lời nhắc hệ thống có **danh mục hiệu ứng và chuyển cảnh** (tên, trông thế nào, dùng khi nào: zoomPunch / flash khi lộ kết quả, confetti / sparkle khi thành công, bw / vintage cho hồi tưởng, spotlight để tập trung một chỗ; fadeBlack / wipe cho đổi phần, zoom / whip cho short-form, slide* cho bước tiếp / trước, flip cho trước – sau, iris để tập trung) kèm gợi ý độ dài. Bộ hiểu từ khóa (không có AI) nhận tên tiếng Việt / tiếng Anh của mọi hiệu ứng và chuyển cảnh mới ("hiệu ứng lấp lánh", "chuyển cảnh lia máy", "lướt sang phải"…); hiệu ứng màu trùng tên bộ lọc chỉ nhận khi câu có chữ "hiệu ứng".
+
 ## 1.9.1
 
 - **Sửa tiếng thu bị giật và rè.** Chromium đóng dấu từng gói âm thanh của MediaRecorder theo giờ thu thật, nên khi micro / loopback khựng hoặc máy bận mã hóa video, mốc thời gian bị hụt: phát lên nghe giật và tiếng lệch dần so với hình. Khi lưu bản quay, track micro và âm thanh máy (và bản lồng tiếng) được chuẩn hóa mốc thời gian (`aresample async`: điền im lặng đúng chỗ hụt, giữ nguyên độ dài) rồi mã hóa lại Opus 48 kHz. Micro giờ **thu thô** (tắt khử vang, lọc ồn và tự chỉnh gain của Chromium, 48 kHz mono) vì ba bộ lọc đó làm tiếng rè, bập bùng và nuốt đầu câu, còn khử vang không có tác dụng với âm thanh máy; lọc tạp âm làm sau bằng RNNoise trong trình chỉnh sửa (Âm thanh → Lọc tạp âm) sạch hơn. Livestream vẫn bật xử lý giọng để khử vang tiếng loa. Trang Quay thả micro / webcam xem trước trong lúc đang quay để không có hai luồng cùng mở một thiết bị.

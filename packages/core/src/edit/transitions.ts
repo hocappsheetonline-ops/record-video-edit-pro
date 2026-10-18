@@ -5,15 +5,86 @@ import { clipPositions, clipDuration, type Clip } from './timeline'
  * nối nên không làm thay đổi độ dài video hay lệch tiếng.
  */
 export const TRANSITION_KINDS = [
+  // Cơ bản
   'fadeBlack',
   'fadeWhite',
   'flash',
+  'lightLeak',
+  // Chuyển động
   'zoom',
-  'blur',
+  'zoomOut',
+  'whip',
+  'spin',
   'slide',
+  'slideRight',
+  'slideUp',
+  'slideDown',
+  'shake',
+  // Hình khối
+  'wipe',
+  'iris',
+  'blinds',
+  'squeeze',
+  'flip',
+  // Cách điệu
+  'blur',
   'glitch',
+  'pixelate',
 ] as const
 export type TransitionKind = (typeof TRANSITION_KINDS)[number]
+
+export const TRANSITION_CATEGORIES = ['basic', 'motion', 'shape', 'stylized'] as const
+export type TransitionCategory = (typeof TRANSITION_CATEGORIES)[number]
+
+/** Nhóm của từng chuyển cảnh (bày trong Thư viện, AI chọn theo mục đích). */
+export const TRANSITION_CATEGORY: Record<TransitionKind, TransitionCategory> = {
+  fadeBlack: 'basic',
+  fadeWhite: 'basic',
+  flash: 'basic',
+  lightLeak: 'basic',
+  zoom: 'motion',
+  zoomOut: 'motion',
+  whip: 'motion',
+  spin: 'motion',
+  slide: 'motion',
+  slideRight: 'motion',
+  slideUp: 'motion',
+  slideDown: 'motion',
+  shake: 'motion',
+  wipe: 'shape',
+  iris: 'shape',
+  blinds: 'shape',
+  squeeze: 'shape',
+  flip: 'shape',
+  blur: 'stylized',
+  glitch: 'stylized',
+  pixelate: 'stylized',
+}
+
+/** Mô tả ngắn (tiếng Anh, cho lời nhắc AI) — khi nào nên dùng chuyển cảnh này. */
+export const TRANSITION_INFO: Record<TransitionKind, string> = {
+  fadeBlack: 'fade through black; calm section change, time passing (400-800 ms)',
+  fadeWhite: 'fade through white; soft, bright, dreamy section change',
+  flash: 'quick white flash; energetic beat cut, short-form (200-300 ms)',
+  lightLeak: 'warm light leak sweep; vlog, summer, memories',
+  zoom: 'zoom-in punch into the cut; TikTok / Shorts default, fast (200-400 ms)',
+  zoomOut: 'zoom-out pull back through the cut; reveal the bigger picture',
+  whip: 'whip pan with heavy motion blur; fast scene changes, travel vlogs',
+  spin: 'spin rotate through the cut; playful, hype',
+  slide: 'slide left (new clip comes from the right); next step / forward',
+  slideRight: 'slide right (new clip comes from the left); back / previous',
+  slideUp: 'slide up; vertical video, scrolling to the next point',
+  slideDown: 'slide down; dropping into a detail',
+  shake: 'camera shake over the cut; impact, "boom"',
+  wipe: 'black curtain wipe left to right; classic, clean',
+  iris: 'circle iris close / open; cartoon, focus on one thing',
+  blinds: 'horizontal blinds; retro slideshow',
+  squeeze: 'vertical squeeze to a line and back; snappy, mechanical',
+  flip: 'horizontal card flip; comparing two things, before / after',
+  blur: 'blur through the cut; dreamy, soft',
+  glitch: 'digital glitch; tech, errors, edgy',
+  pixelate: 'pixelate to blocks and back; 8-bit, "loading"',
+}
 
 export interface Transition {
   /** Chuyển tiếp nằm giữa clip này và clip ngay sau nó. */
