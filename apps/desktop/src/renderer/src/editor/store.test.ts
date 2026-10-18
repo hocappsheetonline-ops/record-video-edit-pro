@@ -327,6 +327,273 @@ describe('lệnh trợ lý AI (applyAssistantCommands)', () => {
   })
 })
 
+describe('lệnh mở rộng của Đạo diễn AI (timeline, âm thanh, khung, lớp, phụ đề, mốc)', () => {
+  const s = useEditorStore.getState
+
+  it('cutRange cắt một đoạn trên video xuất; freeze chèn khung đứng yên; too_short khi vô nghĩa', async () => {
+    const report = await s().applyAssistantCommands([
+      { kind: 'cutRange', fromMs: 1000, toMs: 2000 },
+      { kind: 'freeze', atMs: 500, ms: 1500 },
+    ])
+    expect(report).toEqual([
+      { step: 'cutRange', status: 'done', detail: 1 },
+      { step: 'freeze', status: 'done', detail: 1 },
+    ])
+    // 7000 - 1000 (cắt) + 1500 (đứng yên).
+    expect(outputDuration(s().edit!.clips)).toBe(7500)
+    expect(s().edit!.clips.some((c) => c.freeze === 1500)).toBe(true)
+    expect(s().past).toHaveLength(1)
+    expect(
+      await s().applyAssistantCommands([{ kind: 'cutRange', fromMs: 0, toMs: 60_000 }]),
+    ).toEqual([{ step: 'cutRange', status: 'skipped', detail: 'too_short' }])
+  })
+
+  it('flip / rotate đặt biến đổi cho mọi clip; về mặc định thì bỏ trường transform', async () => {
+    await s().applyAssistantCommands([
+      { kind: 'flip', axis: 'horizontal' },
+      { kind: 'rotate', degrees: 90 },
+    ])
+    expect(s().edit!.clips.every((c) => c.transform?.flipH && c.transform.rotate === 90)).toBe(true)
+    s().undo()
+    expect(s().edit!.clips.every((c) => c.transform === undefined)).toBe(true)
+  })
+
+  it('volume: mic / máy đổi mức chung; nhạc chưa có thì bỏ qua; voiceFx đổi giọng mic', async () => {
+    const report = await s().applyAssistantCommands([
+      { kind: 'volume', target: 'mic', level: 0 },
+      { kind: 'volume', target: 'system', level: 1.5 },
+      { kind: 'volume', target: 'music', level: 0.2 },
+      { kind: 'voiceFx', voice: 'robot' },
+      { kind: 'fade', ms: 800 },
+    ])
+    expect(report).toEqual([
+      { step: 'volume', status: 'done', detail: 1 },
+      { step: 'volume', status: 'done', detail: 1 },
+      { step: 'volume', status: 'skipped', detail: 'no_music' },
+      { step: 'voiceFx', status: 'done', detail: 1 },
+      { step: 'fade', status: 'skipped', detail: 'no_music' },
+    ])
+    expect(s().edit!.audio).toMatchObject({ mic: 0, system: 1.5 })
+    expect(s().edit!.audio.micFx.voice).toBe('robot')
+    // Có nhạc rồi thì âm lượng và fade áp cho bài nhạc.
+    await api.addMusicPaths(['C:\\nhac\\Lofi Chill.mp3'], 'file')
+    await s().applyAssistantCommands([
+      { kind: 'music', query: 'lofi', volume: 0.4 },
+      { kind: 'volume', target: 'music', level: 0.2 },
+      { kind: 'fade', ms: 800 },
+    ])
+    const music = s().edit!.audioClips.find((a) => a.kind === 'music')!
+    expect(music).toMatchObject({ volume: 0.2, fadeIn: 800, fadeOut: 800 })
+  })
+
+  it('sound chèn hiệu ứng âm thanh tại thời điểm, không chọn', async () => {
+    const report = await s().applyAssistantCommands([{ kind: 'sound', sound: 'tada', atMs: 2500 }])
+    expect(report).toEqual([{ step: 'sound', status: 'done', detail: 1 }])
+    expect(api.addSoundEffect).toHaveBeenCalledWith(sampleSummary.folder, 'tada')
+    expect(s().edit!.audioClips).toMatchObject([{ kind: 'sfx', start: 2500, duration: 800 }])
+    expect(s().selection).toBeNull()
+  })
+
+  it('zoomLevel đặt mức cho mọi zoom; zoomAt thêm đoạn theo thời gian xuất; motion đổi chuyển động', async () => {
+    const report = await s().applyAssistantCommands([
+      { kind: 'zoomLevel', scale: 3 },
+      { kind: 'zoomAt', atMs: 4000, ms: 2000, scale: 2.5 },
+      { kind: 'motion', cameraSpeed: 0.3, zoomMs: 1200 },
+    ])
+    expect(report).toEqual([
+      { step: 'zoomLevel', status: 'done', detail: 1 },
+      { step: 'zoomAt', status: 'done', detail: 1 },
+      { step: 'motion', status: 'done', detail: 1 },
+    ])
+    const zooms = s().edit!.zooms
+    expect(zooms).toHaveLength(2)
+    expect(zooms[0]!.scale).toBe(3)
+    // Chưa cắt gì nên thời gian xuất trùng thời gian nguồn.
+    expect(zooms[1]).toMatchObject({ start: 4000, end: 6000, scale: 2.5, mode: 'follow' })
+    expect(s().edit!.motion).toEqual({ cameraSpeed: 0.3, zoomTransitionMs: 1200 })
+    expect(s().past).toHaveLength(1)
+    await s().applyAssistantCommands([{ kind: 'clear', target: 'zooms' }])
+    expect(await s().applyAssistantCommands([{ kind: 'zoomLevel', scale: 2 }])).toEqual([
+      { step: 'zoomLevel', status: 'skipped', detail: 'no_zooms' },
+    ])
+  })
+
+  it('frame / background / cursor / camera chỉ đổi trường được nêu', async () => {
+    const before = s().edit!
+    await s().applyAssistantCommands([
+      { kind: 'frame', padding: 0.1, fill: false },
+      { kind: 'background', color: '#112233', color2: '#445566' },
+      { kind: 'cursor', visible: false, size: 2 },
+      {
+        kind: 'camera',
+        visible: true,
+        shape: 'square',
+        position: 'top-left',
+        beauty: true,
+        background: 'blur',
+      },
+    ])
+    const e = s().edit!
+    expect(e.frame).toMatchObject({
+      padding: 0.1,
+      radius: before.frame.radius,
+      shadow: before.frame.shadow,
+      background: { kind: 'gradient', color: '#112233', color2: '#445566' },
+    })
+    expect(e.cursor).toMatchObject({
+      visible: false,
+      size: 2,
+      clickEffect: before.cursor.clickEffect,
+    })
+    expect(e.camera).toMatchObject({
+      shape: 'square',
+      position: 'top-left',
+      x: 0,
+      y: 0,
+      size: before.camera.size,
+      background: { mode: 'blur' },
+    })
+    expect(e.camera.beauty.smooth).toBeGreaterThan(0)
+    await s().applyAssistantCommands([{ kind: 'background', color: '#000000', color2: '' }])
+    expect(s().edit!.frame.background).toEqual({
+      kind: 'solid',
+      color: '#000000',
+      color2: '#000000',
+      angle: 0,
+    })
+  })
+
+  it('text / sticker / shape thêm lớp tại thời điểm và vị trí, không chọn lớp', async () => {
+    const report = await s().applyAssistantCommands([
+      {
+        kind: 'text',
+        text: 'Xin chào',
+        atMs: 1000,
+        ms: 2000,
+        template: 'neon',
+        position: 'bottom',
+      },
+      { kind: 'sticker', emoji: '🔥', atMs: 500, ms: 1000, position: 'center' },
+      { kind: 'shape', shape: 'arrow', atMs: 0, ms: 3000, x: 0.8, y: 0.3, color: '#ff0000' },
+      // Sát cuối video: cắt bớt cho vừa.
+      { kind: 'text', text: 'Hết', atMs: 6500, ms: 5000, template: 'title', position: 'top' },
+    ])
+    expect(report.map((r) => r.status)).toEqual(['done', 'done', 'done', 'done'])
+    const o = s().edit!.overlays
+    expect(o).toHaveLength(4)
+    expect(o[0]).toMatchObject({ kind: 'text', text: 'Xin chào', start: 1000, end: 3000, y: 0.85 })
+    expect(o[0]!.textStyle?.font).toBeDefined()
+    expect(o[1]).toMatchObject({ kind: 'emoji', text: '🔥', start: 500, end: 1500, x: 0.5, y: 0.5 })
+    expect(o[2]).toMatchObject({ kind: 'shape', shape: 'arrow', color: '#ff0000', x: 0.8, y: 0.3 })
+    expect(o[3]).toMatchObject({ start: 6500, end: 7000, y: 0.15 })
+    expect(s().selection).toBeNull()
+    expect(s().past).toHaveLength(1)
+  })
+
+  it('adjust đổi từng thông số màu; clear filter / adjust đặt lại', async () => {
+    await s().applyAssistantCommands([
+      { kind: 'filter', preset: 'warm', intensity: 0.8 },
+      { kind: 'adjust', setting: 'brightness', value: 0.3 },
+      { kind: 'adjust', setting: 'contrast', value: -0.2 },
+    ])
+    expect(s().edit!.look.adjust).toMatchObject({ brightness: 0.3, contrast: -0.2, saturation: 0 })
+    const report = await s().applyAssistantCommands([
+      { kind: 'clear', target: 'filter' },
+      { kind: 'clear', target: 'adjust' },
+      { kind: 'clear', target: 'adjust' },
+    ])
+    expect(report).toEqual([
+      { step: 'clear', status: 'done', detail: 1 },
+      { step: 'clear', status: 'done', detail: 1 },
+      { step: 'clear', status: 'skipped', detail: 'nothing' },
+    ])
+    expect(s().edit!.look).toEqual(DEFAULT_LOOK)
+  })
+
+  it('captionsLayout và translate: chưa có phụ đề thì bỏ qua; có thì dịch thay / song ngữ', async () => {
+    expect(
+      await s().applyAssistantCommands([
+        { kind: 'captionsLayout', position: 'top', size: 1.4 },
+        { kind: 'translate', language: 'en', bilingual: false },
+      ]),
+    ).toEqual([
+      { step: 'captionsLayout', status: 'done', detail: 1 },
+      { step: 'translate', status: 'skipped', detail: 'no_captions' },
+    ])
+    expect(s().edit!.captions).toMatchObject({ position: 'top', size: 1.4, look: { y: 0.12 } })
+    s().change((e) => ({
+      ...e,
+      captions: {
+        ...e.captions,
+        enabled: true,
+        lines: [{ id: 'l1', start: 1000, end: 2000, text: 'xin chào', words: [], edited: false }],
+      },
+    }))
+    await s().applyAssistantCommands([{ kind: 'translate', language: 'en', bilingual: true }])
+    expect(s().edit!.captions).toMatchObject({
+      bilingual: true,
+      translationLanguage: 'en',
+      lines: [{ text: 'xin chào', translation: 'EN: xin chào' }],
+    })
+    await s().applyAssistantCommands([{ kind: 'translate', language: 'en', bilingual: false }])
+    expect(s().edit!.captions).toMatchObject({
+      bilingual: false,
+      language: 'en',
+      lines: [{ text: 'EN: xin chào', edited: true }],
+    })
+    expect(s().edit!.captions.lines[0]!.translation).toBeUndefined()
+    expect(await s().applyAssistantCommands([{ kind: 'clear', target: 'captions' }])).toEqual([
+      { step: 'clear', status: 'done', detail: 1 },
+    ])
+    expect(s().edit!.captions).toMatchObject({ enabled: false, lines: [] })
+  })
+
+  it('marker / chapters thêm mốc; track ẩn hàng; clear theo loại và khôi phục bản quay', async () => {
+    s().setTime(2000)
+    s().splitAtPlayhead()
+    s().select({ kind: 'clip', id: s().edit!.clips[0]!.id })
+    s().deleteSelection()
+    expect(outputDuration(s().edit!.clips)).toBe(5000)
+    const report = await s().applyAssistantCommands([
+      { kind: 'marker', atMs: 1000, label: 'Mốc A' },
+      { kind: 'chapters' },
+      { kind: 'track', row: 'effects', hidden: true },
+      { kind: 'effect', effect: 'shake' },
+      { kind: 'clear', target: 'effects' },
+      { kind: 'clear', target: 'sfx' },
+      { kind: 'clear', target: 'cuts' },
+    ])
+    expect(report).toEqual([
+      { step: 'marker', status: 'done', detail: 1 },
+      // Chương "Mở đầu" (nguồn 0) đã bị cắt; "Phần 2" (nguồn 5500 → xuất 3500) còn.
+      { step: 'chapters', status: 'done', detail: 1 },
+      { step: 'track', status: 'done', detail: 1 },
+      { step: 'effect', status: 'done', detail: 2 },
+      { step: 'clear', status: 'done', detail: 2 },
+      { step: 'clear', status: 'skipped', detail: 'nothing' },
+      { step: 'clear', status: 'done', detail: 1 },
+    ])
+    expect(s().edit!.markers.map((m) => [m.t, m.label])).toEqual([
+      [1000, 'Mốc A'],
+      [3500, 'Phần 2'],
+    ])
+    expect(s().edit!.tracks.effects.hidden).toBe(true)
+    expect(s().edit!.effects).toEqual([])
+    expect(outputDuration(s().edit!.clips)).toBe(7000)
+  })
+
+  it('shorts: video 7 giây không chia được (đoạn tối thiểu 5 giây) thì báo too_short; export đặt fps', async () => {
+    const report = await s().applyAssistantCommands([
+      { kind: 'shorts', mode: 'fixed', seconds: 5, vertical: true },
+    ])
+    expect(report).toEqual([{ step: 'shorts', status: 'skipped', detail: 'too_short' }])
+    expect(api.duplicateProject).not.toHaveBeenCalled()
+    s().requestExport = () => {}
+    await s().applyAssistantCommands([{ kind: 'export', resolution: 720, format: 'mp4', fps: 60 }])
+    expect(s().edit!.export).toMatchObject({ resolution: 720, fps: 60 })
+  })
+})
+
 describe('đạo diễn AI', () => {
   const key = `lumora.director.${sampleSummary.folder}`
   const saved = () => JSON.parse(localStorage.getItem(key)!).messages as unknown[]

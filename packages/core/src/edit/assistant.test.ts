@@ -61,3 +61,160 @@ describe('parseAssistantRequest', () => {
     expect(normalizeAssistantCommands('x')).toEqual([])
   })
 })
+
+describe('lệnh mở rộng (hầu hết tính năng chỉnh sửa)', () => {
+  it('normalize: đọc đúng từng lệnh mới, kẹp giá trị, điền mặc định', () => {
+    expect(
+      normalizeAssistantCommands([
+        { kind: 'cutRange', fromMs: 1000, toMs: 2500.7 },
+        { kind: 'freeze', atMs: 3000 },
+        { kind: 'flip', axis: 'horizontal' },
+        { kind: 'rotate', degrees: 90 },
+        { kind: 'volume', target: 'mic', level: 5 },
+        { kind: 'voiceFx', voice: 'robot' },
+        { kind: 'fade', ms: 99_999 },
+        { kind: 'sound', sound: 'tada', atMs: 500 },
+        { kind: 'zoomLevel', scale: 9 },
+        { kind: 'zoomAt', atMs: 2000 },
+        { kind: 'motion', zoomMs: 100 },
+        { kind: 'frame', padding: 0.9, fill: true },
+        { kind: 'background', color: '#1E1B4B' },
+        { kind: 'cursor', visible: false },
+        { kind: 'camera', shape: 'square', position: 'top-left', beauty: true },
+        { kind: 'text', text: ' Xin chào ', atMs: 1000, template: 'neon', position: 'bottom' },
+        { kind: 'sticker', emoji: '🔥', atMs: 2000 },
+        { kind: 'shape', shape: 'arrow', atMs: 0, x: 0.8, y: 1.7 },
+        { kind: 'adjust', setting: 'brightness', value: 0.333 },
+        { kind: 'adjust', setting: 'grain', value: -1 },
+        { kind: 'captionsLayout', position: 'top' },
+        { kind: 'translate', language: 'EN', bilingual: true },
+        { kind: 'marker', atMs: 4000, label: 'Mốc' },
+        { kind: 'chapters' },
+        { kind: 'track', row: 'effects', hidden: true },
+        { kind: 'clear', target: 'music' },
+        { kind: 'shorts', seconds: 45 },
+        { kind: 'export', resolution: 720, format: 'mp4', fps: 60 },
+      ]),
+    ).toEqual([
+      { kind: 'cutRange', fromMs: 1000, toMs: 2501 },
+      { kind: 'freeze', atMs: 3000, ms: 2000 },
+      { kind: 'flip', axis: 'horizontal' },
+      { kind: 'rotate', degrees: 90 },
+      { kind: 'volume', target: 'mic', level: 2 },
+      { kind: 'voiceFx', voice: 'robot' },
+      { kind: 'fade', ms: 10_000 },
+      { kind: 'sound', sound: 'tada', atMs: 500 },
+      { kind: 'zoomLevel', scale: 5 },
+      { kind: 'zoomAt', atMs: 2000, ms: 3000, scale: 2 },
+      { kind: 'motion', zoomMs: 250 },
+      { kind: 'frame', padding: 0.45, fill: true },
+      { kind: 'background', color: '#1e1b4b', color2: '' },
+      { kind: 'cursor', visible: false },
+      { kind: 'camera', shape: 'square', position: 'top-left', beauty: true },
+      {
+        kind: 'text',
+        text: 'Xin chào',
+        atMs: 1000,
+        ms: 3000,
+        template: 'neon',
+        position: 'bottom',
+      },
+      { kind: 'sticker', emoji: '🔥', atMs: 2000, ms: 3000, position: 'center' },
+      { kind: 'shape', shape: 'arrow', atMs: 0, ms: 3000, x: 0.8, y: 1, color: '#ef4444' },
+      { kind: 'adjust', setting: 'brightness', value: 0.33 },
+      { kind: 'adjust', setting: 'grain', value: 0 },
+      { kind: 'captionsLayout', position: 'top' },
+      { kind: 'translate', language: 'en', bilingual: true },
+      { kind: 'marker', atMs: 4000, label: 'Mốc' },
+      { kind: 'chapters' },
+      { kind: 'track', row: 'effects', hidden: true },
+      { kind: 'clear', target: 'music' },
+      { kind: 'shorts', mode: 'fixed', seconds: 45, vertical: true },
+      { kind: 'export', resolution: 720, format: 'mp4', fps: 60 },
+    ])
+  })
+
+  it('normalize: bỏ lệnh thiếu dữ liệu; trùng theo mục / thời điểm mới bị bỏ', () => {
+    expect(
+      normalizeAssistantCommands([
+        { kind: 'cutRange', fromMs: 3000, toMs: 1000 },
+        { kind: 'freeze' },
+        { kind: 'rotate', degrees: 45 },
+        { kind: 'volume', target: 'tv', level: 1 },
+        { kind: 'background', color: 'xanh' },
+        { kind: 'motion' },
+        { kind: 'frame' },
+        { kind: 'camera' },
+        { kind: 'text', text: '' },
+        { kind: 'shape', shape: 'triangle', atMs: 0 },
+        { kind: 'translate', language: 'tiếng anh' },
+        { kind: 'track', row: 'clips' },
+        { kind: 'clear', target: 'everything' },
+        { kind: 'adjust', setting: 'contrast', value: 0.2 },
+        { kind: 'adjust', setting: 'contrast', value: 0.9 },
+        { kind: 'adjust', setting: 'saturation', value: 0.2 },
+        { kind: 'marker', atMs: 1000, label: 'a' },
+        { kind: 'marker', atMs: 1000, label: 'b' },
+        { kind: 'marker', atMs: 2000, label: 'c' },
+        { kind: 'clear', target: 'zooms' },
+        { kind: 'clear', target: 'zooms' },
+        { kind: 'clear', target: 'effects' },
+      ]),
+    ).toEqual([
+      { kind: 'adjust', setting: 'contrast', value: 0.2 },
+      { kind: 'adjust', setting: 'saturation', value: 0.2 },
+      { kind: 'marker', atMs: 1000, label: 'a' },
+      { kind: 'marker', atMs: 2000, label: 'c' },
+      { kind: 'clear', target: 'zooms' },
+      { kind: 'clear', target: 'effects' },
+    ])
+  })
+
+  it('từ khóa: mức zoom không bị hiểu nhầm thành tốc độ, không kéo theo tự zoom', () => {
+    expect(parseAssistantRequest('đặt mức zoom 2.5x')).toEqual([{ kind: 'zoomLevel', scale: 2.5 }])
+    expect(parseAssistantRequest('zoom theo chuột, tốc độ 1.5x').map((c) => c.kind)).toEqual([
+      'autoZoom',
+      'speed',
+    ])
+  })
+
+  it('từ khóa: bỏ nhạc / zoom / phụ đề / bộ lọc thành lệnh clear, không thêm lại', () => {
+    expect(parseAssistantRequest('bỏ nhạc nền và xóa hết zoom, tắt phụ đề, bỏ bộ lọc')).toEqual([
+      { kind: 'clear', target: 'zooms' },
+      { kind: 'clear', target: 'music' },
+      { kind: 'clear', target: 'captions' },
+      { kind: 'clear', target: 'filter' },
+    ])
+    expect(parseAssistantRequest('remove the music').map((c) => c.kind)).toEqual(['clear'])
+  })
+
+  it('từ khóa: tắt tiếng, lật, xoay, webcam, con trỏ, phụ đề trên, dịch, chương, video ngắn', () => {
+    expect(
+      parseAssistantRequest(
+        'tắt tiếng mic, lật ngang, xoay 180 độ, ẩn webcam, hiện con trỏ, phụ đề ở trên, dịch phụ đề sang tiếng Anh, thêm chương',
+      ),
+    ).toEqual([
+      { kind: 'captions' },
+      { kind: 'captionsLayout', position: 'top' },
+      { kind: 'translate', language: 'en', bilingual: false },
+      { kind: 'volume', target: 'mic', level: 0 },
+      { kind: 'flip', axis: 'horizontal' },
+      { kind: 'rotate', degrees: 180 },
+      { kind: 'camera', visible: false },
+      { kind: 'cursor', visible: true },
+      { kind: 'chapters' },
+    ])
+    expect(parseAssistantRequest('chia thành các video ngắn mỗi 30 giây, dọc')).toEqual([
+      { kind: 'aspect', aspect: '9:16' },
+      { kind: 'shorts', mode: 'fixed', seconds: 30, vertical: true },
+    ])
+    expect(parseAssistantRequest('phụ đề song ngữ tiếng Nhật')).toEqual([
+      { kind: 'captions' },
+      { kind: 'translate', language: 'ja', bilingual: true },
+    ])
+    expect(parseAssistantRequest('mute system audio')).toEqual([
+      { kind: 'cleanAudio' },
+      { kind: 'volume', target: 'system', level: 0 },
+    ])
+  })
+})

@@ -1,13 +1,56 @@
+import { SOUND_EFFECT_IDS, type SoundEffectId } from './audio-clips'
+import { VOICE_FX, type VoiceFx } from './audio-fx'
 import { CAPTION_TEMPLATES, type CaptionTemplate } from './caption-style'
+import { CAMERA_LAYOUTS, type CameraBgMode, type CameraLayout, CAMERA_BG_MODES } from './edit-state'
 import { EFFECT_KINDS, type EffectKind } from './effects'
-import { ASPECTS, type Aspect } from './layout'
-import { FILTER_PRESETS, type FilterPreset } from './look'
+import { ASPECTS, CORNERS, type Aspect, type Corner } from './layout'
+import {
+  ADJUST_KEYS,
+  FILTER_PRESETS,
+  POSITIVE_ADJUST,
+  type AdjustKey,
+  type FilterPreset,
+} from './look'
 import { RESOLUTIONS, type Resolution } from './layout'
+import { ROTATIONS, type Rotation } from './orient'
+import { SHAPES, type ShapeKind } from './shapes'
+import { TEXT_TEMPLATES, type TextTemplateId } from './text-style'
+import { TIMELINE_ROWS, type TimelineRow } from './tracks'
 import { TRANSITION_KINDS, type TransitionKind } from './transitions'
+
+/** Mục có thể xóa sạch bằng lệnh `clear`. */
+export const CLEAR_TARGETS = [
+  'zooms',
+  'effects',
+  'overlays',
+  'music',
+  'sfx',
+  'transitions',
+  'captions',
+  'markers',
+  'filter',
+  'adjust',
+  'cuts',
+] as const
+export type ClearTarget = (typeof CLEAR_TARGETS)[number]
+
+/** Nguồn âm thanh mà lệnh `volume` chỉnh được. */
+export const VOLUME_TARGETS = ['mic', 'system', 'music', 'sfx'] as const
+export type VolumeTarget = (typeof VOLUME_TARGETS)[number]
+
+/** Vị trí đặt sẵn cho chữ / nhãn dán. */
+export const OVERLAY_POSITIONS = ['top', 'center', 'bottom'] as const
+export type OverlayPosition = (typeof OVERLAY_POSITIONS)[number]
+
+export const CAMERA_SHAPES = ['circle', 'rounded', 'square'] as const
+export type CameraShape = (typeof CAMERA_SHAPES)[number]
+
+export const TEXT_TEMPLATE_IDS = TEXT_TEMPLATES.map((t) => t.id) as TextTemplateId[]
 
 /**
  * Lệnh chỉnh sửa mà trợ lý AI (kiểu EditPilot của CapCut) có thể ra: người dùng mô tả bằng lời,
  * Claude (hoặc bộ phân tích từ khóa khi không có key) đổi thành danh sách lệnh, app thực hiện.
+ * Mọi mốc thời gian (`atMs`, `fromMs`, `toMs`) tính trên video xuất (sau khi cắt).
  */
 export type AssistantCommand =
   | { kind: 'cutSilences' }
@@ -30,9 +73,93 @@ export type AssistantCommand =
   /** Mẫu phụ đề (tiktok, karaoke, neon…). */
   | { kind: 'captionsStyle'; template: CaptionTemplate }
   /** Đặt cài đặt xuất rồi xuất luôn. */
-  | { kind: 'export'; resolution: Resolution; format: 'mp4' | 'gif' }
+  | { kind: 'export'; resolution: Resolution; format: 'mp4' | 'gif'; fps?: 30 | 60 }
   /** Áp dụng phong cách (khung hình, bộ lọc, phụ đề, chuyển động…) của một dự án mẫu. */
   | { kind: 'styleFrom'; project: string }
+  // ---- Timeline ----
+  /** Cắt bỏ một khoảng của video xuất. */
+  | { kind: 'cutRange'; fromMs: number; toMs: number }
+  /** Chèn khung hình đứng yên tại một thời điểm, giữ `ms`. */
+  | { kind: 'freeze'; atMs: number; ms: number }
+  /** Lật toàn bộ video màn hình. */
+  | { kind: 'flip'; axis: 'horizontal' | 'vertical' }
+  /** Xoay toàn bộ video màn hình (độ, theo chiều kim đồng hồ). */
+  | { kind: 'rotate'; degrees: Rotation }
+  // ---- Âm thanh ----
+  /** Âm lượng micro / âm thanh máy / nhạc nền / hiệu ứng âm thanh (0 = tắt tiếng, 1 = giữ nguyên, tối đa 2). */
+  | { kind: 'volume'; target: VolumeTarget; level: number }
+  /** Hiệu ứng giọng cho micro (chipmunk, deep, robot…). */
+  | { kind: 'voiceFx'; voice: VoiceFx }
+  /** Nhạc nền tăng dần lúc đầu / giảm dần lúc cuối (ms). */
+  | { kind: 'fade'; ms: number }
+  /** Hiệu ứng âm thanh có sẵn tại một thời điểm. */
+  | { kind: 'sound'; sound: SoundEffectId; atMs: number }
+  // ---- Zoom & chuyển động ----
+  /** Đặt mức phóng to cho mọi đoạn zoom hiện có. */
+  | { kind: 'zoomLevel'; scale: number }
+  /** Thêm một đoạn zoom theo con trỏ tại thời điểm, dài `ms`. */
+  | { kind: 'zoomAt'; atMs: number; ms: number; scale: number }
+  /** Tốc độ khung nhìn theo con trỏ (0..1) và thời gian zoom vào / ra (ms). */
+  | { kind: 'motion'; cameraSpeed?: number; zoomMs?: number }
+  // ---- Khung hình ----
+  /** Lề, bo góc, bóng đổ (0..1) và phủ kín khung. */
+  | { kind: 'frame'; padding?: number; radius?: number; shadow?: number; fill?: boolean }
+  /** Nền sau video: một màu, hoặc chuyển màu khi có `color2`. */
+  | { kind: 'background'; color: string; color2: string }
+  /** Con trỏ chuột vẽ thêm. */
+  | { kind: 'cursor'; visible?: boolean; size?: number; clickEffect?: boolean; hideIdle?: boolean }
+  /** Bong bóng webcam. */
+  | {
+      kind: 'camera'
+      visible?: boolean
+      shape?: CameraShape
+      size?: number
+      position?: Corner
+      layout?: CameraLayout
+      beauty?: boolean
+      background?: CameraBgMode
+    }
+  // ---- Lớp nổi ----
+  /** Chữ nổi trên video theo mẫu chữ. */
+  | {
+      kind: 'text'
+      text: string
+      atMs: number
+      ms: number
+      template: TextTemplateId
+      position: OverlayPosition
+    }
+  /** Nhãn dán emoji. */
+  | { kind: 'sticker'; emoji: string; atMs: number; ms: number; position: OverlayPosition }
+  /** Hình vẽ sẵn (mũi tên, vòng tròn…) tại vị trí (x, y) 0..1. */
+  | {
+      kind: 'shape'
+      shape: ShapeKind
+      atMs: number
+      ms: number
+      x: number
+      y: number
+      color: string
+    }
+  // ---- Màu ----
+  /** Một điều chỉnh màu (độ sáng, tương phản…): -1..1 (sharpen / vignette / grain: 0..1). */
+  | { kind: 'adjust'; setting: AdjustKey; value: number }
+  // ---- Phụ đề ----
+  /** Vị trí (trên / dưới) và cỡ chữ phụ đề (0.5..2.5). */
+  | { kind: 'captionsLayout'; position?: 'top' | 'bottom'; size?: number }
+  /** Dịch phụ đề sang ngôn ngữ khác: thay nội dung, hoặc hiện song ngữ. */
+  | { kind: 'translate'; language: string; bilingual: boolean }
+  // ---- Mốc & hàng ----
+  /** Điểm đánh dấu trên timeline. */
+  | { kind: 'marker'; atMs: number; label: string }
+  /** Tạo mốc chương từ lời thoại (AI tóm tắt). */
+  | { kind: 'chapters' }
+  /** Ẩn / tắt tiếng / khóa một hàng trên timeline. */
+  | { kind: 'track'; row: TimelineRow; hidden?: boolean; muted?: boolean; locked?: boolean }
+  /** Xóa sạch một loại mục (zoom, hiệu ứng, nhạc, phụ đề…; `cuts` = khôi phục bản quay đầy đủ). */
+  | { kind: 'clear'; target: ClearTarget }
+  /** Chia thành video ngắn: mỗi N giây hoặc theo chương AI, tuỳ chọn khung dọc. */
+  | { kind: 'shorts'; mode: 'fixed' | 'chapters'; seconds: number; vertical: boolean }
 
 export type AssistantKind = AssistantCommand['kind']
 
@@ -54,6 +181,32 @@ export const ASSISTANT_KINDS: readonly AssistantKind[] = [
   'captionsStyle',
   'export',
   'styleFrom',
+  'cutRange',
+  'freeze',
+  'flip',
+  'rotate',
+  'volume',
+  'voiceFx',
+  'fade',
+  'sound',
+  'zoomLevel',
+  'zoomAt',
+  'motion',
+  'frame',
+  'background',
+  'cursor',
+  'camera',
+  'text',
+  'sticker',
+  'shape',
+  'adjust',
+  'captionsLayout',
+  'translate',
+  'marker',
+  'chapters',
+  'track',
+  'clear',
+  'shorts',
 ]
 
 /** Thông tin về video gửi kèm yêu cầu để AI ra lệnh phù hợp. */
@@ -64,6 +217,314 @@ export interface AssistantContext {
 }
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v))
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+const numOr = (v: unknown, lo: number, hi: number): number | undefined =>
+  isNum(v) ? clamp(v, lo, hi) : undefined
+const boolOr = (v: unknown): boolean | undefined => (typeof v === 'boolean' ? v : undefined)
+const oneOf = <T extends string | number>(list: readonly T[], v: unknown): T | undefined =>
+  list.includes(v as T) ? (v as T) : undefined
+const hex = (v: unknown): string | undefined =>
+  typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v.trim()) ? v.trim().toLowerCase() : undefined
+/** Mốc thời gian (ms) không âm, làm tròn; tối đa 1 giờ. */
+const timeMs = (v: unknown): number | undefined =>
+  isNum(v) && v >= 0 ? Math.round(clamp(v, 0, 3_600_000)) : undefined
+/** Thời lượng (ms) dương, mặc định khi thiếu. */
+const durMs = (v: unknown, fallback: number, lo = 200, hi = 600_000): number =>
+  isNum(v) && v > 0 ? Math.round(clamp(v, lo, hi)) : fallback
+/** Bỏ các khóa `undefined` cho lệnh gọn (so sánh bằng toEqual trong test). */
+const compact = <T extends object>(o: T): T =>
+  Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T
+
+const LANGUAGE_CODE = /^[a-z]{2}(-[a-z]{2})?$/i
+
+/**
+ * Khóa chống trùng: hầu hết lệnh mỗi loại chỉ một; các lệnh theo mục / thời điểm (adjust từng
+ * thông số, clear từng loại, marker từng mốc…) được phép nhiều lệnh cùng loại.
+ */
+export function assistantCommandKey(cmd: AssistantCommand): string {
+  switch (cmd.kind) {
+    case 'adjust':
+      return `adjust:${cmd.setting}`
+    case 'clear':
+      return `clear:${cmd.target}`
+    case 'volume':
+      return `volume:${cmd.target}`
+    case 'track':
+      return `track:${cmd.row}`
+    case 'marker':
+      return `marker:${cmd.atMs}`
+    case 'text':
+      return `text:${cmd.atMs}:${cmd.text}`
+    case 'sticker':
+      return `sticker:${cmd.atMs}:${cmd.emoji}`
+    case 'shape':
+      return `shape:${cmd.atMs}:${cmd.shape}`
+    case 'sound':
+      return `sound:${cmd.atMs}:${cmd.sound}`
+    case 'zoomAt':
+      return `zoomAt:${cmd.atMs}`
+    case 'freeze':
+      return `freeze:${cmd.atMs}`
+    case 'cutRange':
+      return `cutRange:${cmd.fromMs}`
+    default:
+      return cmd.kind
+  }
+}
+
+/** Đọc một lệnh từ dữ liệu không tin cậy; sai thì null. */
+function parseCommand(r: Record<string, unknown>): AssistantCommand | null {
+  switch (r.kind) {
+    case 'cutSilences':
+    case 'removeFillers':
+    case 'autoZoom':
+    case 'captions':
+    case 'cleanAudio':
+    case 'chapters':
+      return { kind: r.kind }
+    case 'title':
+      if (typeof r.text === 'string' && r.text.trim())
+        return { kind: 'title', text: r.text.trim().slice(0, 80) }
+      return null
+    case 'filter':
+      if (FILTER_PRESETS.includes(r.preset as FilterPreset))
+        return {
+          kind: 'filter',
+          preset: r.preset as FilterPreset,
+          intensity: typeof r.intensity === 'number' ? clamp(r.intensity, 0.1, 1) : 1,
+        }
+      return null
+    case 'speed':
+      if (isNum(r.factor) && r.factor > 0)
+        return { kind: 'speed', factor: clamp(Number(r.factor.toFixed(2)), 0.25, 8) }
+      return null
+    case 'aspect':
+      if (ASPECTS.includes(r.aspect as Aspect))
+        return { kind: 'aspect', aspect: r.aspect as Aspect }
+      return null
+    case 'trimStart':
+    case 'trimEnd':
+      if (typeof r.ms === 'number' && r.ms > 0)
+        return { kind: r.kind, ms: Math.round(clamp(r.ms, 1, 3_600_000)) }
+      return null
+    case 'effect':
+      if (EFFECT_KINDS.includes(r.effect as EffectKind))
+        return { kind: 'effect', effect: r.effect as EffectKind }
+      return null
+    case 'transitions':
+      if (TRANSITION_KINDS.includes(r.transition as TransitionKind))
+        return { kind: 'transitions', transition: r.transition as TransitionKind }
+      return null
+    case 'music':
+      return {
+        kind: 'music',
+        query: typeof r.query === 'string' ? r.query.trim().slice(0, 60) : '',
+        volume: typeof r.volume === 'number' ? clamp(r.volume, 0.05, 1) : 0.4,
+      }
+    case 'captionsStyle':
+      if (CAPTION_TEMPLATES.includes(r.template as CaptionTemplate))
+        return { kind: 'captionsStyle', template: r.template as CaptionTemplate }
+      return null
+    case 'export': {
+      const fps = oneOf([30, 60] as const, r.fps)
+      return compact({
+        kind: 'export' as const,
+        resolution: RESOLUTIONS.includes(r.resolution as Resolution)
+          ? (r.resolution as Resolution)
+          : 1080,
+        format: (r.format === 'gif' ? 'gif' : 'mp4') as 'mp4' | 'gif',
+        fps,
+      })
+    }
+    case 'styleFrom':
+      if (typeof r.project === 'string' && r.project.trim())
+        return { kind: 'styleFrom', project: r.project.trim().slice(0, 200) }
+      return null
+    case 'cutRange': {
+      const fromMs = timeMs(r.fromMs)
+      const toMs = timeMs(r.toMs)
+      if (fromMs === undefined || toMs === undefined || toMs <= fromMs) return null
+      return { kind: 'cutRange', fromMs, toMs }
+    }
+    case 'freeze': {
+      const atMs = timeMs(r.atMs)
+      if (atMs === undefined) return null
+      return { kind: 'freeze', atMs, ms: durMs(r.ms, 2000, 100, 60_000) }
+    }
+    case 'flip': {
+      const axis = oneOf(['horizontal', 'vertical'] as const, r.axis)
+      return axis ? { kind: 'flip', axis } : null
+    }
+    case 'rotate': {
+      const degrees = oneOf(ROTATIONS, r.degrees)
+      return degrees ? { kind: 'rotate', degrees } : null
+    }
+    case 'volume': {
+      const target = oneOf(VOLUME_TARGETS, r.target)
+      const level = numOr(r.level, 0, 2)
+      return target && level !== undefined ? { kind: 'volume', target, level } : null
+    }
+    case 'voiceFx': {
+      const voice = oneOf(VOICE_FX, r.voice)
+      return voice ? { kind: 'voiceFx', voice } : null
+    }
+    case 'fade':
+      return { kind: 'fade', ms: durMs(r.ms, 1500, 0, 10_000) }
+    case 'sound': {
+      const sound = oneOf(SOUND_EFFECT_IDS, r.sound)
+      const atMs = timeMs(r.atMs)
+      return sound && atMs !== undefined ? { kind: 'sound', sound, atMs } : null
+    }
+    case 'zoomLevel': {
+      const scale = numOr(r.scale, 1.1, 5)
+      return scale !== undefined ? { kind: 'zoomLevel', scale } : null
+    }
+    case 'zoomAt': {
+      const atMs = timeMs(r.atMs)
+      if (atMs === undefined) return null
+      return {
+        kind: 'zoomAt',
+        atMs,
+        ms: durMs(r.ms, 3000, 1500, 600_000),
+        scale: numOr(r.scale, 1.1, 5) ?? 2,
+      }
+    }
+    case 'motion': {
+      const cmd = compact({
+        kind: 'motion' as const,
+        cameraSpeed: numOr(r.cameraSpeed, 0, 1),
+        zoomMs: isNum(r.zoomMs) ? Math.round(clamp(r.zoomMs, 250, 1500)) : undefined,
+      })
+      return Object.keys(cmd).length > 1 ? cmd : null
+    }
+    case 'frame': {
+      const cmd = compact({
+        kind: 'frame' as const,
+        padding: numOr(r.padding, 0, 0.45),
+        radius: numOr(r.radius, 0, 0.2),
+        shadow: numOr(r.shadow, 0, 1),
+        fill: boolOr(r.fill),
+      })
+      return Object.keys(cmd).length > 1 ? cmd : null
+    }
+    case 'background': {
+      const color = hex(r.color)
+      return color ? { kind: 'background', color, color2: hex(r.color2) ?? '' } : null
+    }
+    case 'cursor': {
+      const cmd = compact({
+        kind: 'cursor' as const,
+        visible: boolOr(r.visible),
+        size: numOr(r.size, 0.5, 4),
+        clickEffect: boolOr(r.clickEffect),
+        hideIdle: boolOr(r.hideIdle),
+      })
+      return Object.keys(cmd).length > 1 ? cmd : null
+    }
+    case 'camera': {
+      const cmd = compact({
+        kind: 'camera' as const,
+        visible: boolOr(r.visible),
+        shape: oneOf(CAMERA_SHAPES, r.shape),
+        size: numOr(r.size, 0.05, 0.6),
+        position: oneOf(CORNERS, r.position),
+        layout: oneOf(CAMERA_LAYOUTS, r.layout),
+        beauty: boolOr(r.beauty),
+        background: oneOf(CAMERA_BG_MODES, r.background),
+      })
+      return Object.keys(cmd).length > 1 ? cmd : null
+    }
+    case 'text': {
+      if (typeof r.text !== 'string' || !r.text.trim()) return null
+      return {
+        kind: 'text',
+        text: r.text.trim().slice(0, 200),
+        atMs: timeMs(r.atMs) ?? 0,
+        ms: durMs(r.ms, 3000),
+        template: oneOf(TEXT_TEMPLATE_IDS, r.template) ?? 'title',
+        position: oneOf(OVERLAY_POSITIONS, r.position) ?? 'top',
+      }
+    }
+    case 'sticker': {
+      if (typeof r.emoji !== 'string' || !r.emoji.trim()) return null
+      return {
+        kind: 'sticker',
+        emoji: r.emoji.trim().slice(0, 16),
+        atMs: timeMs(r.atMs) ?? 0,
+        ms: durMs(r.ms, 3000),
+        position: oneOf(OVERLAY_POSITIONS, r.position) ?? 'center',
+      }
+    }
+    case 'shape': {
+      const shape = oneOf(SHAPES, r.shape)
+      if (!shape) return null
+      return {
+        kind: 'shape',
+        shape,
+        atMs: timeMs(r.atMs) ?? 0,
+        ms: durMs(r.ms, 3000),
+        x: numOr(r.x, 0, 1) ?? 0.5,
+        y: numOr(r.y, 0, 1) ?? 0.5,
+        color: hex(r.color) ?? '#ef4444',
+      }
+    }
+    case 'adjust': {
+      const setting = oneOf(ADJUST_KEYS, r.setting)
+      if (!setting || !isNum(r.value)) return null
+      const lo = POSITIVE_ADJUST.includes(setting) ? 0 : -1
+      return { kind: 'adjust', setting, value: Number(clamp(r.value, lo, 1).toFixed(2)) }
+    }
+    case 'captionsLayout': {
+      const cmd = compact({
+        kind: 'captionsLayout' as const,
+        position: oneOf(['top', 'bottom'] as const, r.position),
+        size: numOr(r.size, 0.5, 2.5),
+      })
+      return Object.keys(cmd).length > 1 ? cmd : null
+    }
+    case 'translate': {
+      const language = typeof r.language === 'string' ? r.language.trim().toLowerCase() : ''
+      if (!LANGUAGE_CODE.test(language)) return null
+      return { kind: 'translate', language: language.slice(0, 8), bilingual: r.bilingual === true }
+    }
+    case 'marker': {
+      const atMs = timeMs(r.atMs)
+      if (atMs === undefined) return null
+      return {
+        kind: 'marker',
+        atMs,
+        label: typeof r.label === 'string' ? r.label.trim().slice(0, 80) : '',
+      }
+    }
+    case 'track': {
+      const row = oneOf(TIMELINE_ROWS, r.row)
+      if (!row) return null
+      const cmd = compact({
+        kind: 'track' as const,
+        row,
+        hidden: boolOr(r.hidden),
+        muted: boolOr(r.muted),
+        locked: boolOr(r.locked),
+      })
+      return Object.keys(cmd).length > 2 ? cmd : null
+    }
+    case 'clear': {
+      const target = oneOf(CLEAR_TARGETS, r.target)
+      return target ? { kind: 'clear', target } : null
+    }
+    case 'shorts': {
+      const mode = r.mode === 'chapters' ? 'chapters' : 'fixed'
+      return {
+        kind: 'shorts',
+        mode,
+        seconds: isNum(r.seconds) && r.seconds > 0 ? Math.round(clamp(r.seconds, 5, 600)) : 60,
+        vertical: r.vertical !== false,
+      }
+    }
+    default:
+      return null
+  }
+}
 
 /** Kiểm tra dữ liệu lệnh (từ Claude hoặc từ file) và bỏ lệnh sai; lệnh trùng chỉ giữ một. */
 export function normalizeAssistantCommands(input: unknown): AssistantCommand[] {
@@ -72,76 +533,9 @@ export function normalizeAssistantCommands(input: unknown): AssistantCommand[] {
   const seen = new Set<string>()
   for (const raw of input) {
     if (typeof raw !== 'object' || raw === null) continue
-    const r = raw as Record<string, unknown>
-    let cmd: AssistantCommand | null = null
-    switch (r.kind) {
-      case 'cutSilences':
-      case 'removeFillers':
-      case 'autoZoom':
-      case 'captions':
-      case 'cleanAudio':
-        cmd = { kind: r.kind }
-        break
-      case 'title':
-        if (typeof r.text === 'string' && r.text.trim())
-          cmd = { kind: 'title', text: r.text.trim().slice(0, 80) }
-        break
-      case 'filter':
-        if (FILTER_PRESETS.includes(r.preset as FilterPreset))
-          cmd = {
-            kind: 'filter',
-            preset: r.preset as FilterPreset,
-            intensity: typeof r.intensity === 'number' ? clamp(r.intensity, 0.1, 1) : 1,
-          }
-        break
-      case 'speed':
-        if (typeof r.factor === 'number' && Number.isFinite(r.factor) && r.factor > 0)
-          cmd = { kind: 'speed', factor: clamp(Number(r.factor.toFixed(2)), 0.25, 8) }
-        break
-      case 'aspect':
-        if (ASPECTS.includes(r.aspect as Aspect))
-          cmd = { kind: 'aspect', aspect: r.aspect as Aspect }
-        break
-      case 'trimStart':
-      case 'trimEnd':
-        if (typeof r.ms === 'number' && r.ms > 0)
-          cmd = { kind: r.kind, ms: Math.round(clamp(r.ms, 1, 3_600_000)) }
-        break
-      case 'effect':
-        if (EFFECT_KINDS.includes(r.effect as EffectKind))
-          cmd = { kind: 'effect', effect: r.effect as EffectKind }
-        break
-      case 'transitions':
-        if (TRANSITION_KINDS.includes(r.transition as TransitionKind))
-          cmd = { kind: 'transitions', transition: r.transition as TransitionKind }
-        break
-      case 'music':
-        cmd = {
-          kind: 'music',
-          query: typeof r.query === 'string' ? r.query.trim().slice(0, 60) : '',
-          volume: typeof r.volume === 'number' ? clamp(r.volume, 0.05, 1) : 0.4,
-        }
-        break
-      case 'captionsStyle':
-        if (CAPTION_TEMPLATES.includes(r.template as CaptionTemplate))
-          cmd = { kind: 'captionsStyle', template: r.template as CaptionTemplate }
-        break
-      case 'export':
-        cmd = {
-          kind: 'export',
-          resolution: RESOLUTIONS.includes(r.resolution as Resolution)
-            ? (r.resolution as Resolution)
-            : 1080,
-          format: r.format === 'gif' ? 'gif' : 'mp4',
-        }
-        break
-      case 'styleFrom':
-        if (typeof r.project === 'string' && r.project.trim())
-          cmd = { kind: 'styleFrom', project: r.project.trim().slice(0, 200) }
-        break
-    }
+    const cmd = parseCommand(raw as Record<string, unknown>)
     if (!cmd) continue
-    const key = cmd.kind === 'trimStart' || cmd.kind === 'trimEnd' ? cmd.kind : cmd.kind
+    const key = assistantCommandKey(cmd)
     if (seen.has(key)) continue
     seen.add(key)
     out.push(cmd)
@@ -185,6 +579,20 @@ function parseSeconds(part: string): number | null {
   return Math.round(n * (/phút|min/i.test(m[2]!) ? 60_000 : 1000))
 }
 
+/** Tên ngôn ngữ (tiếng Việt / tiếng Anh) → mã ngôn ngữ cho lệnh dịch phụ đề. */
+const LANGUAGE_WORDS: [RegExp, string][] = [
+  [/tiếng anh|english/i, 'en'],
+  [/tiếng việt|vietnamese/i, 'vi'],
+  [/tiếng nhật|japanese/i, 'ja'],
+  [/tiếng hàn|korean/i, 'ko'],
+  [/tiếng trung|tiếng hoa|chinese/i, 'zh'],
+  [/tiếng thái|thai\b/i, 'th'],
+  [/tiếng indo|indonesian/i, 'id'],
+  [/tiếng pháp|french/i, 'fr'],
+  [/tiếng tây ban nha|spanish/i, 'es'],
+  [/tiếng đức|german/i, 'de'],
+]
+
 /**
  * Hiểu yêu cầu bằng từ khóa (tiếng Việt / tiếng Anh) khi không có key Claude, hoặc để bổ sung
  * khi Claude không trả lệnh nào. Không hiểu thì trả về mảng rỗng.
@@ -194,7 +602,8 @@ export function parseAssistantRequest(text: string): AssistantCommand[] {
   if (!t) return []
   const out: AssistantCommand[] = []
   const push = (c: AssistantCommand) => {
-    if (!out.some((x) => x.kind === c.kind)) out.push(c)
+    const key = assistantCommandKey(c)
+    if (!out.some((x) => assistantCommandKey(x) === key)) out.push(c)
   }
   if (/tự biên tập|tự chỉnh|auto.?edit|làm gọn|dọn dẹp|clean ?up|tidy/i.test(t)) {
     push({ kind: 'cutSilences' })
@@ -205,8 +614,63 @@ export function parseAssistantRequest(text: string): AssistantCommand[] {
   if (/khoảng lặng|im lặng|khoảng trống|silence|silent|pause|dead air/i.test(t))
     push({ kind: 'cutSilences' })
   if (/từ thừa|từ đệm|nói lặp|ừm|filler|stutter|repeat/i.test(t)) push({ kind: 'removeFillers' })
-  if (/zoom|phóng to theo chuột|phóng to chỗ bấm/i.test(t)) push({ kind: 'autoZoom' })
-  if (/phụ đề|caption|subtitle/i.test(t)) push({ kind: 'captions' })
+
+  // Xóa sạch một loại mục ("bỏ nhạc", "xóa hết zoom", "tắt phụ đề", "bỏ bộ lọc").
+  const CLEAR_WORDS: [RegExp, ClearTarget][] = [
+    [
+      /(?:bỏ|xóa|tắt|không|remove|delete|clear|no)\s+(?:hết\s+|all\s+|the\s+)?(?:zoom|phóng to)/i,
+      'zooms',
+    ],
+    [
+      /(?:bỏ|xóa|tắt|remove|delete|clear|no|mute)\s+(?:hết\s+|all\s+|the\s+)?(?:nhạc|music)/i,
+      'music',
+    ],
+    [
+      /(?:bỏ|xóa|tắt|remove|delete|clear|no)\s+(?:hết\s+|all\s+|the\s+)?(?:hiệu ứng|effects?)/i,
+      'effects',
+    ],
+    [
+      /(?:bỏ|xóa|tắt|remove|delete|clear|no)\s+(?:hết\s+|all\s+|the\s+)?(?:phụ đề|captions?|subtitles?)/i,
+      'captions',
+    ],
+    [
+      /(?:bỏ|xóa|tắt|remove|delete|clear|no)\s+(?:hết\s+|all\s+|the\s+)?(?:bộ lọc|filter)/i,
+      'filter',
+    ],
+    [
+      /(?:bỏ|xóa|tắt|remove|delete|clear|no)\s+(?:hết\s+|all\s+|the\s+)?(?:chuyển cảnh|transitions?)/i,
+      'transitions',
+    ],
+    [
+      /(?:bỏ|xóa|remove|delete|clear)\s+(?:hết\s+|all\s+|the\s+)?(?:chữ|sticker|nhãn dán|lớp|overlays?|text)/i,
+      'overlays',
+    ],
+  ]
+  const cleared = new Set<ClearTarget>()
+  for (const [re, target] of CLEAR_WORDS)
+    if (re.test(t)) {
+      cleared.add(target)
+      push({ kind: 'clear', target })
+    }
+
+  // Mức zoom ("zoom 2.5x", "mức zoom 3 lần"): tách khỏi câu trước khi đoán tốc độ.
+  const zoomLevel =
+    /(?:mức\s+)?(?:zoom|phóng to)\D{0,10}(\d+(?:[.,]\d+)?)\s*(?:x|lần|×|times)?/i.exec(t)
+  let forSpeed = t
+  if (zoomLevel) {
+    const scale = Number(zoomLevel[1]!.replace(',', '.'))
+    if (Number.isFinite(scale) && scale >= 1.1 && scale <= 5) {
+      push({ kind: 'zoomLevel', scale })
+      forSpeed = t.replace(zoomLevel[0], ' ')
+    }
+  }
+  if (
+    /zoom|phóng to theo chuột|phóng to chỗ bấm/i.test(t) &&
+    !cleared.has('zooms') &&
+    !out.some((c) => c.kind === 'zoomLevel')
+  )
+    push({ kind: 'autoZoom' })
+  if (/phụ đề|caption|subtitle/i.test(t) && !cleared.has('captions')) push({ kind: 'captions' })
   if (/tạp âm|lọc ồn|tiếng ồn|giọng rõ|chuẩn hóa|noise|audio|voice|loudness/i.test(t))
     push({ kind: 'cleanAudio' })
 
@@ -219,13 +683,16 @@ export function parseAssistantRequest(text: string): AssistantCommand[] {
       break
     }
 
-  if (/tốc độ|speed|nhanh|chậm|fast|slow|\d\s*x\b|x\s*\d|gấp đôi|lần/i.test(t)) {
-    const factor = parseSpeed(t)
+  if (/tốc độ|speed|nhanh|chậm|fast|slow|\d\s*x\b|x\s*\d|gấp đôi|lần/i.test(forSpeed)) {
+    const factor = parseSpeed(forSpeed)
     if (factor) push({ kind: 'speed', factor })
   }
 
   // "phụ đề kiểu TikTok" nói về mẫu phụ đề, không phải khung dọc: bỏ cụm đó trước khi đoán khung.
-  const forAspect = t.replace(/(?:phụ đề|caption|subtitle)[^,.;]*/gi, '')
+  // "lật ngang / lật dọc" là lật hình, không phải khung ngang / dọc.
+  const forAspect = t
+    .replace(/(?:phụ đề|caption|subtitle)[^,.;]*/gi, '')
+    .replace(/lật\s+(?:ngang|dọc)/gi, '')
   if (/9\s*:\s*16|dọc|vertical|tiktok|shorts|reels|portrait/i.test(forAspect))
     push({ kind: 'aspect', aspect: '9:16' })
   else if (/1\s*:\s*1|vuông|square/i.test(forAspect)) push({ kind: 'aspect', aspect: '1:1' })
@@ -241,16 +708,17 @@ export function parseAssistantRequest(text: string): AssistantCommand[] {
   const endMs = end ? parseSeconds(end[1]!) : null
   if (endMs) push({ kind: 'trimEnd', ms: endMs })
 
-  for (const [re, effect] of EFFECT_WORDS)
-    if (re.test(t)) {
-      push({ kind: 'effect', effect })
-      break
-    }
-  if (/chuyển cảnh|transition/i.test(t)) {
+  if (!cleared.has('effects'))
+    for (const [re, effect] of EFFECT_WORDS)
+      if (re.test(t)) {
+        push({ kind: 'effect', effect })
+        break
+      }
+  if (/chuyển cảnh|transition/i.test(t) && !cleared.has('transitions')) {
     const transition = TRANSITION_WORDS.find(([re]) => re.test(t))?.[1] ?? 'fadeBlack'
     push({ kind: 'transitions', transition })
   }
-  if (/nhạc|music|soundtrack/i.test(t) && !/tắt nhạc|bỏ nhạc|no music|mute music/i.test(t)) {
+  if (/nhạc|music|soundtrack/i.test(t) && !cleared.has('music')) {
     const query =
       /(?:nhạc nền|nhạc|music)\s+(?:kiểu\s+|nền\s+)?([\p{L}\d][\p{L}\d\s-]{1,24}?)(?=[,.;]|\s+(?:và|rồi|và|then|and)\b|$)/iu.exec(
         t,
@@ -269,6 +737,67 @@ export function parseAssistantRequest(text: string): AssistantCommand[] {
     push({ kind: 'captions' })
     push({ kind: 'captionsStyle', template })
   }
+  // Phụ đề ở trên / dưới.
+  if (
+    /(?:phụ đề|captions?|subtitles?)\s+(?:ở\s+|nằm\s+|lên\s+|at the\s+|on\s+)?(?:trên|phía trên|top)/i.test(
+      t,
+    )
+  )
+    push({ kind: 'captionsLayout', position: 'top' })
+  else if (
+    /(?:phụ đề|captions?|subtitles?)\s+(?:ở\s+|nằm\s+|xuống\s+|at the\s+|on\s+)?(?:dưới|phía dưới|bottom)/i.test(
+      t,
+    )
+  )
+    push({ kind: 'captionsLayout', position: 'bottom' })
+
+  // Dịch phụ đề ("dịch phụ đề sang tiếng Anh", "song ngữ Anh").
+  if (/dịch|translate|song ngữ|bilingual/i.test(t)) {
+    const language = LANGUAGE_WORDS.find(([re]) => re.test(t))?.[1]
+    if (language) push({ kind: 'translate', language, bilingual: /song ngữ|bilingual/i.test(t) })
+  }
+
+  // Tắt tiếng micro / âm thanh máy ("tắt tiếng mic", "mute system audio").
+  if (/(?:tắt tiếng|tắt|mute)\s+(?:tiếng\s+)?(?:mic|micro|giọng|voice)/i.test(t))
+    push({ kind: 'volume', target: 'mic', level: 0 })
+  if (/(?:tắt tiếng|tắt|mute)\s+(?:tiếng\s+|âm thanh\s+)?(?:máy|hệ thống|system)/i.test(t))
+    push({ kind: 'volume', target: 'system', level: 0 })
+
+  // Lật / xoay video.
+  if (/lật ngang|flip horizontal|mirror/i.test(t)) push({ kind: 'flip', axis: 'horizontal' })
+  if (/lật dọc|flip vertical|upside down/i.test(t)) push({ kind: 'flip', axis: 'vertical' })
+  const rotate = /(?:xoay|rotate)\D{0,8}(90|180|270)/i.exec(t)
+  if (rotate) push({ kind: 'rotate', degrees: Number(rotate[1]) as Rotation })
+
+  // Webcam và con trỏ.
+  if (/(?:ẩn|tắt|bỏ|hide|remove)\s+(?:bong bóng\s+)?(?:webcam|camera|cam\b)/i.test(t))
+    push({ kind: 'camera', visible: false })
+  else if (/(?:hiện|bật|show)\s+(?:bong bóng\s+)?(?:webcam|camera|cam\b)/i.test(t))
+    push({ kind: 'camera', visible: true })
+  if (/(?:ẩn|tắt|hide)\s+(?:con\s+)?(?:trỏ|chuột|cursor|mouse)/i.test(t))
+    push({ kind: 'cursor', visible: false })
+  else if (/(?:hiện|bật|show)\s+(?:con\s+)?(?:trỏ|chuột|cursor|mouse)/i.test(t))
+    push({ kind: 'cursor', visible: true })
+
+  // Chương (mốc đánh dấu từ lời thoại).
+  if (/(?:thêm|tạo|đánh dấu|add|create|mark)\s+(?:các\s+|mốc\s+)?(?:chương|chapters?)/i.test(t))
+    push({ kind: 'chapters' })
+
+  // Chia thành video ngắn.
+  const shorts =
+    /(?:chia|tách|cắt)\s+(?:nhỏ\s+|thành\s+|ra\s+)?(?:nhiều\s+|các\s+)?(?:video ngắn|clip ngắn|đoạn ngắn|shorts|reels)|split (?:it |the video )?into (?:shorts|clips|parts)/i.test(
+      t,
+    )
+  if (shorts) {
+    const every = /(?:mỗi|every)\s+(\d+)\s*(?:giây|s\b|sec|seconds?)/i.exec(t)
+    push({
+      kind: 'shorts',
+      mode: /chương|chapter/i.test(t) ? 'chapters' : 'fixed',
+      seconds: every ? Number(every[1]) : 60,
+      vertical: /dọc|9\s*:\s*16|tiktok|shorts|reels|vertical/i.test(t),
+    })
+  }
+
   if (/xuất|export|render|lưu video|save video/i.test(t)) {
     const res = /(2160|4k|1440|1080|720)/i.exec(t)?.[1]?.toLowerCase()
     push({

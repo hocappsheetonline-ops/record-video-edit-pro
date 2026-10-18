@@ -98,6 +98,18 @@ import {
   type DirectorPlan,
   type StyleMemory,
   type ZoomRegion,
+  BEAUTY_PRESET,
+  captionYOf,
+  clipDuration,
+  cornerPlacement,
+  DEFAULT_ADJUST,
+  DEFAULT_TRANSFORM,
+  initialClips,
+  isDefaultTransform,
+  NO_BEAUTY,
+  type ClearTarget,
+  type ClipTransform,
+  type OverlayPosition,
 } from '@lumora/core'
 import type { AudioAsset, MediaAsset, MusicTrack } from '@shared/ipc'
 import { lumora } from '../api'
@@ -540,6 +552,66 @@ function addTitleOverlay(text: string) {
     }
   })
   s.select(null)
+}
+
+/** Số mục mà lệnh `clear` sẽ xóa (0 = không có gì để xóa). */
+function clearCount(edit: EditState, target: ClearTarget): number {
+  switch (target) {
+    case 'zooms':
+      return edit.zooms.length
+    case 'effects':
+      return edit.effects.length
+    case 'overlays':
+      return edit.overlays.length
+    case 'music':
+      return edit.audioClips.filter((a) => a.kind === 'music').length
+    case 'sfx':
+      return edit.audioClips.filter((a) => a.kind === 'sfx').length
+    case 'transitions':
+      return edit.transitions.length
+    case 'captions':
+      return edit.captions.lines.length || (edit.captions.enabled ? 1 : 0)
+    case 'markers':
+      return edit.markers.length
+    case 'filter':
+      return edit.look.filter === 'none' ? 0 : 1
+    case 'adjust':
+      return Object.values(edit.look.adjust).some((v) => v !== 0) ? 1 : 0
+    case 'cuts':
+      return 1
+  }
+}
+
+/** Bản chỉnh sửa sau khi xóa sạch một loại mục. */
+function clearTarget(e: EditState, target: ClearTarget, project: Project): EditState {
+  switch (target) {
+    case 'zooms':
+      return { ...e, zooms: [] }
+    case 'effects':
+      return { ...e, effects: [] }
+    case 'overlays':
+      return { ...e, overlays: [] }
+    case 'music':
+    case 'sfx':
+      return { ...e, audioClips: e.audioClips.filter((a) => a.kind !== target) }
+    case 'transitions':
+      return { ...e, transitions: [] }
+    case 'captions':
+      return {
+        ...e,
+        captions: { ...e.captions, lines: [], enabled: false, bilingual: false },
+      }
+    case 'markers':
+      return { ...e, markers: [] }
+    case 'filter':
+      return { ...e, look: { ...e.look, filter: 'none', intensity: 1 } }
+    case 'adjust':
+      return { ...e, look: { ...e.look, adjust: { ...DEFAULT_ADJUST } } }
+    case 'cuts': {
+      const clips = initialClips(project)
+      return { ...e, clips, transitions: pruneTransitions(clips, e.transitions) }
+    }
+  }
 }
 
 /** Mã lỗi ngắn từ lỗi IPC ("missing_key:elevenlabs" → "missing_key"). */
@@ -1757,7 +1829,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         case 'export':
           get().change((e) => ({
             ...e,
-            export: { ...e.export, resolution: c.resolution, format: c.format },
+            export: {
+              ...e.export,
+              resolution: c.resolution,
+              format: c.format,
+              fps: c.fps ?? e.export.fps,
+            },
           }))
           exportAfter = true
           done('export')
@@ -1792,6 +1869,395 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
               : e.transitions,
           }))
           done('styleFrom')
+          break
+        }
+        case 'cutRange': {
+          const cur = get().edit!
+          const total = outputDuration(cur.clips)
+          const from = Math.min(c.fromMs, total)
+          const to = Math.min(c.toMs, total)
+          if (to - from < MIN_REGION_MS || total - (to - from) < 1000) {
+            skipped('cutRange', 'too_short')
+            break
+          }
+          get().change((e) => {
+            const split = splitAt(splitAt(e.clips, from), to)
+            const keep = clipPositions(split)
+              .filter((p) => {
+                const end = p.outputStart + clipDuration(p.clip)
+                return !(p.outputStart >= from - 1 && end <= to + 1)
+              })
+              .map((p) => p.clip)
+            if (keep.length === 0) return e
+            return { ...e, clips: keep, transitions: pruneTransitions(keep, e.transitions) }
+          })
+          get().select(null)
+          done('cutRange')
+          break
+        }
+        case 'freeze': {
+          const cur = get().edit!
+          const result = insertFreeze(cur.clips, Math.min(c.atMs, outputDuration(cur.clips)), c.ms)
+          if (!result) {
+            skipped('freeze', 'too_short')
+            break
+          }
+          get().change((e) => ({ ...e, clips: result.clips }))
+          done('freeze')
+          break
+        }
+        case 'flip':
+        case 'rotate': {
+          const patch: Partial<ClipTransform> =
+            c.kind === 'rotate'
+              ? { rotate: c.degrees }
+              : c.axis === 'horizontal'
+                ? { flipH: true }
+                : { flipV: true }
+          get().change((e) => ({
+            ...e,
+            clips: e.clips.map((clip) => {
+              const transform = { ...(clip.transform ?? DEFAULT_TRANSFORM), ...patch }
+              const { transform: _old, ...rest } = clip
+              void _old
+              return isDefaultTransform(transform) ? rest : { ...rest, transform }
+            }),
+          }))
+          done(c.kind)
+          break
+        }
+        case 'volume': {
+          if (c.target === 'mic' || c.target === 'system') {
+            get().change((e) => ({ ...e, audio: { ...e.audio, [c.target]: c.level } }))
+            done('volume')
+            break
+          }
+          const count = get().edit!.audioClips.filter((a) => a.kind === c.target).length
+          if (count === 0) {
+            skipped('volume', c.target === 'music' ? 'no_music' : 'nothing')
+            break
+          }
+          get().change((e) => ({
+            ...e,
+            audioClips: e.audioClips.map((a) =>
+              a.kind === c.target ? { ...a, volume: c.level } : a,
+            ),
+          }))
+          done('volume', count)
+          break
+        }
+        case 'voiceFx':
+          get().change((e) => ({
+            ...e,
+            audio: { ...e.audio, micFx: { ...e.audio.micFx, voice: c.voice } },
+          }))
+          done('voiceFx')
+          break
+        case 'fade': {
+          const count = get().edit!.audioClips.filter((a) => a.kind === 'music').length
+          if (count === 0) {
+            skipped('fade', 'no_music')
+            break
+          }
+          get().change((e) => ({
+            ...e,
+            audioClips: e.audioClips.map((a) =>
+              a.kind === 'music' ? { ...a, fadeIn: c.ms, fadeOut: c.ms } : a,
+            ),
+          }))
+          done('fade', count)
+          break
+        }
+        case 'sound': {
+          try {
+            const asset = await lumora().addSoundEffect(folder, c.sound)
+            if (get().folder !== folder) return report
+            insertAudio(asset, 'sfx', Math.min(c.atMs, outputDuration(get().edit!.clips)))
+            get().select(null)
+            done('sound')
+          } catch (e) {
+            report.push({ step: 'sound', status: 'error', detail: errorCode(e) })
+          }
+          break
+        }
+        case 'zoomLevel': {
+          if (get().edit!.zooms.length === 0) {
+            skipped('zoomLevel', 'no_zooms')
+            break
+          }
+          get().updateAllZooms({ scale: c.scale })
+          done('zoomLevel', get().edit!.zooms.length)
+          break
+        }
+        case 'zoomAt': {
+          const cur = get().edit!
+          const total = outputDuration(cur.clips)
+          const a = outputToSource(cur.clips, Math.min(c.atMs, Math.max(0, total - 1)))
+          const b = outputToSource(cur.clips, Math.min(c.atMs + c.ms, total))
+          if (!a || !b || b.source - a.source < MIN_REGION_MS) {
+            skipped('zoomAt', 'too_short')
+            break
+          }
+          const region: ZoomRegion = {
+            id: newZoomId(),
+            start: Math.round(a.source),
+            end: Math.round(b.source),
+            scale: c.scale,
+            mode: 'follow',
+            x: 0.5,
+            y: 0.5,
+          }
+          get().setZooms([...cur.zooms, region])
+          done('zoomAt')
+          break
+        }
+        case 'motion':
+          get().change((e) => ({
+            ...e,
+            motion: {
+              cameraSpeed: c.cameraSpeed ?? e.motion.cameraSpeed,
+              zoomTransitionMs: c.zoomMs ?? e.motion.zoomTransitionMs,
+            },
+          }))
+          done('motion')
+          break
+        case 'frame':
+          get().change((e) => ({
+            ...e,
+            frame: {
+              ...e.frame,
+              padding: c.padding ?? e.frame.padding,
+              radius: c.radius ?? e.frame.radius,
+              shadow: c.shadow ?? e.frame.shadow,
+              fill: c.fill ?? e.frame.fill,
+            },
+          }))
+          done('frame')
+          break
+        case 'background':
+          get().change((e) => ({
+            ...e,
+            frame: {
+              ...e.frame,
+              fill: false,
+              background: c.color2
+                ? { kind: 'gradient', color: c.color, color2: c.color2, angle: 135 }
+                : { kind: 'solid', color: c.color, color2: c.color, angle: 0 },
+            },
+          }))
+          done('background')
+          break
+        case 'cursor':
+          get().change((e) => ({
+            ...e,
+            cursor: {
+              ...e.cursor,
+              visible: c.visible ?? e.cursor.visible,
+              size: c.size ?? e.cursor.size,
+              clickEffect: c.clickEffect ?? e.cursor.clickEffect,
+              hideIdle: c.hideIdle ?? e.cursor.hideIdle,
+            },
+          }))
+          done('cursor')
+          break
+        case 'camera':
+          get().change((e) => {
+            const place = c.position ? cornerPlacement(c.position) : null
+            return {
+              ...e,
+              camera: {
+                ...e.camera,
+                visible: c.visible ?? e.camera.visible,
+                shape: c.shape ?? e.camera.shape,
+                size: c.size ?? e.camera.size,
+                position: c.position ?? e.camera.position,
+                x: place ? place.x : e.camera.x,
+                y: place ? place.y : e.camera.y,
+                layout: c.layout ?? e.camera.layout,
+                beauty:
+                  c.beauty === undefined
+                    ? e.camera.beauty
+                    : c.beauty
+                      ? { ...BEAUTY_PRESET }
+                      : { ...NO_BEAUTY },
+                background:
+                  c.background === undefined
+                    ? e.camera.background
+                    : { ...e.camera.background, mode: c.background },
+              },
+            }
+          })
+          done('camera')
+          break
+        case 'text':
+        case 'sticker':
+        case 'shape': {
+          const cur = get().edit!
+          const total = outputDuration(cur.clips)
+          const start = Math.min(c.atMs, Math.max(0, total - MIN_REGION_MS))
+          const end = Math.min(total, start + c.ms)
+          if (end - start < MIN_REGION_MS) {
+            skipped(c.kind, 'too_short')
+            break
+          }
+          const init: Partial<Overlay> & Pick<Overlay, 'kind'> =
+            c.kind === 'text'
+              ? (() => {
+                  const style = templateStyle(c.template)
+                  return {
+                    kind: 'text',
+                    text: c.text,
+                    style: 'title',
+                    color: style.color,
+                    textStyle: style,
+                  }
+                })()
+              : c.kind === 'sticker'
+                ? { kind: 'emoji', text: c.emoji }
+                : { kind: 'shape', shape: c.shape, color: c.color }
+          const overlay = buildOverlay(init, start, total)
+          const pos: Record<OverlayPosition, number> = { top: 0.15, center: 0.5, bottom: 0.85 }
+          const placed: Overlay = {
+            ...overlay,
+            start,
+            end,
+            x: c.kind === 'shape' ? c.x : 0.5,
+            y: c.kind === 'shape' ? c.y : pos[c.position],
+          }
+          get().change((e) => ({ ...e, overlays: [...e.overlays, placed] }))
+          done(c.kind)
+          break
+        }
+        case 'adjust':
+          get().change((e) => ({
+            ...e,
+            look: { ...e.look, adjust: { ...e.look.adjust, [c.setting]: c.value } },
+          }))
+          done('adjust')
+          break
+        case 'captionsLayout':
+          get().change((e) => ({
+            ...e,
+            captions: {
+              ...e.captions,
+              position: c.position ?? e.captions.position,
+              size: c.size ?? e.captions.size,
+              look: c.position
+                ? { ...e.captions.look, y: captionYOf(c.position) }
+                : e.captions.look,
+            },
+          }))
+          done('captionsLayout')
+          break
+        case 'translate': {
+          const lines = get().edit!.captions.lines
+          if (lines.length === 0) {
+            skipped('translate', 'no_captions')
+            break
+          }
+          try {
+            const translated = await lumora().translateLines(
+              lines.map((l) => ({ id: l.id, text: l.text })),
+              c.language,
+            )
+            if (get().folder !== folder) return report
+            const byId = new Map(translated.map((l) => [l.id, l.text]))
+            get().change((e) => ({
+              ...e,
+              captions: c.bilingual
+                ? {
+                    ...e.captions,
+                    bilingual: true,
+                    translationLanguage: c.language,
+                    lines: e.captions.lines.map((l) => ({
+                      ...l,
+                      translation: byId.get(l.id) ?? l.text,
+                    })),
+                  }
+                : {
+                    ...e.captions,
+                    language: c.language,
+                    bilingual: false,
+                    lines: e.captions.lines.map((l) => {
+                      const next = { ...l, text: byId.get(l.id) ?? l.text, edited: true }
+                      delete next.translation
+                      return next
+                    }),
+                  },
+            }))
+            done('translate', lines.length)
+          } catch (e) {
+            report.push({ step: 'translate', status: 'error', detail: errorCode(e) })
+          }
+          break
+        }
+        case 'marker': {
+          const total = outputDuration(get().edit!.clips)
+          get().change((e) => ({
+            ...e,
+            markers: addMarker(e.markers, Math.min(c.atMs, total), c.label),
+          }))
+          done('marker')
+          break
+        }
+        case 'chapters': {
+          try {
+            const summary = await lumora().summarize(folder)
+            if (get().folder !== folder) return report
+            const cur = get().edit!
+            const marks = summary.chapters.flatMap((ch) => {
+              const t = sourceToOutput(cur.clips, ch.start)
+              return t === null ? [] : [{ t, label: ch.title }]
+            })
+            if (marks.length === 0) {
+              skipped('chapters', 'no_chapters')
+              break
+            }
+            get().change((e) => ({
+              ...e,
+              markers: marks.reduce((all, m) => addMarker(all, m.t, m.label), e.markers),
+            }))
+            done('chapters', marks.length)
+          } catch (e) {
+            report.push({ step: 'chapters', status: 'error', detail: errorCode(e) })
+          }
+          break
+        }
+        case 'track': {
+          const { row, ...patch } = c
+          const state: Partial<TrackState> = {}
+          if (patch.hidden !== undefined) state.hidden = patch.hidden
+          if (patch.muted !== undefined) state.muted = patch.muted
+          if (patch.locked !== undefined) state.locked = patch.locked
+          get().setTrack(row, state)
+          done('track')
+          break
+        }
+        case 'clear': {
+          const cur = get().edit!
+          const count = clearCount(cur, c.target)
+          if (count === 0) {
+            skipped('clear', 'nothing')
+            break
+          }
+          get().change((e) => clearTarget(e, c.target, project))
+          get().select(null)
+          done('clear', count)
+          break
+        }
+        case 'shorts': {
+          try {
+            const made = await get().splitIntoShorts({
+              mode: c.mode,
+              seconds: c.seconds,
+              vertical: c.vertical,
+            })
+            if (get().folder !== folder) return report
+            if (made === 0) skipped('shorts', 'too_short')
+            else done('shorts', made)
+          } catch (e) {
+            report.push({ step: 'shorts', status: 'error', detail: errorCode(e) })
+          }
           break
         }
         default:

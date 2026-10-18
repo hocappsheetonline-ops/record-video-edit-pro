@@ -2,6 +2,11 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.7.0
+
+- **Đạo diễn AI điều khiển hầu hết tính năng chỉnh sửa**: ngoài cắt / phụ đề / zoom / nhạc / bộ lọc / xuất, AI (Claude hoặc Ollama) giờ ra được lệnh cho **timeline** (cắt một đoạn theo thời gian, đóng băng khung hình, lật, xoay), **âm thanh** (âm lượng micro / máy / nhạc / hiệu ứng, tắt tiếng, hiệu ứng giọng, nhạc tăng giảm dần, chèn hiệu ứng âm thanh), **zoom** (đặt mức zoom cho tất cả, thêm đoạn zoom tại thời điểm, tốc độ khung nhìn), **khung hình** (lề, bo góc, bóng, nền màu / chuyển màu, phủ kín), **con trỏ** và **webcam** (ẩn / hiện, hình dạng, cỡ, góc, bố cục, làm đẹp, xóa phông), **lớp nổi** (chữ theo mẫu, nhãn dán emoji, mũi tên / vòng tròn… tại vị trí), **điều chỉnh màu** từng thông số, **phụ đề** (vị trí trên / dưới, cỡ chữ, dịch hoặc song ngữ), **điểm đánh dấu** và **mốc chương** từ lời thoại, ẩn / tắt tiếng / khóa hàng timeline, **xóa sạch** một loại mục (zoom, hiệu ứng, nhạc, phụ đề, bộ lọc… hoặc khôi phục bản quay đầy đủ), **chia thành video ngắn**, và xuất kèm số khung hình / giây.
+- Bộ hiểu từ khóa (khi không có AI) biết thêm: mức zoom ("zoom 2.5x"), bỏ nhạc / zoom / hiệu ứng / phụ đề / bộ lọc, tắt tiếng mic / máy, lật, xoay, ẩn / hiện webcam và con trỏ, phụ đề trên / dưới, dịch phụ đề sang ngôn ngữ khác, tạo chương, chia video ngắn.
+
 ## 1.6.0
 
 - **Tất cả đoạn zoom** (tab Zoom): đặt một mức zoom cố định cho mọi đoạn, đổi kiểu zoom cho tất cả; nút **Áp dụng mức này cho tất cả** khi đang chọn một đoạn; menu chuột phải trên đoạn zoom.
