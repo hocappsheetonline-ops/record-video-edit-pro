@@ -140,3 +140,55 @@ test('AI: nhập key, tạo phụ đề, cắt từ thừa, tạo chương, lưu
   expect(errors).toEqual([])
   await app.close()
 })
+
+test('Đạo diễn AI: một câu → nhiều lệnh (chữ, nhãn dán, mốc, zoom, mic, lề, màu, cắt); một bước hoàn tác', async () => {
+  const { app, page, errors } = await launchApp(dirs.userData, {
+    env: { LUMORA_ANTHROPIC_BASE_URL: mock.url },
+  })
+
+  await page.getByTestId('nav-settings').click()
+  await saveKey(page, 'anthropic', 'Claude (Anthropic)', 'sk-ant-test-key-0123456789abcdef')
+  await page.getByTestId('nav-projects').click()
+  await page.getByTestId('project-card').click()
+  await page.getByTestId('open-editor').click()
+  await expect(page.getByTestId('timecode')).toContainText('/ 0:04.0')
+  await expect(page.getByTestId('timeline-zoom')).toHaveCount(1)
+
+  await page.getByTestId('lib-ai').click()
+  await expect(page.getByTestId('director-engine')).toHaveAttribute('data-engine', 'claude')
+  await page.getByTestId('assistant-input').fill('làm hết cho mình')
+  await page.getByTestId('assistant-run').click()
+
+  // Báo cáo từng lệnh: 8 xong, "bỏ nhạc" bỏ qua vì chưa có nhạc.
+  const commands = page.getByTestId('assistant-command')
+  await expect(commands).toHaveCount(9)
+  await expect(page.locator('[data-testid="assistant-command"][data-status="done"]')).toHaveCount(8)
+  await expect(
+    page.locator('[data-testid="assistant-command"][data-kind="clear"][data-status="skipped"]'),
+  ).toHaveCount(1)
+  await expect(page.getByTestId('director-message').last()).toContainText('Thêm chữ, nhãn dán')
+
+  // Kết quả trên timeline: 2 lớp, 1 mốc, zoom 3×, video ngắn đi 1 giây.
+  await expect(page.getByTestId('timeline-overlay')).toHaveCount(2)
+  await expect(page.getByTestId('timeline-marker')).toHaveCount(1)
+  await expect(page.getByTestId('timeline-zoom').first()).toHaveText('3.0×')
+  await expect(page.getByTestId('timecode')).toContainText('/ 0:03.0')
+
+  // Lệnh đi qua Claude với lời nhắc đạo diễn có mô tả các lệnh mở rộng.
+  const direct = mock.requests.filter((r) => r.path === '/v1/messages').at(-1)!
+  const body = JSON.parse(direct.body.toString('utf8'))
+  expect(String(body.system)).toContain('AI director')
+  expect(String(body.system)).toContain('zoomLevel {scale}')
+  expect(body.output_config.format.schema.properties.commands.items.properties.kind.enum).toContain(
+    'sticker',
+  )
+
+  // Tất cả là một bước hoàn tác.
+  await page.keyboard.press('Control+z')
+  await expect(page.getByTestId('timeline-overlay')).toHaveCount(0)
+  await expect(page.getByTestId('timeline-marker')).toHaveCount(0)
+  await expect(page.getByTestId('timecode')).toContainText('/ 0:04.0')
+
+  expect(errors).toEqual([])
+  await app.close()
+})

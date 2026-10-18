@@ -122,6 +122,34 @@ export async function startMockAi(): Promise<{
           return json(200, anthropicMessage({ commands: [{ kind: 'cutSilences' }] }))
         }
         if (system.includes('AI director')) {
+          const goal = String(request.messages[0].content)
+          // Kế hoạch nhiều lệnh mở rộng (chữ, nhãn dán, mốc, zoom, âm lượng, khung, màu, cắt).
+          if (goal.includes('làm hết'))
+            return json(
+              200,
+              anthropicMessage({
+                summary: 'Thêm chữ, nhãn dán, mốc, chỉnh zoom, tắt mic, lề và cắt đoạn cuối',
+                questions: [],
+                commands: [
+                  {
+                    kind: 'text',
+                    text: 'Xin chào',
+                    atMs: 0,
+                    ms: 1500,
+                    template: 'neon',
+                    position: 'top',
+                  },
+                  { kind: 'sticker', emoji: '🔥', atMs: 500, ms: 1000, position: 'center' },
+                  { kind: 'marker', atMs: 1000, label: 'Mốc A' },
+                  { kind: 'zoomLevel', scale: 3 },
+                  { kind: 'volume', target: 'mic', level: 0 },
+                  { kind: 'frame', padding: 0.2 },
+                  { kind: 'adjust', setting: 'brightness', value: 0.2 },
+                  { kind: 'cutRange', fromMs: 3000, toMs: 4000 },
+                  { kind: 'clear', target: 'music' },
+                ],
+              }),
+            )
           return json(
             200,
             anthropicMessage({

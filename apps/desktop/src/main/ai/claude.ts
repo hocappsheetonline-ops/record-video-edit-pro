@@ -1,10 +1,23 @@
 import Anthropic from '@anthropic-ai/sdk'
 import {
+  ADJUST_KEYS,
   ASSISTANT_KINDS,
+  CAMERA_BG_MODES,
+  CAMERA_LAYOUTS,
+  CAMERA_SHAPES,
   CAPTION_TEMPLATES,
+  CLEAR_TARGETS,
+  CORNERS,
   EFFECT_KINDS,
+  OVERLAY_POSITIONS,
   RESOLUTIONS,
+  SHAPES,
+  SOUND_EFFECT_IDS,
+  TEXT_TEMPLATE_IDS,
+  TIMELINE_ROWS,
   TRANSITION_KINDS,
+  VOICE_FX,
+  VOLUME_TARGETS,
   type DirectorContext,
 } from '@lumora/core'
 import type { FetchLike } from '../key-validation'
@@ -160,7 +173,7 @@ const COMMAND_SCHEMA: Schema = {
   type: 'object',
   properties: {
     kind: { type: 'string', enum: [...ASSISTANT_KINDS] },
-    text: { type: 'string', description: 'title: the opening title text' },
+    text: { type: 'string', description: 'title: the opening title text; text: the overlay text' },
     preset: {
       type: 'string',
       enum: [
@@ -181,7 +194,11 @@ const COMMAND_SCHEMA: Schema = {
     intensity: { type: 'number', description: 'filter: 0.1-1' },
     factor: { type: 'number', description: 'speed: playback factor 0.25-8' },
     aspect: { type: 'string', enum: ['16:9', '9:16', '1:1', '4:3', 'source'] },
-    ms: { type: 'integer', description: 'trimStart / trimEnd: milliseconds to cut' },
+    ms: {
+      type: 'integer',
+      description:
+        'trimStart / trimEnd: milliseconds to cut; freeze / zoomAt / text / sticker / shape: duration in ms; fade: fade length in ms',
+    },
     effect: {
       type: 'string',
       enum: [...EFFECT_KINDS],
@@ -199,8 +216,8 @@ const COMMAND_SCHEMA: Schema = {
     volume: { type: 'number', description: 'music: background music volume 0.05-1 (0.4 default)' },
     template: {
       type: 'string',
-      enum: [...CAPTION_TEMPLATES],
-      description: 'captionsStyle: subtitle template',
+      enum: [...new Set<string>([...CAPTION_TEMPLATES, ...TEXT_TEMPLATE_IDS])],
+      description: `captionsStyle: subtitle template (${CAPTION_TEMPLATES.join(', ')}); text: text template (${TEXT_TEMPLATE_IDS.join(', ')})`,
     },
     resolution: {
       type: 'integer',
@@ -212,6 +229,88 @@ const COMMAND_SCHEMA: Schema = {
       type: 'string',
       description: 'styleFrom: exact name of the project whose style to copy',
     },
+    fps: { type: 'integer', enum: [30, 60], description: 'export: frames per second' },
+    atMs: {
+      type: 'integer',
+      description:
+        'freeze / sound / zoomAt / text / sticker / shape / marker: time on the output video, milliseconds',
+    },
+    fromMs: { type: 'integer', description: 'cutRange: start of the span to cut (ms)' },
+    toMs: { type: 'integer', description: 'cutRange: end of the span to cut (ms)' },
+    axis: { type: 'string', enum: ['horizontal', 'vertical'], description: 'flip' },
+    degrees: { type: 'integer', enum: [90, 180, 270], description: 'rotate: clockwise' },
+    target: {
+      type: 'string',
+      enum: [...new Set<string>([...VOLUME_TARGETS, ...CLEAR_TARGETS])],
+      description: `volume: ${VOLUME_TARGETS.join(' / ')}; clear: ${CLEAR_TARGETS.join(' / ')}`,
+    },
+    level: { type: 'number', description: 'volume: 0 (mute) to 2 (1 = unchanged)' },
+    voice: { type: 'string', enum: [...VOICE_FX], description: 'voiceFx: voice effect' },
+    sound: { type: 'string', enum: [...SOUND_EFFECT_IDS], description: 'sound: sound effect id' },
+    scale: { type: 'number', description: 'zoomLevel / zoomAt: zoom factor 1.1-5 (2 = twice)' },
+    cameraSpeed: { type: 'number', description: 'motion: 0 (slow glide) to 1 (tight follow)' },
+    zoomMs: { type: 'integer', description: 'motion: zoom in/out duration 250-1500 ms' },
+    padding: { type: 'number', description: 'frame: margin around the video 0-0.45' },
+    radius: { type: 'number', description: 'frame: corner radius 0-0.2' },
+    shadow: { type: 'number', description: 'frame: drop shadow 0-1' },
+    fill: {
+      type: 'boolean',
+      description: 'frame: fill the whole frame (no margin, no background)',
+    },
+    color: {
+      type: 'string',
+      description: 'background / shape: hex colour like #1e1b4b',
+    },
+    color2: {
+      type: 'string',
+      description: 'background: second hex colour for a gradient; "" for a solid colour',
+    },
+    visible: { type: 'boolean', description: 'cursor / camera: show or hide' },
+    size: {
+      type: 'number',
+      description:
+        'cursor: pointer scale 0.5-4; camera: bubble size 0.05-0.6; captionsLayout: text size 0.5-2.5',
+    },
+    clickEffect: { type: 'boolean', description: 'cursor: ripple on clicks' },
+    hideIdle: { type: 'boolean', description: 'cursor: hide when idle' },
+    shape: {
+      type: 'string',
+      enum: [...new Set<string>([...CAMERA_SHAPES, ...SHAPES])],
+      description: `camera: ${CAMERA_SHAPES.join(' / ')}; shape: ${SHAPES.join(' / ')}`,
+    },
+    position: {
+      type: 'string',
+      enum: [...new Set<string>([...CORNERS, ...OVERLAY_POSITIONS])],
+      description: `camera: corner (${CORNERS.join(' / ')}); text / sticker: ${OVERLAY_POSITIONS.join(' / ')}; captionsLayout: top / bottom`,
+    },
+    layout: { type: 'string', enum: [...CAMERA_LAYOUTS], description: 'camera: bubble or stack' },
+    beauty: { type: 'boolean', description: 'camera: face beautify on/off' },
+    background: {
+      type: 'string',
+      enum: [...CAMERA_BG_MODES],
+      description: 'camera: webcam background (none, remove, blur, color)',
+    },
+    emoji: { type: 'string', description: 'sticker: one emoji' },
+    x: { type: 'number', description: 'shape: horizontal centre 0-1' },
+    y: { type: 'number', description: 'shape: vertical centre 0-1' },
+    setting: { type: 'string', enum: [...ADJUST_KEYS], description: 'adjust: which setting' },
+    value: {
+      type: 'number',
+      description: 'adjust: -1..1 (sharpen, vignette, grain: 0..1); 0 = unchanged',
+    },
+    language: { type: 'string', description: 'translate: target language code (en, vi, ja…)' },
+    bilingual: {
+      type: 'boolean',
+      description: 'translate: true = show the translation under the original line',
+    },
+    label: { type: 'string', description: 'marker: short label' },
+    row: { type: 'string', enum: [...TIMELINE_ROWS], description: 'track: timeline row' },
+    hidden: { type: 'boolean', description: 'track: hide the row' },
+    muted: { type: 'boolean', description: 'track: mute the row' },
+    locked: { type: 'boolean', description: 'track: lock the row' },
+    mode: { type: 'string', enum: ['fixed', 'chapters'], description: 'shorts: how to split' },
+    seconds: { type: 'integer', description: 'shorts: length of each short in seconds (fixed)' },
+    vertical: { type: 'boolean', description: 'shorts: 9:16 frame for each short' },
   },
   required: ['kind'],
   additionalProperties: false,
@@ -238,7 +337,27 @@ const COMMAND_GUIDE = `- cutSilences: remove long pauses. removeFillers: remove 
 - transitions {transition}: transition at every cut (${TRANSITION_KINDS.join(', ')}).
 - music {query, volume}: background music from the user's own library; query = words from one track name; volume 0.05-1 (0.4 by default, about 0.25 when asked for quiet music).
 - export {resolution, format}: set export settings and export right away (resolution ${RESOLUTIONS.join(' / ')}; format mp4 or gif).
-- styleFrom {project}: copy the style (frame, filter, captions, motion…) of one of the user's other projects, by its exact name.`
+- styleFrom {project}: copy the style (frame, filter, captions, motion…) of one of the user's other projects, by its exact name.
+Timeline (all times are on the output video, in milliseconds):
+- cutRange {fromMs, toMs}: cut out that span. freeze {atMs, ms}: freeze frame at a time for ms. flip {axis}: mirror the screen video. rotate {degrees}: 90 / 180 / 270 clockwise.
+Audio:
+- volume {target, level}: ${VOLUME_TARGETS.join(' / ')}; level 0 = mute, 1 = unchanged, up to 2. voiceFx {voice}: microphone voice effect (${VOICE_FX.join(', ')}). fade {ms}: fade the background music in and out. sound {sound, atMs}: built-in sound effect (${SOUND_EFFECT_IDS.join(', ')}) at a time.
+Zoom & motion:
+- zoomLevel {scale}: set the zoom factor of every existing zoom (1.1-5). zoomAt {atMs, ms, scale}: add one zoom following the cursor. motion {cameraSpeed, zoomMs}: how fast the view follows the cursor (0-1) and how long zooming in/out takes (250-1500 ms).
+Frame & look:
+- frame {padding, radius, shadow, fill}: margin, rounded corners, shadow (0-1) and fill-the-frame. background {color, color2}: colour behind the video (hex), gradient when color2 is given.
+- cursor {visible, size, clickEffect, hideIdle}: drawn mouse pointer. camera {visible, shape, size, position, layout, beauty, background}: webcam bubble (shape ${CAMERA_SHAPES.join(' / ')}, position ${CORNERS.join(' / ')}, layout ${CAMERA_LAYOUTS.join(' / ')}, background ${CAMERA_BG_MODES.join(' / ')}).
+- adjust {setting, value}: one colour adjustment (${ADJUST_KEYS.join(', ')}), -1..1; one command per setting.
+Overlays:
+- text {text, atMs, ms, template, position}: text on the video with a text template (${TEXT_TEMPLATE_IDS.join(', ')}), position ${OVERLAY_POSITIONS.join(' / ')} (use "title" for an opening title, "text" for anything at a given time).
+- sticker {emoji, atMs, ms, position}: an emoji sticker. shape {shape, atMs, ms, x, y, color}: a drawn shape (${SHAPES.join(', ')}) centred at x, y (0-1) — e.g. an arrow pointing at something the narration mentions.
+Captions:
+- captionsLayout {position, size}: captions at the top or bottom, text size 0.5-2.5. translate {language, bilingual}: translate the existing captions (language code), bilingual = keep the original and show the translation under it.
+Markers & rows:
+- marker {atMs, label}: a timeline marker. chapters: create chapter markers from the transcript (needs captions / transcript).
+- track {row, hidden, muted, locked}: hide / mute / lock a timeline row (${TIMELINE_ROWS.join(', ')}).
+- clear {target}: remove every item of one kind (${CLEAR_TARGETS.join(', ')}); "cuts" restores the full recording; "captions" turns captions off; "filter" / "adjust" reset the colour look.
+- shorts {mode, seconds, vertical}: split the video into short clips, each becoming its own project (mode fixed = every N seconds, chapters = by AI chapters).`
 
 export function assistantSystem(context: {
   language: string
