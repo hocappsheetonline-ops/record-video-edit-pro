@@ -480,7 +480,8 @@ export class PreviewEngine {
     ]
     const hit = outputToSource(edit.clips, time)
     const source = hit?.source ?? 0
-    const item = segmentAt(this.segments, source)
+    // Timeline trống (đã xóa hết clip): chỉ vẽ nền, không lấy khung hình nào của bản quay.
+    const item = hit ? segmentAt(this.segments, source) : null
     const size = this.outputSize()
     if (this.canvas.width !== size.width || this.canvas.height !== size.height) {
       this.canvas.width = size.width

@@ -159,10 +159,12 @@ export interface SelItem {
 const isMulti = (k: string | undefined): k is MultiKind =>
   k === 'overlay' || k === 'effect' || k === 'audio' || k === 'clip' || k === 'zoom'
 
-/** Xóa nhiều clip một lúc nhưng luôn giữ lại ít nhất một clip trên timeline. */
+/**
+ * Xóa nhiều clip một lúc. Được xóa hết: timeline trống, người dùng thêm lại bản quay gốc từ
+ * Thư viện → Phương tiện (như xóa hết rồi kéo lại media trong CapCut).
+ */
 function removeClips(clips: readonly Clip[], ids: Set<string>): Clip[] {
-  const rest = clips.filter((c) => !ids.has(c.id))
-  return rest.length > 0 ? rest : clips.slice(0, 1)
+  return clips.filter((c) => !ids.has(c.id))
 }
 
 /** `transition`: id là clip đứng trước chỗ nối. `camera`: bong bóng webcam (id rỗng). */
@@ -304,6 +306,12 @@ interface EditorStore {
   importVideo(file?: string): Promise<boolean>
   /** Ghép bản quay khác (thư mục `other`) vào cuối video. */
   mergeProject(other: string): Promise<void>
+  /**
+   * Thêm lại một đoạn quay gốc (theo `segment.index`) làm clip mới ở cuối timeline, trọn vẹn từ
+   * đầu tới cuối đoạn; không có `index` thì thêm lại tất cả các đoạn. Dùng khi đã xóa hết clip hoặc
+   * muốn dùng lại bản quay. Trả về clip đầu tiên vừa thêm (null nếu không có đoạn nào).
+   */
+  addSourceClips(index?: number): Clip | null
   /** Tách tiếng clip chính thành đoạn âm thanh riêng, tắt tiếng clip. False nếu không tách được. */
   detachClipAudio(id: string, names: { mic: string; system: string }): boolean
   /** Ẩn / tắt tiếng / khóa một hàng trên timeline. */
@@ -1227,6 +1235,27 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     return true
   },
 
+  addSourceClips(index) {
+    const { project, edit } = get()
+    if (!project || !edit) return null
+    const added = sourceSegments(project.segments)
+      .filter((x) => x.duration > 0 && (index === undefined || x.segment.index === index))
+      .map((x): Clip => ({
+        id: newClipId(),
+        sourceStart: x.offset,
+        sourceEnd: x.offset + x.duration,
+        speed: 1,
+      }))
+    const first = added[0]
+    if (!first) return null
+    const at = outputDuration(edit.clips)
+    get().change((e) => ({ ...e, clips: [...e.clips, ...added] }))
+    get().setPlaying(false)
+    get().setTime(at)
+    get().select({ kind: 'clip', id: first.id })
+    return first
+  },
+
   async mergeProject(other) {
     const { folder, edit } = get()
     if (!folder || !edit) return
@@ -1662,9 +1691,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     } else if (selection.kind === 'audio') {
       get().change((e) => ({ ...e, audioClips: e.audioClips.filter((c) => c.id !== selection.id) }))
     } else if (selection.kind === 'clip') {
-      get().change((e) =>
-        e.clips.length > 1 ? { ...e, clips: removeClip(e.clips, selection.id) } : e,
-      )
+      get().change((e) => ({ ...e, clips: removeClip(e.clips, selection.id) }))
     } else if (selection.kind === 'transition') {
       get().setTransition(selection.id, null)
     } else if (selection.kind === 'camera') {

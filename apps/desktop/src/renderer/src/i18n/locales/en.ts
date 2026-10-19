@@ -115,6 +115,12 @@ export const en: Messages = {
     tracks: { screen: 'Screen', camera: 'Webcam', mic: 'Microphone', system: 'Computer audio' },
     cursorHidden: 'Cursor recorded separately',
   },
+  crash: {
+    title: 'The editor hit an error',
+    text: 'The error was written to the log (Settings → Open log folder). Your edit is still autosaved.',
+    retry: 'Try again',
+    back: 'Back to Projects',
+  },
   editor: {
     recovered:
       'Lumora closed unexpectedly last time. Your latest autosaved edit has been restored.',
@@ -156,6 +162,15 @@ export const en: Messages = {
       merge: 'Append another recording',
       merging: 'Appending…',
       mergeEmpty: 'No other recordings yet.',
+      sourceTitle: 'Source recording',
+      sourceEmptyHint:
+        'The timeline is empty. Click a segment below (or drag it onto the timeline) to add it back.',
+      sourceSegment: 'Recording {{n}}',
+      sourceImported: 'Imported video {{n}}',
+      sourceAddHint:
+        'Click to add this whole segment at the end of the timeline (drag to drop it where you want)',
+      sourceAddAll: 'Add the whole recording back',
+      sourceAdded: 'Source recording added to the timeline.',
       mergeFailed: 'Could not append this recording.',
       importVideo: 'Import video',
       importVideoHint:
@@ -306,6 +321,8 @@ export const en: Messages = {
     },
     timeline: {
       add: 'Add media (open Library)',
+      empty: 'The timeline is empty.',
+      restoreSource: 'Add the source recording back',
       voiceover: 'Record voice-over',
       zoom: 'Timeline zoom',
       zoomIn: 'Zoom timeline in',
@@ -1054,6 +1071,8 @@ export const en: Messages = {
       enhance: 'Enhance quality (HD)',
       enhanceHint: 'Denoise and sharpen on export; takes a little longer.',
       start: 'Export video',
+      noClips:
+        'The timeline is empty: add the source recording back from Library → Media, then export.',
       rendering: 'Rendering… {{percent}}%',
       muxing: 'Adding audio…',
       cancel: 'Cancel',

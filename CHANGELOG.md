@@ -2,6 +2,11 @@
 
 Các phiên bản Lumora (bản cài Windows ở trang Releases của kho mã; app tự cập nhật).
 
+## 1.14.1
+
+- **Xóa hết clip rồi thêm lại bản quay gốc.** Trước đây timeline luôn giữ lại ít nhất một clip (xóa cả nhóm vẫn còn clip đầu) và không có chỗ nào để lấy lại bản quay gốc sau khi xóa, nên không "dọn sạch rồi dựng lại từ đầu" được. Giờ **Delete / menu Xóa xóa được cả clip cuối cùng** (timeline trống, khung xem trước chỉ còn nền, nút Xuất tạm tắt); Thư viện → **Phương tiện** có mục **Bản quay gốc** liệt kê từng đoạn quay / video đã nhập kèm ảnh và thời lượng: **bấm để nối trọn đoạn vào cuối timeline**, hoặc **kéo thả** vào timeline, bấm nhiều lần để dùng lại nhiều lần; timeline trống có ngay nút **Thêm lại bản quay gốc**. Mọi bước đều hoàn tác được.
+- **Không còn màn hình đen khi trình chỉnh sửa gặp lỗi.** Một lỗi JavaScript khi dựng giao diện trước đây làm cả cửa sổ chỉ còn một màu đen, không thao tác được. Giờ app hiện màn hình **"Trình chỉnh sửa gặp lỗi"** kèm chi tiết lỗi, nút **Thử mở lại** / **Về Dự án**, và ghi lỗi vào nhật ký (Cài đặt → Mở thư mục nhật ký) để gửi báo cáo; bản chỉnh sửa vẫn được tự lưu.
+
 ## 1.14.0
 
 - **Chỉnh sửa video bằng văn bản (kiểu Descript)** (Thư viện → **Lời thoại**): lời thoại hiện thành chữ (nhận dạng nếu chưa có), **xóa chữ nào thì đoạn video + tiếng tương ứng bị cắt**. Bấm một từ để đưa đầu phát tới đó; Shift+bấm hoặc bôi đen để chọn nhiều từ rồi bấm **Delete** (hoặc nút Cắt chữ đã chọn). Phần đã cắt hiện **gạch ngang**, bấm để khôi phục (có ô ẩn / hiện phần đã cắt); mọi bước đều hoàn tác được. Hợp cho video hướng dẫn kiểu quay màn hình + nói.

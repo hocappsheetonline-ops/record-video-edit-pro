@@ -1166,3 +1166,65 @@ test('AI xóa phông webcam: nạp được AI trong app, phông màu thay phầ
   expect(errors).toEqual([])
   await app.close()
 })
+
+test('xóa hết clip (timeline trống) rồi thêm lại bản quay gốc từ Thư viện → Phương tiện', async () => {
+  const { app, page, errors } = await launchApp(dirs.userData)
+  await openEditor(page)
+  await page.getByTestId('editor-canvas').click()
+  await page.keyboard.press('ArrowRight')
+  await page.keyboard.press('s')
+  await expect(page.getByTestId('timeline-clip')).toHaveCount(2)
+
+  // Chọn clip đầu, Ctrl+click clip sau rồi Delete: xóa hết, timeline trống thay vì giữ lại một clip.
+  await page.getByTestId('timeline-clip').nth(0).click()
+  await page
+    .getByTestId('timeline-clip')
+    .nth(1)
+    .click({ modifiers: ['Control'] })
+  await page.keyboard.press('Delete')
+  await expect(page.getByTestId('timeline-clip')).toHaveCount(0)
+  await expect(page.getByTestId('timeline-empty')).toBeVisible()
+  await expect(page.getByTestId('timecode')).toContainText('/ 0:00.0')
+  // Không có gì để xuất.
+  await openExport(page)
+  await expect(page.getByTestId('export-start')).toBeDisabled()
+  await closeExport(page)
+  // Khung xem trước vẫn vẽ được (nền), không lỗi.
+  await page.getByTestId('tab-frame').click()
+  await page.getByTestId('bg-preset-6').click()
+  await expect
+    .poll(() => previewPixel(page, 4, 4).then((p) => near(p, [0xf5, 0xf5, 0xf4])))
+    .toBe(true)
+
+  // Thư viện → Phương tiện có mục "Bản quay gốc": bấm là thêm lại trọn bản quay.
+  await page.getByTestId('lib-media').click()
+  await expect(page.getByTestId('source-empty-hint')).toBeVisible()
+  await expect(page.getByTestId('source-clip')).toHaveCount(1)
+  await page.getByTestId('source-clip').click()
+  await expect(page.getByTestId('timeline-clip')).toHaveCount(1)
+  await expect(page.getByTestId('timecode')).toContainText('/ 0:04.0')
+  await expect(page.getByTestId('source-empty-hint')).toBeHidden()
+  // Hình của bản quay hiện lại ở giữa khung (không còn là màu nền).
+  const box = (await page.getByTestId('editor-canvas').boundingBox())!
+  await expect
+    .poll(() =>
+      previewPixel(page, Math.round(box.width / 2), Math.round(box.height / 2)).then((p) =>
+        near(p, [0xf5, 0xf5, 0xf4]),
+      ),
+    )
+    .toBe(false)
+
+  // Xóa clip cuối cùng bằng menu chuột phải, rồi dùng nút ngay trên timeline để thêm lại.
+  await page.getByTestId('timeline-clip').click({ button: 'right' })
+  await page.getByTestId('menu-delete').click()
+  await expect(page.getByTestId('timeline-clip')).toHaveCount(0)
+  await page.getByTestId('timeline-restore-source').click()
+  await expect(page.getByTestId('timeline-clip')).toHaveCount(1)
+  // Bấm thêm lần nữa: nối thêm một bản nữa vào cuối (8 giây).
+  await page.getByTestId('source-clip').click()
+  await expect(page.getByTestId('timeline-clip')).toHaveCount(2)
+  await expect(page.getByTestId('timecode')).toContainText('/ 0:08.0')
+
+  expect(errors).toEqual([])
+  await app.close()
+})
