@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { accentForeground, type Theme } from '@lumora/core'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { Sidebar } from './components/Sidebar'
 import { TitleBar } from './components/TitleBar'
 import { TooltipLayer } from './components/TooltipLayer'
@@ -22,6 +23,7 @@ export function App() {
   const { i18n } = useTranslation()
   const ready = useAppStore((s) => s.ready)
   const page = useAppStore((s) => s.page)
+  const editorFolder = useAppStore((s) => s.editorFolder)
   const settings = useAppStore((s) => s.settings)
   const init = useAppStore((s) => s.init)
   const showProject = useAppStore((s) => s.showProject)
@@ -56,11 +58,13 @@ export function App() {
           <main
             className={`min-h-0 flex-1 ${page === 'editor' || page === 'live' ? 'overflow-hidden' : 'overflow-y-auto'}`}
           >
-            {page === 'record' && <RecordPage />}
-            {page === 'projects' && <ProjectsPage />}
-            {page === 'editor' && <EditorPage />}
-            {page === 'live' && <LivePage />}
-            {page === 'settings' && <SettingsPage />}
+            <ErrorBoundary resetKey={page === 'editor' ? `editor:${editorFolder}` : page}>
+              {page === 'record' && <RecordPage />}
+              {page === 'projects' && <ProjectsPage />}
+              {page === 'editor' && <EditorPage />}
+              {page === 'live' && <LivePage />}
+              {page === 'settings' && <SettingsPage />}
+            </ErrorBoundary>
           </main>
         </div>
       </div>

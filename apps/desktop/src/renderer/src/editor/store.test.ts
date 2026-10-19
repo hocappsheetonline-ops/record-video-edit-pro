@@ -8,6 +8,7 @@ import {
   DEFAULT_TRANSITION_MS,
   EMPTY_MEMORY,
   outputDuration,
+  sourceDuration,
   withCaptionTemplate,
 } from '@lumora/core'
 import { createFakeApi, sampleProject, sampleSummary, sampleTranscript } from '../test/fake-api'
@@ -58,16 +59,37 @@ describe('editor store', () => {
     expect(s().edit!.clips).toHaveLength(3)
   })
 
-  it('không xóa clip cuối cùng', () => {
+  it('xóa được cả clip cuối cùng (timeline trống), rồi thêm lại bản quay gốc từ thư viện', () => {
     const s = useEditorStore.getState
-    s().select({ kind: 'clip', id: s().edit!.clips[0]!.id })
-    s().deleteSelection()
-    s().select({ kind: 'clip', id: s().edit!.clips[0]!.id })
-    s().deleteSelection()
-    expect(s().edit!.clips).toHaveLength(1)
+    s().setTime(2000)
+    s().splitAtPlayhead()
+    // Xóa từng clip một (chuột phải → Xóa) cho tới khi hết.
+    while (s().edit!.clips.length > 0) {
+      s().select({ kind: 'clip', id: s().edit!.clips[0]!.id })
+      s().deleteSelection()
+    }
+    expect(s().edit!.clips).toHaveLength(0)
+    expect(s().time).toBe(0)
+    // Thêm lại trọn bản quay: mỗi đoạn quay một clip, phủ hết nguồn; clip đầu được chọn.
+    const clip = s().addSourceClips()
+    expect(clip).not.toBeNull()
+    const segments = s().project!.segments.length
+    expect(s().edit!.clips).toHaveLength(segments)
+    expect(s().edit!.clips[0]).toMatchObject({ sourceStart: 0, speed: 1 })
+    expect(outputDuration(s().edit!.clips)).toBe(sourceDuration(s().project!.segments))
+    expect(s().selection).toEqual({ kind: 'clip', id: clip!.id })
+    expect(s().time).toBe(0)
+    // Thêm đoạn 0 lần nữa: nối vào cuối, đầu phát nhảy tới chỗ nối.
+    const total = outputDuration(s().edit!.clips)
+    s().addSourceClips(0)
+    expect(s().edit!.clips).toHaveLength(segments + 1)
+    expect(s().time).toBe(total)
+    // Đoạn không tồn tại: không thêm gì.
+    expect(s().addSourceClips(99)).toBeNull()
+    expect(s().edit!.clips).toHaveLength(segments + 1)
   })
 
-  it('chọn nhiều clip và zoom (kéo khung / Ctrl+click): Delete xóa cả nhóm, giữ lại ít nhất một clip', () => {
+  it('chọn nhiều clip và zoom (kéo khung / Ctrl+click): Delete xóa cả nhóm, kể cả mọi clip', () => {
     const s = useEditorStore.getState
     s().setTime(2000)
     s().splitAtPlayhead()
@@ -92,11 +114,10 @@ describe('editor store', () => {
     s().undo()
     expect(s().edit!.clips).toHaveLength(4)
     expect(s().edit!.zooms).toHaveLength(1)
-    // Kéo khung chọn hết mọi clip: xóa vẫn giữ lại clip đầu.
+    // Kéo khung chọn hết mọi clip: xóa hết, timeline trống (thêm lại bản quay gốc từ thư viện).
     s().selectMany(s().edit!.clips.map((c) => ({ kind: 'clip' as const, id: c.id })))
     s().deleteSelection()
-    expect(s().edit!.clips).toHaveLength(1)
-    expect(s().edit!.clips[0]!.id).toBe(clips[0]!.id)
+    expect(s().edit!.clips).toHaveLength(0)
     // Shift+Delete với nhóm clip cũng xóa (clip không có khoảng trống để dồn).
     s().undo()
     s().selectMany([

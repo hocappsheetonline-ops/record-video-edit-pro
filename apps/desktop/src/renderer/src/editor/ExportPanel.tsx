@@ -22,6 +22,7 @@ export function ExportPanel() {
   const [error, setError] = useState<string | null>(null)
   const abort = useRef<AbortController | null>(null)
   const autoExport = useEditorStore((s) => s.autoExport)
+  const clips = edit?.clips.length ?? 0
   const busy = progress !== null
 
   const run = async () => {
@@ -195,8 +196,10 @@ export function ExportPanel() {
         <button
           type="button"
           data-testid="export-start"
+          disabled={clips === 0}
+          data-tooltip={clips === 0 ? t('editor.export.noClips') : undefined}
           onClick={() => void run()}
-          className="rounded-xl bg-accent px-4 py-2.5 font-medium text-accent-fg hover:opacity-90"
+          className="rounded-xl bg-accent px-4 py-2.5 font-medium text-accent-fg hover:opacity-90 disabled:opacity-40"
         >
           {t('editor.export.start')}
         </button>

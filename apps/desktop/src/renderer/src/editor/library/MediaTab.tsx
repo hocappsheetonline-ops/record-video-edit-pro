@@ -8,21 +8,24 @@ import {
   FolderPlus,
   ImagePlus,
   Loader2,
+  MonitorPlay,
   Plus,
   Volume2,
   X,
 } from 'lucide-react'
+import { sourceSegments, thumbAt } from '@lumora/core'
 import type { MemeItem, OnlineSource, ProjectSummary } from '@shared/ipc'
 import { lumora } from '../../api'
 import { runJob, useJobs } from '../jobs'
 import { dragProps } from '../library-drag'
 import { useEditorStore } from '../store'
 import { ghostButton, primaryButton } from '../ui'
-import { libraryUrl } from '../../lib/media'
+import { libraryUrl, mediaUrl } from '../../lib/media'
 import {
   EmptyState,
   ErrorNote,
   formatDuration,
+  Heading,
   SubNav,
   useErrorText,
   usePreviewHover,
@@ -255,6 +258,100 @@ function MyLibrary() {
 
 type MediaSource = 'mine' | OnlineSource
 
+/**
+ * Bản quay gốc của dự án (từng đoạn quay / video đã nhập): bấm để thêm lại trọn đoạn vào cuối
+ * timeline, kéo để thả vào vị trí muốn. Dùng khi đã xóa hết clip hoặc muốn dùng lại bản quay
+ * (như kho media của CapCut: xóa trên timeline không mất file gốc).
+ */
+function SourceClips() {
+  const { t } = useTranslation()
+  const project = useEditorStore((s) => s.project)
+  const folder = useEditorStore((s) => s.folder)
+  const filmstrip = useEditorStore((s) => s.filmstrip)
+  const clipCount = useEditorStore((s) => s.edit?.clips.length ?? 0)
+  if (!project || !folder) return null
+  const segments = sourceSegments(project.segments).filter((x) => x.duration > 0)
+  if (segments.length === 0) return null
+  const add = (index?: number) => {
+    const clip = useEditorStore.getState().addSourceClips(index)
+    if (clip) useJobs.getState().toast({ kind: 'success', text: t('editor.library.sourceAdded') })
+  }
+  return (
+    <div className="flex flex-col gap-1.5" data-testid="source-clips">
+      <Heading>{t('editor.library.sourceTitle')}</Heading>
+      {clipCount === 0 && (
+        <p className="text-[11px] text-muted" data-testid="source-empty-hint">
+          {t('editor.library.sourceEmptyHint')}
+        </p>
+      )}
+      <div className="grid grid-cols-2 gap-2">
+        {segments.map((x) => {
+          // Ảnh đại diện: khung hình ở giây thứ 1 của đoạn (lấy từ tấm ghép dải phim).
+          const hit = filmstrip
+            ? thumbAt(filmstrip, x.offset + Math.min(1000, x.duration / 2))
+            : null
+          const name =
+            x.segment.kind === 'imported'
+              ? t('editor.library.sourceImported', { n: x.segment.index + 1 })
+              : t('editor.library.sourceSegment', { n: x.segment.index + 1 })
+          return (
+            <button
+              key={x.segment.index}
+              type="button"
+              data-testid="source-clip"
+              data-segment={x.segment.index}
+              {...dragProps({ kind: 'source', index: x.segment.index })}
+              data-tooltip={t('editor.library.sourceAddHint')}
+              onClick={() => add(x.segment.index)}
+              className="group flex w-full flex-col gap-1 rounded-lg p-1 text-left hover:bg-surface-2"
+            >
+              <span className="relative block aspect-video w-full overflow-hidden rounded-md bg-black">
+                {hit && filmstrip ? (
+                  <span
+                    className="absolute inset-0 bg-center bg-no-repeat"
+                    style={{
+                      backgroundImage: `url("${mediaUrl(folder, hit.sheet.file)}")`,
+                      // Tấm ghép rộng `columns` ô: phóng cho một ô vừa khít rồi dịch tới đúng ô.
+                      backgroundSize: `${hit.sheet.columns * 100}% auto`,
+                      backgroundPosition: `${
+                        hit.sheet.columns > 1 ? (hit.column * 100) / (hit.sheet.columns - 1) : 0
+                      }% ${hit.sheet.rows > 1 ? (hit.row * 100) / (hit.sheet.rows - 1) : 0}%`,
+                    }}
+                  />
+                ) : (
+                  <span className="absolute inset-0 flex items-center justify-center text-muted">
+                    <MonitorPlay size={20} aria-hidden />
+                  </span>
+                )}
+                <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 text-[10px] font-medium tabular-nums text-white">
+                  {formatDuration(x.duration)}
+                </span>
+                <span className="absolute inset-0 hidden items-center justify-center bg-black/40 group-hover:flex">
+                  <span className="rounded-full bg-accent p-1.5 text-accent-fg shadow-lg">
+                    <Plus size={16} aria-hidden />
+                  </span>
+                </span>
+              </span>
+              <span className="truncate px-0.5 text-[11px] text-muted">{name}</span>
+            </button>
+          )
+        })}
+      </div>
+      {clipCount === 0 && segments.length > 1 && (
+        <button
+          type="button"
+          data-testid="source-add-all"
+          className={`${ghostButton} w-full`}
+          onClick={() => add()}
+        >
+          <Film size={14} aria-hidden />
+          {t('editor.library.sourceAddAll')}
+        </button>
+      )}
+    </div>
+  )
+}
+
 /** Thêm mục đã có trong thư viện của tôi vào video tại đầu phát. */
 export async function addLibraryItem(meme: MemeItem) {
   const folder = useEditorStore.getState().folder
@@ -405,6 +502,7 @@ export function MediaTab() {
         <ImportVideoButton />
         <MergeProjectButton />
       </div>
+      <SourceClips />
       <div className="flex min-h-0 flex-1 gap-3">
         <SubNav
           items={(['mine', 'pixabayVideo', 'pixabayImage'] as const).map((s) => ({

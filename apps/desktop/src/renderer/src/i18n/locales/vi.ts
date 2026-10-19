@@ -110,6 +110,12 @@ export const vi = {
     tracks: { screen: 'Màn hình', camera: 'Webcam', mic: 'Micro', system: 'Âm thanh máy' },
     cursorHidden: 'Con trỏ được ghi riêng',
   },
+  crash: {
+    title: 'Trình chỉnh sửa gặp lỗi',
+    text: 'Lỗi đã được ghi vào nhật ký (Cài đặt → Mở thư mục nhật ký). Bản chỉnh sửa vẫn được tự lưu.',
+    retry: 'Thử mở lại',
+    back: 'Về Dự án',
+  },
   editor: {
     recovered: 'Lần trước app tắt đột ngột khi đang chỉnh sửa. Đã mở lại bản tự lưu gần nhất.',
     title: 'Trình chỉnh sửa',
@@ -150,6 +156,14 @@ export const vi = {
       merge: 'Ghép bản quay',
       merging: 'Đang ghép…',
       mergeEmpty: 'Chưa có bản quay nào khác.',
+      sourceTitle: 'Bản quay gốc',
+      sourceEmptyHint:
+        'Timeline đang trống. Bấm một đoạn dưới đây (hoặc kéo vào timeline) để thêm lại.',
+      sourceSegment: 'Đoạn quay {{n}}',
+      sourceImported: 'Video nhập {{n}}',
+      sourceAddHint: 'Bấm để thêm trọn đoạn này vào cuối timeline (kéo để thả vào vị trí muốn)',
+      sourceAddAll: 'Thêm lại toàn bộ bản quay',
+      sourceAdded: 'Đã thêm bản quay gốc vào timeline.',
       mergeFailed: 'Không ghép được bản quay này.',
       importVideo: 'Nhập video',
       importVideoHint:
@@ -298,6 +312,8 @@ export const vi = {
     },
     timeline: {
       add: 'Thêm phương tiện (mở Thư viện)',
+      empty: 'Timeline trống.',
+      restoreSource: 'Thêm lại bản quay gốc',
       voiceover: 'Ghi lồng tiếng',
       zoom: 'Phóng to timeline',
       zoomIn: 'Phóng to timeline',
@@ -1043,6 +1059,7 @@ export const vi = {
       enhance: 'Nâng cao chất lượng (HD)',
       enhanceHint: 'Giảm nhiễu và làm nét khi xuất; xuất lâu hơn một chút.',
       start: 'Xuất video',
+      noClips: 'Timeline đang trống: thêm lại bản quay gốc ở Thư viện → Phương tiện rồi xuất.',
       rendering: 'Đang dựng hình… {{percent}}%',
       muxing: 'Đang ghép âm thanh…',
       cancel: 'Hủy',

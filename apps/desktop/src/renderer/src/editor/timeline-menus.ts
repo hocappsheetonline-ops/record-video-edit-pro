@@ -145,7 +145,6 @@ export function clipMenu(t: TFunction, id: string): MenuEntry[] {
       shortcut: 'Delete',
       testId: 'menu-delete',
       danger: true,
-      disabled: s.edit.clips.length <= 1,
       onClick: () => store().deleteSelection(),
     },
   ]

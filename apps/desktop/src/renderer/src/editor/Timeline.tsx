@@ -735,6 +735,25 @@ export function Timeline() {
                 onPointerDown={seekAndDeselect}
                 onPointerLeave={() => setHoverAt(null)}
               >
+                {edit.clips.length === 0 && (
+                  <div
+                    data-testid="timeline-empty"
+                    className="pointer-events-none absolute inset-x-0 top-1 flex h-16 items-center justify-center rounded-md border border-dashed border-border text-[11px] text-muted"
+                  >
+                    <span className="pointer-events-auto flex items-center gap-2">
+                      {t('editor.timeline.empty')}
+                      <button
+                        type="button"
+                        data-testid="timeline-restore-source"
+                        className="rounded-md border border-border bg-surface-2 px-2 py-0.5 font-medium text-text hover:bg-surface"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={() => store().addSourceClips()}
+                      >
+                        {t('editor.timeline.restoreSource')}
+                      </button>
+                    </span>
+                  </div>
+                )}
                 {hoverAt !== null && filmstrip && folder && (
                   <ClipHoverPreview
                     at={hoverAt}
