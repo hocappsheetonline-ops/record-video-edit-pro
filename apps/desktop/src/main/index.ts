@@ -31,10 +31,19 @@ import {
 import { loadFilmstrip } from './projects/filmstrip'
 import { IMPORT_VIDEO_EXT, importVideoSegment, mergeProject } from './projects/import-video'
 import { importImageFile, MEDIA_EXTENSIONS, MemeLibrary } from './projects/images'
+import { MusicLibrary, recentDownloads } from './projects/music'
+import { ollamaInstallerUrl } from './ai/ollama'
+import { LocalSpeech, PIPER_VOICES, WHISPER_MODEL_INFO } from './ai/local-speech'
+import { WHISPER_MODELS, type WhisperModel } from '@lumora/core'
+import { createWriteStream } from 'node:fs'
+import { mkdir } from 'node:fs/promises'
+import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import { clearDirs, dirSize } from './content/cache'
 import { RnnoiseDenoiser } from './audio/denoise'
 import { AudioProcessor } from './audio/process'
 import { ClipReverser } from './clips/reverse'
+import { MusicFinder } from './content/music-finder'
 import { OnlineService } from './content/online'
 import { PACK_EXTENSION } from './projects/share'
 import { loadWaveform } from './projects/waveform'
@@ -151,8 +160,14 @@ if (!app.requestSingleInstanceLock()) {
 
     // File của AI xóa phông (MediaPipe + model): chỉ phục vụ đúng các file này.
     const aiFiles = aiAssetFiles()
+    // Thư viện chung (meme, nhạc): cho giao diện xem trước / nghe thử trước khi thêm vào dự án.
+    const memesDir = join(userData, 'memes')
+    const musicDir = join(userData, 'music')
     protocol.handle(MEDIA_SCHEME, async (request) =>
-      handleMediaRequest(request, await projectsDir(), aiFiles),
+      handleMediaRequest(request, await projectsDir(), aiFiles, {
+        memes: memesDir,
+        music: musicDir,
+      }),
     )
 
     const recording = new RecordingController({ mainWindow: () => mainWindow, projectsDir })
@@ -196,7 +211,8 @@ if (!app.requestSingleInstanceLock()) {
         : await dialog.showOpenDialog({ ...options, properties: [...options.properties] })
       return r.canceled ? [] : r.filePaths
     }
-    const memes = new MemeLibrary(join(userData, 'memes'), runFfmpeg)
+    const memes = new MemeLibrary(memesDir, runFfmpeg)
+    const music = new MusicLibrary(musicDir, runFfmpeg)
     // Lọc tạp âm AI bằng RNNoise (WebAssembly, chạy ở luồng phụ) — cùng kết quả trên mọi máy.
     const audioProcessor = new AudioProcessor(
       runFfmpeg,
@@ -209,9 +225,35 @@ if (!app.requestSingleInstanceLock()) {
     )
     const reverser = new ClipReverser(runFfmpeg)
     const cacheDirs = [join(userData, 'cache'), join(userData, 'sounds')]
+    // Giọng nói cục bộ: whisper.cpp + Piper ở tools/, model và giọng ở models/ (không bị xóa khi
+    // dọn bộ đệm).
+    const localSpeech = new LocalSpeech({
+      toolsDir: join(userData, 'tools'),
+      modelsDir: join(userData, 'models'),
+      cacheDir: join(userData, 'cache'),
+    })
+    const speechCatalog = () => ({
+      models: WHISPER_MODELS.map((id) => ({
+        id,
+        label: WHISPER_MODEL_INFO[id].label,
+        sizeMb: WHISPER_MODEL_INFO[id].sizeMb,
+      })),
+      voices: PIPER_VOICES.map((v) => ({
+        id: v.id,
+        language: v.language,
+        label: v.label,
+        sizeMb: v.sizeMb,
+      })),
+    })
     const online = new OnlineService({
       getKey: (name) => secrets.get(name),
       library: memes,
+      tmpDir: join(userData, 'cache'),
+    })
+    // AI tự tìm nhạc nền miễn phí bản quyền (Jamendo) vào kho nhạc.
+    const musicFinder = new MusicFinder({
+      getKey: (name) => secrets.get(name),
+      library: music,
       tmpDir: join(userData, 'cache'),
     })
 
@@ -226,6 +268,46 @@ if (!app.requestSingleInstanceLock()) {
         remove: (file) => memes.remove(file),
         useInProject: (file, dir) => memes.useInProject(file, dir),
       },
+      localAi: {
+        sendProgress: (p) => mainWindow?.webContents.send(EVENTS.localAiProgress, p),
+        // Tải bộ cài Ollama về thư mục đệm rồi mở (người dùng bấm Next vài lần là xong).
+        installOllama: async (onProgress) => {
+          const { url, fileName } = ollamaInstallerUrl()
+          if (!fileName) {
+            await shell.openExternal(url)
+            return
+          }
+          const dir = join(userData, 'cache')
+          await mkdir(dir, { recursive: true })
+          const target = join(dir, fileName)
+          const response = await fetch(url, { signal: AbortSignal.timeout(30 * 60_000) })
+          if (!response.ok || !response.body) throw new Error(`ollama_download:${response.status}`)
+          const total = Number(response.headers.get('content-length') ?? 0)
+          let completed = 0
+          const body = Readable.fromWeb(response.body as never)
+          body.on('data', (chunk: Buffer) => {
+            completed += chunk.length
+            onProgress(completed, total)
+          })
+          await pipeline(body, createWriteStream(target))
+          const error = await shell.openPath(target)
+          if (error) throw new Error(`ollama_open:${error}`)
+        },
+      },
+      music: {
+        list: () => music.list(),
+        pickAndAdd: async () => {
+          const files = await pickFiles(AUDIO_EXTENSIONS, true)
+          return files.length > 0 ? music.add(files, 'file') : music.list()
+        },
+        add: (paths, source) => music.add(paths, source),
+        remove: (file) => music.remove(file),
+        useInProject: (file, dir) => music.useInProject(file, dir),
+        recentDownloads: () => recentDownloads(app.getPath('downloads')),
+        // Thư viện âm thanh YouTube (YouTube Studio): nhạc miễn phí bản quyền, tải về bằng trình duyệt.
+        openYouTube: () => shell.openExternal('https://www.youtube.com/audiolibrary'),
+        find: (query) => musicFinder.find(query),
+      },
       updates,
       logRendererError: (message: string) => logger.error('renderer', message),
       openLogs: async () => {
@@ -236,9 +318,33 @@ if (!app.requestSingleInstanceLock()) {
       live,
       ai: new AiService({
         getKey: (key) => secrets.get(key),
+        getLocalAi: async () => (await settings.get()).localAi,
+        getLocalSpeech: async () => (await settings.get()).localSpeech,
+        localSpeech: {
+          transcribe: (wav, opts) => localSpeech.transcribe(wav, opts),
+          speak: (text, opts) => localSpeech.speak(text, opts),
+          installedVoices: async () =>
+            (await localSpeech.status()).piper.voices.map((id) => ({
+              id,
+              name: PIPER_VOICES.find((v) => v.id === id)?.label ?? id,
+            })),
+        },
         run: runFfmpeg,
         soundsDir: join(userData, 'sounds'),
       }),
+      localSpeech: {
+        status: () => localSpeech.status(),
+        catalog: speechCatalog,
+        install: (tool, onProgress) => localSpeech.installTool(tool, onProgress),
+        download: (kind, id, onProgress) =>
+          kind === 'model'
+            ? localSpeech.downloadModel(id as WhisperModel, onProgress)
+            : localSpeech.downloadVoice(id, onProgress),
+        remove: (kind, id) =>
+          kind === 'model'
+            ? localSpeech.removeModel(id as WhisperModel)
+            : localSpeech.removeVoice(id),
+      },
       online,
       cache: { size: () => dirSize(cacheDirs), clear: () => clearDirs(cacheDirs) },
       recording,
@@ -299,10 +405,26 @@ if (!app.requestSingleInstanceLock()) {
         version: app.getVersion(),
         platform: process.platform,
         encryptionAvailable: safeStorage.isEncryptionAvailable(),
+        frameless: process.platform !== 'darwin',
       }),
+      window: {
+        minimize: () => mainWindow?.minimize(),
+        toggleMaximize: () => {
+          if (!mainWindow) return false
+          if (mainWindow.isMaximized()) mainWindow.unmaximize()
+          else mainWindow.maximize()
+          return mainWindow.isMaximized()
+        },
+        close: () => mainWindow?.close(),
+        isMaximized: () => mainWindow?.isMaximized() ?? false,
+      },
     })
 
     mainWindow = createMainWindow()
+    const sendMaximized = () =>
+      mainWindow?.webContents.send(EVENTS.windowMaximized, mainWindow.isMaximized())
+    mainWindow.on('maximize', sendMaximized)
+    mainWindow.on('unmaximize', sendMaximized)
     mainWindow.on('closed', () => {
       mainWindow = null
       // Đóng cửa sổ chính khi đang quay: lưu lại phần đã quay.

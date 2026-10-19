@@ -137,6 +137,42 @@ export function buildRemuxArgs(input: string, output: string): string[] {
   return ['-hide_banner', '-loglevel', 'error', '-i', input, '-c', 'copy', '-y', output]
 }
 
+/**
+ * Chuẩn hóa mốc thời gian của âm thanh từ MediaRecorder: Chromium đóng dấu từng gói Opus theo giờ
+ * thu thực tế, nên khi thiết bị khựng, loopback không có tiếng để lấy hoặc máy bận mã hóa video,
+ * mốc thời gian bị hụt / nhảy. Phát nguyên như vậy thì nghe giật và tiếng lệch dần so với hình.
+ * `async` điền im lặng vào chỗ hụt từ 20 ms (và kéo giãn rất nhẹ các sai lệch nhỏ hơn), `first_pts=0`
+ * đệm im lặng nếu gói đầu không ở giây 0, nên độ dài và vị trí mọi câu nói đều giữ đúng.
+ */
+export const AUDIO_TIMESTAMP_FIX = 'aresample=48000:async=1:min_hard_comp=0.02:first_pts=0'
+
+/** Mã hóa lại file âm thanh thô của MediaRecorder thành WebM/Opus 48 kHz với mốc thời gian liền mạch. */
+export function buildAudioRemuxArgs(input: string, output: string): string[] {
+  return [
+    '-hide_banner',
+    '-loglevel',
+    'error',
+    '-i',
+    input,
+    '-vn',
+    '-af',
+    AUDIO_TIMESTAMP_FIX,
+    '-c:a',
+    'libopus',
+    '-b:a',
+    '160k',
+    '-y',
+    output,
+  ]
+}
+
+/** Track của MediaRecorder: âm thanh (.webm) thì sửa mốc thời gian, video (.mkv) thì chỉ chép luồng. */
+export function buildTrackRemuxArgs(input: string, output: string): string[] {
+  return /\.webm$/i.test(output)
+    ? buildAudioRemuxArgs(input, output)
+    : buildRemuxArgs(input, output)
+}
+
 /** Chọn một khung hình đại diện trong 30 khung đầu làm ảnh thu nhỏ. */
 export function buildThumbnailArgs(input: string, output: string): string[] {
   return [
@@ -201,24 +237,57 @@ export interface MuxAudioPiece {
   fadeOut?: number
   /** Lặp lại file (nhạc nền ngắn hơn đoạn cần phát). */
   loop?: boolean
+  /** Biểu thức âm lượng theo thời gian (tự giảm nhạc khi có lời), xem `duckVolumeExpr`. */
+  duckExpr?: string
 }
 
 const sec = (n: number) => Number(n.toFixed(6))
 
 /**
+ * Vuốt âm lượng rất ngắn ở hai đầu mỗi mảnh (giây). Cắt đúng giữa một dao động rồi ghép lại tạo
+ * tiếng "tách" ở mọi điểm cắt / đổi tốc độ; 5 ms vuốt nhỏ hơn mức tai nghe thấy nhưng xóa hết tiếng tách.
+ */
+export const EDGE_FADE_S = 0.005
+
+/**
+ * Chặn đỉnh sau khi trộn: `amix normalize=0` cộng thẳng mic + tiếng máy + nhạc, vượt 0 dB là bị
+ * cắt ngọn (nghe rè). Bộ giới hạn nhìn trước 5 ms, `latency=1` bù lại độ trễ đó nên tiếng không lệch hình.
+ */
+export const MIX_LIMITER = 'alimiter=limit=0.97:attack=5:release=50:level=0:latency=1'
+
+/**
  * Ghép video đã dựng (chưa có tiếng) với âm thanh: cắt từng mảnh, đổi tốc độ, chỉnh âm lượng,
  * đặt đúng vị trí rồi trộn lại. Video được chép nguyên, không mã hóa lại.
  */
+/** Nâng cao chất lượng (HD): giảm nhiễu nhẹ rồi làm nét, như "Nâng cao chất lượng" của CapCut. */
+export const ENHANCE_FILTER = 'hqdn3d=1.5:1.5:6:6,unsharp=5:5:0.8:5:5:0'
+
 export function buildExportMuxArgs(options: {
   video: string
   pieces: readonly MuxAudioPiece[]
   durationS: number
   output: string
+  /** Bộ lọc hình (ví dụ ENHANCE_FILTER): có thì mã hóa lại video thay vì chép nguyên. */
+  videoFilter?: string
 }): string[] {
-  const { video, pieces, durationS, output } = options
+  const { video, pieces, durationS, output, videoFilter } = options
   const head = ['-hide_banner', '-loglevel', 'error', '-y', '-i', video]
   const tail = ['-movflags', '+faststart', '-t', String(sec(durationS)), output]
-  if (pieces.length === 0) return [...head, '-map', '0:v', '-c:v', 'copy', '-an', ...tail]
+  const videoCodec = videoFilter
+    ? [
+        '-vf',
+        videoFilter,
+        '-c:v',
+        'libx264',
+        '-preset',
+        'medium',
+        '-crf',
+        '18',
+        '-pix_fmt',
+        'yuv420p',
+      ]
+    : ['-c:v', 'copy']
+  if (pieces.length === 0) return [...head, '-map', '0:v', ...videoCodec, '-an', ...tail]
 
   const files = [...new Set(pieces.map((p) => p.path))]
   // File cần lặp được mở với -stream_loop -1; atrim phía sau giới hạn độ dài.
@@ -243,16 +312,22 @@ export function buildExportMuxArgs(options: {
     used.set(p.path, n + 1)
     const source = labels.get(p.path)![n]!
     const delayMs = Math.round(p.outputStart * 1000)
+    // Độ dài mảnh trên video xuất (sau khi đổi tốc độ).
+    const length = p.duration / p.speed
+    const fadeIn = p.fadeIn || (length >= EDGE_FADE_S * 4 ? EDGE_FADE_S : 0)
+    const fadeOut = p.fadeOut || (length >= EDGE_FADE_S * 4 ? EDGE_FADE_S : 0)
     const chain = [
       `atrim=start=${sec(p.mediaStart)}:end=${sec(p.mediaStart + p.duration)}`,
       'asetpts=PTS-STARTPTS',
+      // Đưa mọi nguồn về 48 kHz trước khi đổi tốc độ / trộn (nhạc MP3 44,1 kHz, mic Opus 48 kHz…).
+      'aresample=48000',
       ...atempoChain(p.speed),
       `volume=${sec(p.volume)}`,
-      ...(p.fadeIn ? [`afade=t=in:st=0:d=${sec(p.fadeIn)}`] : []),
-      ...(p.fadeOut
-        ? [
-            `afade=t=out:st=${sec(Math.max(0, p.duration / p.speed - p.fadeOut))}:d=${sec(p.fadeOut)}`,
-          ]
+      // Dấu nháy đơn bảo vệ dấu phẩy trong biểu thức khỏi cú pháp filtergraph.
+      ...(p.duckExpr ? [`volume=volume='${p.duckExpr}':eval=frame`] : []),
+      ...(fadeIn ? [`afade=t=in:st=0:d=${sec(fadeIn)}`] : []),
+      ...(fadeOut
+        ? [`afade=t=out:st=${sec(Math.max(0, length - fadeOut))}:d=${sec(fadeOut)}`]
         : []),
       `adelay=${delayMs}:all=1`,
     ]
@@ -264,7 +339,7 @@ export function buildExportMuxArgs(options: {
     // mãi (bỏ qua -t, ngốn RAM) khi hai mảnh liền nhau cùng lấy từ một file.
     // asetpts=N/SR/TB đánh lại mốc thời gian liền mạch: mảnh bị cắt đầu (atrim start > 0) làm amix
     // ra mốc thời gian lệch, trình ghép MP4 bỏ hết phần tiếng phía sau (video xuất bị câm).
-    `${mixed.join('')}amix=inputs=${mixed.length}:duration=longest:normalize=0,apad=whole_dur=${sec(durationS)},asetpts=N/SR/TB[aout]`,
+    `${mixed.join('')}amix=inputs=${mixed.length}:duration=longest:normalize=0,${MIX_LIMITER},apad=whole_dur=${sec(durationS)},asetpts=N/SR/TB[aout]`,
   )
   return [
     ...head,
@@ -275,8 +350,7 @@ export function buildExportMuxArgs(options: {
     '0:v',
     '-map',
     '[aout]',
-    '-c:v',
-    'copy',
+    ...videoCodec,
     '-c:a',
     'aac',
     '-b:a',
@@ -310,11 +384,15 @@ export function buildSpeechAudioArgs(options: {
   pieces: readonly MuxAudioPiece[]
   durationS: number
   output: string
-  /** `pcm`: PCM 16-bit mono 8 kHz thô (để vẽ dạng sóng), mặc định MP3 16 kHz. */
-  format?: 'mp3' | 'pcm'
+  /**
+   * `pcm`: PCM 16-bit mono 8 kHz thô (để vẽ dạng sóng); `wav16`: WAV 16 kHz mono 16-bit (đầu vào
+   * cho whisper.cpp); mặc định MP3 16 kHz.
+   */
+  format?: 'mp3' | 'pcm' | 'wav16'
 }): string[] {
   const { pieces, durationS, output } = options
   const pcm = options.format === 'pcm'
+  const wav = options.format === 'wav16'
   const files = [...new Set(pieces.map((p) => p.path))]
   const filters: string[] = []
   const labels = new Map<string, string[]>()
@@ -359,7 +437,11 @@ export function buildSpeechAudioArgs(options: {
     '1',
     '-ar',
     pcm ? '8000' : '16000',
-    ...(pcm ? ['-f', 's16le', '-c:a', 'pcm_s16le'] : ['-c:a', 'libmp3lame', '-b:a', '64k']),
+    ...(pcm
+      ? ['-f', 's16le', '-c:a', 'pcm_s16le']
+      : wav
+        ? ['-f', 'wav', '-c:a', 'pcm_s16le']
+        : ['-c:a', 'libmp3lame', '-b:a', '64k']),
     output,
   ]
 }

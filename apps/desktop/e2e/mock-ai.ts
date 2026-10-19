@@ -111,11 +111,128 @@ export async function startMockAi(): Promise<{
       }
       if (path === '/v1/messages') {
         const request = JSON.parse(body.toString('utf8'))
-        const system = String(request.system)
+        // Lời nhắc hệ thống là chuỗi hoặc các khối (phần tĩnh gắn cache_control từ 1.12.0).
+        const system = Array.isArray(request.system)
+          ? request.system.map((b: { text: string }) => b.text).join('\n\n')
+          : String(request.system)
+        if (system.includes('best moments')) {
+          return json(
+            200,
+            anthropicMessage({
+              segments: [
+                { start_seconds: 0, end_seconds: 0.5, hook: 'quá ngắn', title: 'bỏ' },
+                { start_seconds: 1, end_seconds: 19, hook: 'Mẹo hay nhất', title: 'Mẹo 1' },
+              ],
+            }),
+          )
+        }
         if (system.includes('cleaning up')) {
           return json(
             200,
             anthropicMessage({ cuts: [{ from: 2, to: 2, kind: 'filler', reason: 'Từ đệm' }] }),
+          )
+        }
+        if (system.includes('editing assistant')) {
+          return json(200, anthropicMessage({ commands: [{ kind: 'cutSilences' }] }))
+        }
+        if (system.includes('AI director')) {
+          const goal = String(request.messages[0].content)
+          // Phụ đề kiểu Captions 1.13.0: lồng tiếng AI sang tiếng Anh.
+          if (goal.includes('lồng tiếng'))
+            return json(
+              200,
+              anthropicMessage({
+                summary: 'Lồng tiếng Anh bằng giọng AI',
+                questions: [],
+                commands: [{ kind: 'dub', language: 'en', keepOriginal: false, voiceName: 'Bao' }],
+              }),
+            )
+          // Tự dựng một nút 1.12.0: công thức + hook + tự tìm nhạc + thẻ kết, không câu hỏi.
+          if (goal.startsWith('AUTO BUILD'))
+            return json(
+              200,
+              anthropicMessage({
+                summary: 'Dựng YouTube hoàn chỉnh: hook, cắt lặng, phụ đề, nhạc nền, thẻ kết',
+                questions: [],
+                commands: [
+                  { kind: 'recipe', style: 'youtube' },
+                  {
+                    kind: 'text',
+                    text: 'Demo Lumora trong 4 giây',
+                    atMs: 0,
+                    ms: 1500,
+                    template: 'title',
+                    position: 'top',
+                  },
+                  { kind: 'findMusic', mood: 'calm corporate', tempo: 'medium', volume: 0.2 },
+                  { kind: 'outro', text: 'Đăng ký kênh', ms: 1000, template: 'title' },
+                ],
+              }),
+            )
+          // Chỉnh sửa bằng văn bản 1.14.0: cắt đúng câu trích từ lời thoại.
+          if (goal.includes('cắt câu'))
+            return json(
+              200,
+              anthropicMessage({
+                summary: 'Cắt câu "Hôm nay mình demo" và từ đệm',
+                questions: [],
+                commands: [
+                  { kind: 'cutText', text: 'Hôm nay mình demo.', all: true },
+                  { kind: 'cutText', text: 'không có câu này', all: true },
+                ],
+              }),
+            )
+          // Kế hoạch dựng chuyên nghiệp 1.9.0: hiệu ứng tại thời điểm, tua nhanh một đoạn, chuyển
+          // cảnh tại chỗ nối vừa tạo, kiểu phụ đề, thẻ kết bám cuối.
+          if (goal.includes('chuyên nghiệp'))
+            return json(
+              200,
+              anthropicMessage({
+                summary: 'Dựng theo chuẩn YouTube: điểm nhấn, tua nhanh, chuyển cảnh, thẻ kết',
+                questions: [],
+                commands: [
+                  { kind: 'effectAt', effect: 'flash', atMs: 500, ms: 1000, intensity: 0.8 },
+                  { kind: 'speedRange', fromMs: 2000, toMs: 4000, factor: 2 },
+                  { kind: 'transitionAt', atMs: 2000, transition: 'slide', ms: 400 },
+                  { kind: 'captionsLook', uppercase: true, style: 'classic' },
+                  { kind: 'outro', text: 'Đăng ký kênh', ms: 1500, template: 'title' },
+                ],
+              }),
+            )
+          // Kế hoạch nhiều lệnh mở rộng (chữ, nhãn dán, mốc, zoom, âm lượng, khung, màu, cắt).
+          if (goal.includes('làm hết'))
+            return json(
+              200,
+              anthropicMessage({
+                summary: 'Thêm chữ, nhãn dán, mốc, chỉnh zoom, tắt mic, lề và cắt đoạn cuối',
+                questions: [],
+                commands: [
+                  {
+                    kind: 'text',
+                    text: 'Xin chào',
+                    atMs: 0,
+                    ms: 1500,
+                    template: 'neon',
+                    position: 'top',
+                  },
+                  { kind: 'sticker', emoji: '🔥', atMs: 500, ms: 1000, position: 'center' },
+                  { kind: 'marker', atMs: 1000, label: 'Mốc A' },
+                  { kind: 'zoomLevel', scale: 3 },
+                  { kind: 'volume', target: 'mic', level: 0 },
+                  { kind: 'frame', padding: 0.2 },
+                  { kind: 'adjust', setting: 'brightness', value: 0.2 },
+                  { kind: 'cutRange', fromMs: 3000, toMs: 4000 },
+                  { kind: 'clear', target: 'music' },
+                ],
+              }),
+            )
+          return json(
+            200,
+            anthropicMessage({
+              summary: 'Thêm phụ đề',
+              questions: [],
+              commands: [{ kind: 'captions' }],
+            }),
           )
         }
         if (system.includes('metadata')) {
@@ -141,6 +258,27 @@ export async function startMockAi(): Promise<{
             200,
             anthropicMessage({
               lines: input.map((l) => ({ id: l.id, text: l.text.replace(/ ừm/g, '') })),
+            }),
+          )
+        }
+        if (system.includes('one emoji')) {
+          const input = JSON.parse(request.messages[0].content).lines as { id: string }[]
+          return json(
+            200,
+            anthropicMessage({
+              lines: input.map((l, i) => ({ id: l.id, emoji: i === 0 ? '👋' : '🎬' })),
+            }),
+          )
+        }
+        if (system.includes('keywords to highlight')) {
+          const input = JSON.parse(request.messages[0].content).lines as {
+            id: string
+            text: string
+          }[]
+          return json(
+            200,
+            anthropicMessage({
+              lines: input.map((l) => ({ id: l.id, keywords: [l.text.split(' ')[0], 'rác'] })),
             }),
           )
         }

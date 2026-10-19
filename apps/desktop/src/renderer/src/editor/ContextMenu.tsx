@@ -79,13 +79,13 @@ export function ContextMenuLayer() {
       ref={ref}
       role="menu"
       data-testid="context-menu"
-      className="fixed z-[60] min-w-52 rounded-lg border border-border bg-surface py-1 text-sm shadow-2xl"
+      className="glass-strong fixed z-[60] min-w-52 rounded-xl border p-1 text-[13px] shadow-2xl"
       style={{ left: pos.x, top: pos.y }}
       onContextMenu={(e) => e.preventDefault()}
     >
       {menu.items.map((item, i) =>
         item === null ? (
-          <div key={`sep-${i}`} className="my-1 h-px bg-border" />
+          <div key={`sep-${i}`} className="mx-2 my-1 h-px bg-border" />
         ) : (
           <button
             key={item.testId ?? item.label}
@@ -97,12 +97,16 @@ export function ContextMenuLayer() {
               close()
               item.onClick()
             }}
-            className={`flex w-full items-center justify-between gap-6 px-3 py-1.5 text-left hover:bg-surface-2 disabled:opacity-40 disabled:hover:bg-transparent ${
+            className={`group flex w-full items-center justify-between gap-6 rounded-md px-2.5 py-1 text-left hover:bg-accent hover:text-accent-fg disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-inherit ${
               item.danger ? 'text-danger' : ''
             }`}
           >
             <span>{item.label}</span>
-            {item.shortcut && <span className="text-[11px] text-muted">{item.shortcut}</span>}
+            {item.shortcut && (
+              <span className="text-[11px] text-muted group-hover:text-accent-fg/80">
+                {item.shortcut}
+              </span>
+            )}
           </button>
         ),
       )}

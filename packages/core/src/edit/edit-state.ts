@@ -11,6 +11,7 @@ import {
 import { parseAudioClips, type AudioClip } from './audio-clips'
 import { DEFAULT_AUDIO_FX, parseAudioFx, type AudioFx } from './audio-fx'
 import { NO_BEAUTY, parseBeauty, type BeautyStyle } from './beauty'
+import { DEFAULT_DUCKING, parseDucking, type Ducking } from './ducking'
 import { parseEffects, type EffectRegion } from './effects'
 import { DEFAULT_LOOK, isDefaultLook, parseLook, type Look } from './look'
 import { parseClipTransform } from './orient'
@@ -71,6 +72,8 @@ export interface CursorStyle {
   smoothing: number
   clickEffect: boolean
   hideIdle: boolean
+  /** Hiện phím tắt vừa bấm (Ctrl+C, Alt+Tab…) dưới khung hình, như Screen Studio / Camtasia. */
+  showKeys: boolean
 }
 
 export interface CameraStyle {
@@ -138,12 +141,16 @@ export interface AudioMix {
   /** Lọc tạp âm / hiệu ứng giọng cho micro và âm thanh máy của bản quay. */
   micFx: AudioFx
   systemFx: AudioFx
+  /** Tự giảm nhạc nền khi có lời thoại. */
+  duck: Ducking
 }
 
 export interface ExportSettings {
   resolution: Resolution
   fps: 30 | 60
   format: 'mp4' | 'gif'
+  /** Nâng cao chất lượng (HD): giảm nhiễu và làm nét khi mã hóa lại video xuất. */
+  enhance: boolean
 }
 
 export interface EditState {
@@ -206,6 +213,7 @@ export function createDefaultEdit(
       smoothing: 0.6,
       clickEffect: true,
       hideIdle: true,
+      showKeys: false,
     },
     camera: {
       visible: true,
@@ -225,13 +233,19 @@ export function createDefaultEdit(
       background: { ...DEFAULT_CAMERA_BG },
     },
     motion: { cameraSpeed: 0.85, zoomTransitionMs: 700 },
-    audio: { mic: 1, system: 1, micFx: { ...DEFAULT_AUDIO_FX }, systemFx: { ...DEFAULT_AUDIO_FX } },
+    audio: {
+      mic: 1,
+      system: 1,
+      micFx: { ...DEFAULT_AUDIO_FX },
+      systemFx: { ...DEFAULT_AUDIO_FX },
+      duck: { ...DEFAULT_DUCKING },
+    },
     audioClips: [],
     transitions: [],
     effects: [],
     overlays: [],
     look: { ...DEFAULT_LOOK, adjust: { ...DEFAULT_LOOK.adjust } },
-    export: { resolution: 1080, fps: project.fps >= 60 ? 60 : 30, format: 'mp4' },
+    export: { resolution: 1080, fps: project.fps >= 60 ? 60 : 30, format: 'mp4', enhance: false },
     captions: { ...DEFAULT_CAPTIONS, lines: [] },
     markers: [],
     tracks: DEFAULT_TRACKS,
@@ -268,6 +282,17 @@ function parseCaptions(value: unknown, duration: number): CaptionsState {
             edited: l.edited === true,
             ...(typeof l.translation === 'string'
               ? { translation: l.translation.slice(0, 500) }
+              : {}),
+            ...(typeof l.emoji === 'string' && l.emoji.trim() && l.emoji.length <= 16
+              ? { emoji: l.emoji.trim() }
+              : {}),
+            ...(Array.isArray(l.keywords) && l.keywords.length > 0
+              ? {
+                  keywords: l.keywords
+                    .filter((k): k is string => typeof k === 'string' && k.trim() !== '')
+                    .map((k) => k.trim().slice(0, 40))
+                    .slice(0, 8),
+                }
               : {}),
           },
         ]
@@ -402,6 +427,7 @@ export function parseEditState(
       smoothing: num(c.smoothing, base.cursor.smoothing, 0, 1),
       clickEffect: bool(c.clickEffect, base.cursor.clickEffect),
       hideIdle: bool(c.hideIdle, base.cursor.hideIdle),
+      showKeys: bool(c.showKeys, base.cursor.showKeys),
     },
     camera: {
       visible: bool(cam.visible, base.camera.visible),
@@ -429,6 +455,7 @@ export function parseEditState(
       system: num(a.system, 1, 0, 2),
       micFx: parseAudioFx(a.micFx),
       systemFx: parseAudioFx(a.systemFx),
+      duck: parseDucking(a.duck),
     },
     audioClips: parseAudioClips(input.audioClips),
     transitions: pruneTransitions(clips, parseTransitions(input.transitions)),
@@ -439,6 +466,7 @@ export function parseEditState(
       resolution: pick(RESOLUTIONS, e.resolution, base.export.resolution),
       fps: pick([30, 60] as const, e.fps, base.export.fps),
       format: e.format === 'gif' ? 'gif' : 'mp4',
+      enhance: e.enhance === true,
     },
     captions: parseCaptions(input.captions, duration),
     markers: parseMarkers(input.markers, Number.POSITIVE_INFINITY),

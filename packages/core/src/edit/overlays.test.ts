@@ -103,6 +103,18 @@ describe('overlays', () => {
     expect(old.anim).toMatchObject({ in: 'fade', out: 'fade', loop: 'none' })
   })
 
+  it('vùng che: kiểu và độ mạnh có mặc định, giá trị sai được kẹp', () => {
+    const blur = parseOverlays([{ ...base, kind: 'blur', aspect: 1.6 }])[0]!
+    expect(blur).toMatchObject({ kind: 'blur', blurMode: 'blur', blurStrength: 0.5, aspect: 1.6 })
+    const mosaic = parseOverlays([
+      { ...base, kind: 'blur', blurMode: 'pixelate', blurStrength: 9 },
+    ])[0]!
+    expect(mosaic).toMatchObject({ blurMode: 'pixelate', blurStrength: 1 })
+    expect(parseOverlays([{ ...base, kind: 'blur', blurMode: 'swirl' }])[0]!.blurMode).toBe('blur')
+    // Lớp chữ không mang trường của vùng che.
+    expect(parseOverlays([{ ...base, blurMode: 'pixelate' }])[0]).not.toHaveProperty('blurMode')
+  })
+
   it('video meme: đọc file kiểm tra độ dài, màu phông hợp lệ', () => {
     expect(parseOverlays([meme])).toEqual([meme])
     expect(parseOverlays([{ ...meme, sourceDuration: 0 }])).toEqual([])

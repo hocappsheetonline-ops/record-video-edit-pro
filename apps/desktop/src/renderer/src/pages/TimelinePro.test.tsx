@@ -91,6 +91,41 @@ describe('timeline chuyên nghiệp', () => {
     expect(s().selected).toHaveLength(2)
   })
 
+  it('clip và zoom: Ctrl+click chọn thêm, Delete xóa cả nhóm; chuột phải giữ nhóm', async () => {
+    await setup()
+    act(() => s().setTime(2000))
+    act(() => s().splitAtPlayhead())
+    act(() => s().addZoomAtPlayhead())
+    act(() => s().select(null))
+    const clips = screen.getAllByTestId('timeline-clip')
+    expect(clips).toHaveLength(3)
+    expect(screen.getAllByTestId('timeline-zoom')).toHaveLength(1)
+    fireEvent.pointerDown(clips[0]!, { button: 0 })
+    expect(clips[0]).toHaveAttribute('data-selected', 'true')
+    fireEvent.pointerDown(clips[1]!, { button: 0, ctrlKey: true })
+    fireEvent.pointerDown(screen.getByTestId('timeline-zoom'), { button: 0, ctrlKey: true })
+    expect(s().selected).toHaveLength(3)
+    expect(clips[1]).toHaveAttribute('data-selected', 'true')
+    expect(screen.getByTestId('timeline-zoom')).toHaveAttribute('data-selected', 'true')
+    // Ctrl+click lần nữa: bỏ khỏi nhóm.
+    fireEvent.pointerDown(clips[1]!, { button: 0, ctrlKey: true })
+    expect(s().selected).toHaveLength(2)
+    fireEvent.pointerDown(clips[1]!, { button: 0, ctrlKey: true })
+    // Chuột phải lên clip đang trong nhóm: nhóm còn nguyên, "Xóa" xóa cả nhóm.
+    fireEvent.contextMenu(clips[1]!)
+    expect(s().selected).toHaveLength(3)
+    await userEvent.click(screen.getByTestId('menu-delete'))
+    expect(s().edit!.clips).toHaveLength(1)
+    expect(s().edit!.zooms).toHaveLength(0)
+    await userEvent.keyboard('{Control>}z{/Control}')
+    expect(s().edit!.clips).toHaveLength(3)
+    // Delete trên nhóm nhiều clip.
+    fireEvent.pointerDown(screen.getAllByTestId('timeline-clip')[1]!, { button: 0 })
+    fireEvent.pointerDown(screen.getAllByTestId('timeline-clip')[2]!, { button: 0, ctrlKey: true })
+    await userEvent.keyboard('{Delete}')
+    expect(s().edit!.clips).toHaveLength(1)
+  })
+
   it('menu chuột phải: nhân đôi lớp chữ, đưa lên trên cùng; chỗ trống: thêm marker, dán', async () => {
     await setup()
     act(() => s().addOverlay({ kind: 'text', text: 'A' }))

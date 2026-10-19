@@ -40,8 +40,8 @@ const keys = (elevenlabs: boolean) =>
       secrets: {
         elevenlabs: elevenlabs ? { state: 'saved', masked: 'el••' } : { state: 'missing' },
         anthropic: { state: 'missing' },
-        tenor: { state: 'missing' },
         pixabay: { state: 'missing' },
+        jamendo: { state: 'missing' },
       },
     })
   })
@@ -302,7 +302,7 @@ describe('EditorPage', () => {
     const zone = await screen.findByTestId('media-tab')
     const file = new File(['x'], 'bruh.mp4', { type: 'video/mp4' })
     fireEvent.dragOver(zone, { dataTransfer: { files: [file] } })
-    expect(screen.getByText('Thả để thêm vào thư viện meme')).toBeInTheDocument()
+    expect(screen.getByText('Thả để thêm vào thư viện')).toBeInTheDocument()
     fireEvent.drop(zone, { dataTransfer: { files: [file] } })
     await waitFor(() => expect(api.addMemePaths).toHaveBeenCalledWith(['C:/drop/bruh.mp4']))
     api.addMemePaths.mockRejectedValueOnce(
@@ -439,11 +439,46 @@ describe('EditorPage', () => {
     expect(input).toHaveValue('41%')
   })
 
-  it('kho meme online: chưa có key thì hướng dẫn; có key thì tìm, xem thêm, tải và thêm vào video', async () => {
+  it('nhạc nền từ Thư viện âm thanh YouTube: mở trang, thêm file vừa tải vào kho và lên timeline, xóa khỏi kho', async () => {
     const api = setup()
     await screen.findByTestId('editor')
-    await userEvent.click(screen.getByTestId('media-source-tenor'))
-    expect(screen.getByText('Cần key Tenor để tìm meme')).toBeInTheDocument()
+    await userEvent.click(screen.getByTestId('lib-audio'))
+    await userEvent.click(screen.getByTestId('audio-section-youtube'))
+    await userEvent.click(screen.getByTestId('youtube-open'))
+    expect(api.openYouTubeAudioLibrary).toHaveBeenCalled()
+    // File vừa tải (giả) hiện ngay; Thêm → vào kho (nguồn youtube) và thành nhạc nền tại đầu phát.
+    const add = await screen.findByTestId('youtube-recent-add')
+    expect(add).toHaveTextContent('Thêm')
+    act(() => useEditorStore.getState().setTime(1000))
+    await userEvent.click(add)
+    await waitFor(() => expect(useEditorStore.getState().edit!.audioClips).toHaveLength(1))
+    expect(api.addMusicPaths).toHaveBeenCalledWith(
+      ['C:\\Users\\me\\Downloads\\Sunny Day.mp3'],
+      'youtube',
+    )
+    expect(useEditorStore.getState().edit!.audioClips[0]).toMatchObject({
+      kind: 'music',
+      name: 'Sunny Day',
+      start: 1000,
+      loop: true,
+    })
+    expect(screen.getByTestId('youtube-recent-add')).toHaveTextContent('Đã thêm')
+    const item = screen.getByTestId('music-item')
+    expect(item).toHaveAttribute('data-source', 'youtube')
+    // Bấm bài trong kho: thêm lần nữa (không chép lại file).
+    await userEvent.click(item)
+    await waitFor(() => expect(useEditorStore.getState().edit!.audioClips).toHaveLength(2))
+    await userEvent.click(screen.getByTestId('music-remove'))
+    await waitFor(() => expect(screen.queryByTestId('music-item')).not.toBeInTheDocument())
+  })
+
+  it('kho video online: chưa có key thì hướng dẫn; có key thì tìm, xem thêm, tải và thêm vào video', async () => {
+    const api = setup()
+    await screen.findByTestId('editor')
+    // Tenor đã ngừng hoạt động: không còn nguồn meme / sticker động.
+    expect(screen.queryByTestId('media-source-tenor')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByTestId('media-source-pixabayVideo'))
+    expect(screen.getByText('Cần key Pixabay để tìm video, ảnh')).toBeInTheDocument()
     await userEvent.click(screen.getByTestId('online-open-settings'))
     expect(useAppStore.getState().page).toBe('settings')
     act(() => {
@@ -452,25 +487,27 @@ describe('EditorPage', () => {
         secrets: {
           elevenlabs: { state: 'missing' },
           anthropic: { state: 'missing' },
-          tenor: { state: 'saved', masked: 'AIza••••' },
-          pixabay: { state: 'missing' },
+          pixabay: { state: 'saved', masked: '1234••••' },
+          jamendo: { state: 'missing' },
         },
       })
     })
     expect(await screen.findAllByTestId('online-item')).toHaveLength(2)
-    expect(api.onlineSearch).toHaveBeenCalledWith('tenor', '', null)
-    expect(screen.getByTestId('online-attribution')).toHaveTextContent('Powered by Tenor')
-    await userEvent.type(screen.getByTestId('online-search'), 'bruh{Enter}')
-    await waitFor(() => expect(api.onlineSearch).toHaveBeenLastCalledWith('tenor', 'bruh', null))
+    expect(api.onlineSearch).toHaveBeenCalledWith('pixabayVideo', '', null)
+    expect(screen.getByTestId('online-attribution')).toHaveTextContent('Video từ Pixabay')
+    await userEvent.type(screen.getByTestId('online-search'), 'city{Enter}')
+    await waitFor(() =>
+      expect(api.onlineSearch).toHaveBeenLastCalledWith('pixabayVideo', 'city', null),
+    )
     await userEvent.click(screen.getByTestId('online-more'))
     await waitFor(() => expect(screen.getAllByTestId('online-item')).toHaveLength(3))
-    expect(api.onlineSearch).toHaveBeenLastCalledWith('tenor', 'bruh', '2')
+    expect(api.onlineSearch).toHaveBeenLastCalledWith('pixabayVideo', 'city', '2')
     expect(screen.queryByTestId('online-more')).not.toBeInTheDocument()
 
     act(() => useEditorStore.getState().setTime(500))
     await userEvent.click(screen.getAllByTestId('online-item')[0]!)
     await waitFor(() => expect(useEditorStore.getState().edit!.overlays).toHaveLength(1))
-    expect(api.onlineDownload).toHaveBeenCalledWith('tenor', '0')
+    expect(api.onlineDownload).toHaveBeenCalledWith('pixabay', '0')
     expect(api.useMeme).toHaveBeenCalledWith(sampleSummary.folder, 'meme-dl-0.mp4')
     expect(screen.getAllByTestId('online-item')[0]).toHaveAttribute('data-state', 'done')
     // Bấm lần nữa: không tải lại.
@@ -486,23 +523,14 @@ describe('EditorPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('API key không đúng')
   })
 
-  it('sticker động Tenor và âm thanh meme + giọng đọc AI', async () => {
+  it('nhãn dán chỉ còn emoji và hình vẽ; âm thanh meme + giọng đọc AI', async () => {
     const api = setup()
     await screen.findByTestId('editor')
-    act(() => {
-      useAppStore.setState({
-        secrets: {
-          elevenlabs: { state: 'saved', masked: 'el••' },
-          anthropic: { state: 'missing' },
-          tenor: { state: 'saved', masked: 'AIza••' },
-          pixabay: { state: 'missing' },
-        },
-      })
-    })
+    keys(true)
     await userEvent.click(screen.getByTestId('lib-stickers'))
-    await userEvent.click(screen.getByTestId('sticker-source-tenorSticker'))
-    expect(await screen.findAllByTestId('online-item')).toHaveLength(2)
-    expect(api.onlineSearch).toHaveBeenCalledWith('tenorSticker', '', null)
+    expect(screen.queryByTestId('sticker-source-tenorSticker')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByTestId('sticker-source-shapes'))
+    expect(api.onlineSearch).not.toHaveBeenCalled()
 
     await userEvent.click(screen.getByTestId('lib-audio'))
     await userEvent.click(screen.getByTestId('audio-section-meme'))
@@ -1061,5 +1089,52 @@ describe('EditorPage', () => {
     expect(edit().overlays[0]!.aiKey).toBe(true)
     await userEvent.click(screen.getByTestId('overlay-ai-key'))
     expect(edit().overlays[0]).not.toHaveProperty('aiKey')
+  })
+
+  it('kéo thanh chia đổi chiều rộng hai bảng bên và chiều cao timeline; nhấp đúp đặt lại; mũi tên dời 16px', async () => {
+    localStorage.clear()
+    // jsdom rộng 1024px: nới ra để đủ chỗ cho khung xem trước 360px.
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1600 })
+    setup()
+    await screen.findByTestId('editor')
+    const library = screen.getByTestId('pane-library')
+    const props = screen.getByTestId('pane-props')
+    expect(library.style.width).toBe('360px')
+    expect(props.style.width).toBe('300px')
+
+    const libraryHandle = screen.getByTestId('pane-resize-library')
+    expect(libraryHandle).toHaveAttribute('aria-orientation', 'vertical')
+    fireEvent.pointerDown(libraryHandle, { clientX: 360, clientY: 100, pointerId: 1 })
+    fireEvent.pointerMove(libraryHandle, { clientX: 440, clientY: 100, pointerId: 1 })
+    fireEvent.pointerUp(libraryHandle, { pointerId: 1 })
+    expect(library.style.width).toBe('440px')
+    expect(localStorage.getItem('lumora.libraryWidth')).toBe('440')
+
+    // Kéo thanh bên phải sang trái thì bảng thuộc tính rộng ra.
+    const propsHandle = screen.getByTestId('pane-resize-props')
+    fireEvent.pointerDown(propsHandle, { clientX: 1300, clientY: 100, pointerId: 1 })
+    fireEvent.pointerMove(propsHandle, { clientX: 1260, clientY: 100, pointerId: 1 })
+    fireEvent.pointerUp(propsHandle, { pointerId: 1 })
+    expect(props.style.width).toBe('340px')
+    expect(localStorage.getItem('lumora.propsWidth')).toBe('340')
+
+    fireEvent.doubleClick(libraryHandle)
+    expect(library.style.width).toBe('360px')
+    libraryHandle.focus()
+    await userEvent.keyboard('{ArrowRight}')
+    expect(library.style.width).toBe('376px')
+    expect(localStorage.getItem('lumora.libraryWidth')).toBe('376')
+
+    // Timeline: kéo lên thì cao hơn, nhấp đúp về 300px.
+    const timelineHandle = screen.getByTestId('pane-resize-timeline')
+    expect(timelineHandle).toHaveAttribute('aria-orientation', 'horizontal')
+    fireEvent.pointerDown(timelineHandle, { clientX: 10, clientY: 500, pointerId: 1 })
+    fireEvent.pointerMove(timelineHandle, { clientX: 10, clientY: 460, pointerId: 1 })
+    fireEvent.pointerUp(timelineHandle, { pointerId: 1 })
+    expect(screen.getByTestId('timeline').parentElement!.style.height).toBe('340px')
+    expect(localStorage.getItem('lumora.timelineHeight')).toBe('340')
+    fireEvent.doubleClick(timelineHandle)
+    expect(screen.getByTestId('timeline').parentElement!.style.height).toBe('300px')
+    localStorage.clear()
   })
 })

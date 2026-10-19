@@ -85,6 +85,8 @@ export function audioClipMediaTime(clip: AudioClip, t: number): number | null {
 
 export interface AudioClipPiece {
   file: string
+  /** Nhạc nền / hiệu ứng / lồng tiếng (nhạc nền được tự giảm khi có lời). */
+  kind: AudioClip['kind']
   /** Giây trong file bắt đầu lấy. */
   mediaStart: number
   /** Độ dài (giây) trên video xuất. */
@@ -114,6 +116,7 @@ export function planAudioClips(
     return [
       {
         file: c.file,
+        kind: c.kind,
         mediaStart: c.offset / 1000,
         duration: duration / 1000,
         outputStart: c.start / 1000,

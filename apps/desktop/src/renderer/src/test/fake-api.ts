@@ -9,6 +9,8 @@ import {
   SECRET_KEYS,
 } from '@lumora/core'
 import type {
+  LocalAiProgress,
+  MusicTrack,
   CaptureSources,
   LiveConfig,
   LiveEnded,
@@ -108,6 +110,9 @@ export function createFakeApi(
   options: { encryptionAvailable?: boolean; screenEngine?: 'ffmpeg' | 'browser' } = {},
 ) {
   let settings: AppSettings = { ...DEFAULT_SETTINGS }
+  let maximized = false
+  const localAiListeners = new Set<(p: LocalAiProgress) => void>()
+  let music: MusicTrack[] = []
   const secrets: Partial<Record<SecretKey, string>> = {}
   let projects = [sampleSummary]
   const commandListeners = new Set<(c: RecordingCommand) => void>()
@@ -146,7 +151,16 @@ export function createFakeApi(
       version: '0.1.0',
       platform: 'win32',
       encryptionAvailable: options.encryptionAvailable ?? true,
+      frameless: true,
     }),
+    minimizeWindow: vi.fn<LumoraApi['minimizeWindow']>(async () => {}),
+    toggleMaximizeWindow: vi.fn<LumoraApi['toggleMaximizeWindow']>(async () => {
+      maximized = !maximized
+      return maximized
+    }),
+    closeWindow: vi.fn<LumoraApi['closeWindow']>(async () => {}),
+    isWindowMaximized: vi.fn<LumoraApi['isWindowMaximized']>(async () => maximized),
+    onWindowMaximized: vi.fn<LumoraApi['onWindowMaximized']>(() => () => {}),
     getUpdateState: vi.fn<LumoraApi['getUpdateState']>(async () => ({ state: 'idle' })),
     checkForUpdates: vi.fn<LumoraApi['checkForUpdates']>(async () => ({ state: 'none' })),
     installUpdate: vi.fn<LumoraApi['installUpdate']>(async () => {}),
@@ -263,6 +277,50 @@ export function createFakeApi(
       },
     ]),
     importMemes: vi.fn<LumoraApi['importMemes']>(async () => []),
+    listMusic: vi.fn<LumoraApi['listMusic']>(async () => music),
+    findMusic: vi.fn<LumoraApi['findMusic']>(async (q) => {
+      const track = {
+        file: `music-jamendo-${music.length + 1}.mp3`,
+        name: `Found ${q.mood || q.tempo} – Artist`,
+        durationMs: 120_000,
+        addedAt: music.length + 1,
+        source: 'jamendo' as const,
+        credit: `"Found ${q.mood || q.tempo}" by Artist — CC BY 3.0 (Jamendo)`,
+        origin: { source: 'jamendo' as const, id: String(music.length + 1) },
+      }
+      music.unshift(track)
+      return track
+    }),
+    importMusic: vi.fn<LumoraApi['importMusic']>(async () => music),
+    addMusicPaths: vi.fn<LumoraApi['addMusicPaths']>(async (paths, source) => {
+      for (const p of paths)
+        music.unshift({
+          file: `music-${music.length + 1}.mp3`,
+          name: p.replace(/^.*[\\/]/, '').replace(/\.[^.]+$/, ''),
+          durationMs: 30_000,
+          addedAt: music.length + 1,
+          source,
+        })
+      return [...music]
+    }),
+    removeMusic: vi.fn<LumoraApi['removeMusic']>(async (file) => {
+      music = music.filter((m) => m.file !== file)
+      return [...music]
+    }),
+    useMusic: vi.fn<LumoraApi['useMusic']>(async (_folder, file) => {
+      const track = music.find((m) => m.file === file)
+      if (!track) throw new Error('music_missing')
+      return { file: `asset-${file}`, name: track.name, durationMs: track.durationMs }
+    }),
+    recentAudioDownloads: vi.fn<LumoraApi['recentAudioDownloads']>(async () => [
+      {
+        path: 'C:\\Users\\me\\Downloads\\Sunny Day.mp3',
+        name: 'Sunny Day',
+        modifiedAt: 1,
+        bytes: 3_000_000,
+      },
+    ]),
+    openYouTubeAudioLibrary: vi.fn<LumoraApi['openYouTubeAudioLibrary']>(async () => {}),
     addMemePaths: vi.fn<LumoraApi['addMemePaths']>(async () => []),
     pathForFile: vi.fn<LumoraApi['pathForFile']>((file) => `C:/drop/${file.name}`),
     removeMeme: vi.fn<LumoraApi['removeMeme']>(async () => []),
@@ -300,12 +358,91 @@ export function createFakeApi(
     })),
     cancelExport: vi.fn<LumoraApi['cancelExport']>(async () => {}),
     revealFile: vi.fn<LumoraApi['revealFile']>(async () => {}),
+    saveSnapshot: vi.fn<LumoraApi['saveSnapshot']>(async () => ({
+      path: '/x/snapshot.png',
+      fileName: 'snapshot.png',
+    })),
     transcribe: vi.fn<LumoraApi['transcribe']>(async () => sampleTranscript),
     getTranscript: vi.fn<LumoraApi['getTranscript']>(async () => null),
     suggestCuts: vi.fn<LumoraApi['suggestCuts']>(async () => [
       { id: 'ai0', kind: 'filler', start: 800, end: 1100, text: 'ừm', reason: 'Từ đệm' },
       { id: 's0', kind: 'silence', start: 2500, end: 4000, text: '', reason: '' },
     ]),
+    planEdits: vi.fn<LumoraApi['planEdits']>(async () => []),
+    directEdits: vi.fn<LumoraApi['directEdits']>(async () => ({
+      summary: '',
+      questions: [],
+      commands: [],
+    })),
+    highlights: vi.fn<LumoraApi['highlights']>(async (_folder, count) =>
+      [
+        { start: 0, end: 20_000, hook: 'Mẹo 1', title: 'Mở đầu' },
+        { start: 30_000, end: 55_000, hook: 'Mẹo 2', title: 'Phần giữa' },
+        { start: 60_000, end: 85_000, hook: 'Mẹo 3', title: 'Kết' },
+      ].slice(0, count),
+    ),
+    listLocalModels: vi.fn<LumoraApi['listLocalModels']>(async () => ['llama3.2', 'qwen2.5:7b']),
+    pullLocalModel: vi.fn<LumoraApi['pullLocalModel']>(async (_url, model) => {
+      localAiListeners.forEach((l) =>
+        l({ kind: 'pull', status: `pulling ${model}`, completed: 50, total: 100 }),
+      )
+      localAiListeners.forEach((l) =>
+        l({ kind: 'pull', status: 'success', completed: 0, total: 0 }),
+      )
+    }),
+    benchmarkLocalModel: vi.fn<LumoraApi['benchmarkLocalModel']>(async () => ({
+      loadMs: 1200,
+      tokensPerSecond: 24.5,
+      totalMs: 4000,
+    })),
+    installOllama: vi.fn<LumoraApi['installOllama']>(async () => {
+      localAiListeners.forEach((l) =>
+        l({ kind: 'install', status: 'download', completed: 10, total: 100 }),
+      )
+    }),
+    onLocalAiProgress: vi.fn<LumoraApi['onLocalAiProgress']>((l) => {
+      localAiListeners.add(l)
+      return () => localAiListeners.delete(l)
+    }),
+    localSpeechStatus: vi.fn<LumoraApi['localSpeechStatus']>(async () => ({
+      supported: true,
+      platform: 'win32',
+      whisper: { installed: false, models: [] },
+      piper: { installed: false, voices: [] },
+    })),
+    localSpeechCatalog: vi.fn<LumoraApi['localSpeechCatalog']>(async () => ({
+      models: [
+        { id: 'small', label: 'Small', sizeMb: 488 },
+        { id: 'large-v3-turbo-q5_0', label: 'Large v3 Turbo (q5)', sizeMb: 574 },
+      ],
+      voices: [
+        { id: 'vi_VN-vais1000-medium', language: 'vi', label: 'Vais 1000 (nữ)', sizeMb: 63 },
+        { id: 'en_US-lessac-medium', language: 'en', label: 'Lessac (nữ)', sizeMb: 63 },
+      ],
+    })),
+    installLocalSpeech: vi.fn<LumoraApi['installLocalSpeech']>(async (tool) => {
+      localAiListeners.forEach((l) =>
+        l({
+          kind: 'speech',
+          status: 'download',
+          item: tool,
+          completed: 2_000_000,
+          total: 4_000_000,
+        }),
+      )
+    }),
+    downloadLocalSpeech: vi.fn<LumoraApi['downloadLocalSpeech']>(async (_kind, id) => {
+      localAiListeners.forEach((l) =>
+        l({
+          kind: 'speech',
+          status: 'download',
+          item: id,
+          completed: 50_000_000,
+          total: 100_000_000,
+        }),
+      )
+    }),
+    removeLocalSpeech: vi.fn<LumoraApi['removeLocalSpeech']>(async () => {}),
     summarize: vi.fn<LumoraApi['summarize']>(async () => ({
       titles: ['Hướng dẫn Lumora', 'Lumora trong 5 phút', 'Quay màn hình đẹp'],
       description: 'Video hướng dẫn.',
@@ -349,13 +486,8 @@ export function createFakeApi(
     onlineSearch: vi.fn<LumoraApi['onlineSearch']>(async (source, q, next) => ({
       items: Array.from({ length: next ? 1 : 2 }, (_, i) => ({
         id: `${next ? 'p2-' : ''}${i}`,
-        source: source.startsWith('tenor') ? ('tenor' as const) : ('pixabay' as const),
-        kind:
-          source === 'tenorSticker'
-            ? ('sticker' as const)
-            : source === 'pixabayImage'
-              ? ('image' as const)
-              : ('video' as const),
+        source: 'pixabay' as const,
+        kind: source === 'pixabayImage' ? ('image' as const) : ('video' as const),
         title: `${q || 'hot'} ${i + 1}`,
         thumbUrl: `https://media.example/${i}.gif`,
         previewUrl: `https://media.example/${i}.mp4`,
@@ -365,7 +497,7 @@ export function createFakeApi(
         durationMs: 2000,
       })),
       next: next ? null : '2',
-      attribution: source.startsWith('tenor') ? 'Powered by Tenor' : 'Video từ Pixabay',
+      attribution: source === 'pixabayImage' ? 'Ảnh từ Pixabay' : 'Video từ Pixabay',
     })),
     onlineDownload: vi.fn<LumoraApi['onlineDownload']>(async (source, id) => ({
       file: `meme-dl-${id}.mp4`,
@@ -382,6 +514,12 @@ export function createFakeApi(
     cacheClear: vi.fn<LumoraApi['cacheClear']>(async () => 0),
     translateLines: vi.fn<LumoraApi['translateLines']>(async (lines) =>
       lines.map((l) => ({ id: l.id, text: `EN: ${l.text}` })),
+    ),
+    captionEmojis: vi.fn<LumoraApi['captionEmojis']>(async (lines) =>
+      lines.map((l) => ({ id: l.id, emoji: '🔥' })),
+    ),
+    captionKeywords: vi.fn<LumoraApi['captionKeywords']>(async (lines) =>
+      lines.map((l) => ({ id: l.id, keywords: l.text.split(/\s+/).slice(0, 1) })),
     ),
     editCaptions: vi.fn<LumoraApi['editCaptions']>(async (lines) =>
       lines.map((l) => ({ id: l.id, text: l.text.replace(/ ừm/g, '') })),
@@ -439,6 +577,7 @@ export function createFakeApi(
     emitFinished: (folder: string) => finishedListeners.forEach((l) => l(folder)),
     emitComments: (comments: LiveComment[]) => commentListeners.forEach((l) => l(comments)),
     emitUpdate: (state: UpdateState) => updateListeners.forEach((l) => l(state)),
+    emitLocalAiProgress: (p: LocalAiProgress) => localAiListeners.forEach((l) => l(p)),
     emitLiveStatus: (status: LiveStatus) => statusListeners.forEach((l) => l(status)),
     emitLiveEnded: (ended: LiveEnded) => endedListeners.forEach((l) => l(ended)),
   }

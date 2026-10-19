@@ -7,7 +7,8 @@ import {
   Music2,
   Palette,
   Smile,
-  Sparkles,
+  Sparkle,
+  TextQuote,
   Type,
   WandSparkles,
   type LucideIcon,
@@ -18,6 +19,7 @@ import { AudioTab } from './library/AudioTab'
 import { MediaTab } from './library/MediaTab'
 import { EffectsTab, StickersTab, TransitionsTab } from './library/tabs'
 import { TextTemplatesTab } from './TextPanels'
+import { TranscriptPanel } from './TranscriptPanel'
 import { FiltersTab } from './LookPanels'
 import { useEditorStore } from './store'
 
@@ -30,6 +32,7 @@ export const LIBRARY_TABS = [
   'filters',
   'transitions',
   'captions',
+  'transcript',
   'ai',
 ] as const
 export type LibraryTab = (typeof LIBRARY_TABS)[number]
@@ -39,16 +42,17 @@ const TAB_ICONS: Record<LibraryTab, LucideIcon> = {
   audio: Music2,
   text: Type,
   stickers: Smile,
-  effects: Sparkles,
+  effects: Sparkle,
   filters: Palette,
   transitions: ArrowLeftRight,
   captions: Captions,
+  transcript: TextQuote,
   ai: WandSparkles,
 }
 
 /**
- * Thư viện bên trái (kiểu CapCut): cột biểu tượng chọn mục (chú thích khi rê chuột) và nội dung
- * của mục — meme, âm thanh, chữ, nhãn dán, hiệu ứng, chuyển cảnh, phụ đề, AI.
+ * Thư viện bên trái (kiểu CapCut): cột mục có biểu tượng và nhãn (Phương tiện, Âm thanh, Văn
+ * bản, Nhãn dán, Hiệu ứng, Bộ lọc, Chuyển cảnh, Phụ đề, AI) và nội dung của mục đang chọn.
  */
 export function MediaBrowser() {
   const { t } = useTranslation()
@@ -62,11 +66,12 @@ export function MediaBrowser() {
       setTab(tabRequest.tab as LibraryTab)
   }
   return (
-    <div className="flex h-full" data-testid="library">
+    <div className="flex h-full flex-col" data-testid="library">
+      {/* Hàng mục ngang như CapCut: biểu tượng trên, nhãn dưới; cuộn ngang khi hẹp. */}
       <div
-        className="flex w-12 shrink-0 flex-col items-center gap-1 overflow-y-auto border-r border-border py-2"
+        className="flex shrink-0 gap-0.5 overflow-x-auto border-b border-border bg-bg px-1 py-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         role="tablist"
-        aria-orientation="vertical"
+        aria-orientation="horizontal"
         aria-label={t('editor.library.title')}
       >
         {LIBRARY_TABS.map((name) => {
@@ -82,21 +87,17 @@ export function MediaBrowser() {
               data-tooltip={t(`editor.library.tabs.${name}`)}
               data-testid={`lib-${name}`}
               onClick={() => setTab(name)}
-              className={`flex size-9 items-center justify-center rounded-lg transition-colors ${
-                active
-                  ? 'bg-accent/15 text-accent'
-                  : 'text-muted hover:bg-surface-2 hover:text-text'
+              className={`flex min-w-[58px] shrink-0 flex-col items-center gap-1 rounded-md px-1.5 py-1.5 text-[10px] leading-none transition-colors ${
+                active ? 'text-accent' : 'text-muted hover:text-text'
               }`}
             >
-              <Icon size={19} strokeWidth={1.75} aria-hidden />
+              <Icon size={20} strokeWidth={active ? 2 : 1.6} aria-hidden />
+              <span className="whitespace-nowrap">{t(`editor.library.tabs.${name}`)}</span>
             </button>
           )
         })}
       </div>
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <h2 className="flex h-10 shrink-0 items-center border-b border-border px-3 text-sm font-semibold">
-          {t(`editor.library.tabs.${tab}`)}
-        </h2>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {tab === 'media' && <MediaTab />}
           {tab === 'audio' && <AudioTab />}
@@ -108,6 +109,11 @@ export function MediaBrowser() {
           {tab === 'captions' && (
             <div className="p-3">
               <CaptionsPanel />
+            </div>
+          )}
+          {tab === 'transcript' && (
+            <div className="p-3">
+              <TranscriptPanel />
             </div>
           )}
           {tab === 'ai' && (

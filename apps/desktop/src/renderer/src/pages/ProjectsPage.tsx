@@ -257,7 +257,7 @@ function ProjectDetail({ folder, onDeleted }: { folder: string; onDeleted: () =>
       {segment && (
         <ul className="mt-3 flex flex-wrap gap-2 text-xs text-muted" data-testid="track-list">
           {TRACK_KINDS.filter((k) => segment.tracks[k]).map((k) => (
-            <li key={k} className="rounded-full bg-surface-2 px-2.5 py-1">
+            <li key={k} className="rounded-md bg-surface-2 px-2.5 py-1">
               {t(`projects.tracks.${k}`)}
             </li>
           ))}

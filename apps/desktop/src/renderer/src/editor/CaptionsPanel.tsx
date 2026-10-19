@@ -7,6 +7,8 @@ import {
   CAPTION_LANGUAGES,
   CAPTION_TEMPLATES,
   captionSearchPattern,
+  captionTextMatches,
+  clearCaptionDecor,
   countCaptionMatches,
   FONTS,
   fontFamily,
@@ -70,11 +72,14 @@ function CaptionThumb({ look }: { look: CaptionLook }) {
             active: i === 1,
             spoken: i <= 1,
             since: i === 1 ? 300 : 600,
+            keyword: i === 3,
           })),
         style: 'highlight',
         look: { ...look, y: 0.5 },
         fontSize: 26,
         translation: null,
+        emoji: null,
+        lineSince: 600,
       },
       w,
       h,
@@ -84,9 +89,7 @@ function CaptionThumb({ look }: { look: CaptionLook }) {
 }
 
 function Heading({ children }: { children: ReactNode }) {
-  return (
-    <h3 className="text-[11px] font-semibold uppercase tracking-wide text-muted">{children}</h3>
-  )
+  return <h3 className="text-[11px] font-semibold text-muted">{children}</h3>
 }
 
 export function CaptionsPanel() {
@@ -107,17 +110,36 @@ export function CaptionsPanel() {
   const [replaced, setReplaced] = useState<number | null>(null)
   const [instruction, setInstruction] = useState('')
   const [aiChanged, setAiChanged] = useState<number | null>(null)
+  const [decor, setDecor] = useState<{ kind: 'emoji' | 'keywords'; count: number } | null>(null)
+  const [voices, setVoices] = useState<{ id: string; name: string }[]>([])
+  const [voice, setVoice] = useState('')
+  const [dubKeep, setDubKeep] = useState(false)
+  const [dubProgress, setDubProgress] = useState<[number, number] | null>(null)
+  const [dubbed, setDubbed] = useState<number | null>(null)
+  const hasLines = (edit?.captions.lines.length ?? 0) > 0
+  useEffect(() => {
+    if (!hasLines) return
+    let alive = true
+    lumora()
+      .listVoices()
+      .then((list) => {
+        if (!alive) return
+        setVoices(list)
+        setVoice((v) => v || list[0]?.id || '')
+      })
+      .catch(() => undefined)
+    return () => {
+      alive = false
+    }
+  }, [hasLines])
   if (!edit || !folder || !project) return null
   const captions = edit.captions
   const look = captions.look
   const searchOptions = { matchCase, wholeWord }
   const matchCount = countCaptionMatches(captions.lines, find, searchOptions)
   const matchPattern = captionSearchPattern(find, searchOptions)
-  const isMatch = (text: string | undefined) => {
-    if (!matchPattern || text === undefined) return false
-    matchPattern.lastIndex = 0
-    return matchPattern.test(text)
-  }
+  const isMatch = (text: string | undefined) =>
+    matchPattern !== null && captionTextMatches(matchPattern, text)
   const toLang = target ?? (captions.language.startsWith('en') ? 'vi' : 'en')
 
   const setCaptions = (patch: Partial<CaptionsState>, coalesce?: string) =>
@@ -201,6 +223,36 @@ export function CaptionsPanel() {
       const result = applyCaptionTexts(lines, texts)
       if (result.count > 0) setCaptions({ lines: result.lines })
       setAiChanged(result.count)
+    })
+
+  /** Emoji / từ khóa AI cho từng dòng (store tự dùng từ điển khi không có AI). */
+  const addDecor = (kind: 'emoji' | 'keywords') =>
+    run(kind, async () => {
+      setDecor(null)
+      const store = useEditorStore.getState()
+      const count =
+        kind === 'emoji' ? await store.addCaptionEmojis() : await store.addCaptionKeywords()
+      setDecor({ kind, count })
+    })
+  const clearDecor = (kind: 'emoji' | 'keywords') => {
+    setDecor(null)
+    setCaptions({ lines: clearCaptionDecor(captions.lines, { [kind]: true }) })
+  }
+  const dub = () =>
+    run('dub', async () => {
+      setDubbed(null)
+      setDubProgress([0, captions.lines.length])
+      try {
+        const count = await useEditorStore.getState().dubCaptions({
+          language: toLang,
+          keepOriginal: dubKeep,
+          voiceName: voice || undefined,
+          onProgress: (done, total) => setDubProgress([done, total]),
+        })
+        setDubbed(count)
+      } finally {
+        setDubProgress(null)
+      }
     })
 
   const saveFile = (format: 'srt' | 'vtt') =>
@@ -303,7 +355,7 @@ export function CaptionsPanel() {
               ))}
             </select>
           </label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <label className="flex items-center justify-between text-xs">
               <span className="text-muted">{t('captions.color')}</span>
               <input
@@ -323,6 +375,17 @@ export function CaptionsPanel() {
                 aria-label={t('captions.highlight')}
                 value={look.highlightColor}
                 onChange={(e) => setLook({ highlightColor: e.target.value }, 'cap-hl')}
+                className="h-7 w-10 cursor-pointer rounded border border-border bg-transparent"
+              />
+            </label>
+            <label className="flex items-center justify-between text-xs">
+              <span className="text-muted">{t('captions.keywordColor')}</span>
+              <input
+                type="color"
+                data-testid="caption-keyword-color"
+                aria-label={t('captions.keywordColor')}
+                value={look.keywordColor}
+                onChange={(e) => setLook({ keywordColor: e.target.value }, 'cap-kw')}
                 className="h-7 w-10 cursor-pointer rounded border border-border bg-transparent"
               />
             </label>
@@ -499,7 +562,10 @@ export function CaptionsPanel() {
                   className="size-3.5 accent-accent"
                   data-testid="caption-match-case"
                   checked={matchCase}
-                  onChange={(e) => setMatchCase(e.target.checked)}
+                  onChange={(e) => {
+                    setMatchCase(e.target.checked)
+                    setReplaced(null)
+                  }}
                 />
                 {t('captions.matchCase')}
               </label>
@@ -509,7 +575,10 @@ export function CaptionsPanel() {
                   className="size-3.5 accent-accent"
                   data-testid="caption-whole-word"
                   checked={wholeWord}
-                  onChange={(e) => setWholeWord(e.target.checked)}
+                  onChange={(e) => {
+                    setWholeWord(e.target.checked)
+                    setReplaced(null)
+                  }}
                 />
                 {t('captions.wholeWord')}
               </label>
@@ -575,6 +644,105 @@ export function CaptionsPanel() {
             </p>
           )}
 
+          <Heading>{t('captions.captionsAi')}</Heading>
+          <p className="text-xs text-muted">{t('captions.captionsAiIntro')}</p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              className={button}
+              data-testid="captions-emoji"
+              disabled={busy !== null}
+              onClick={() => void addDecor('emoji')}
+            >
+              {busy === 'emoji' ? t('captions.emojiWorking') : t('captions.emojiAi')}
+            </button>
+            <button
+              type="button"
+              className={button}
+              data-testid="captions-keywords"
+              disabled={busy !== null}
+              onClick={() => void addDecor('keywords')}
+            >
+              {busy === 'keywords' ? t('captions.keywordsWorking') : t('captions.keywordsAi')}
+            </button>
+          </div>
+          {(captions.lines.some((l) => l.emoji) ||
+            captions.lines.some((l) => l.keywords?.length)) && (
+            <div className="flex flex-wrap gap-2 text-xs">
+              {captions.lines.some((l) => l.emoji) && (
+                <button
+                  type="button"
+                  className="text-muted hover:text-text hover:underline"
+                  data-testid="captions-emoji-clear"
+                  onClick={() => clearDecor('emoji')}
+                >
+                  {t('captions.emojiClear')}
+                </button>
+              )}
+              {captions.lines.some((l) => l.keywords?.length) && (
+                <button
+                  type="button"
+                  className="text-muted hover:text-text hover:underline"
+                  data-testid="captions-keywords-clear"
+                  onClick={() => clearDecor('keywords')}
+                >
+                  {t('captions.keywordsClear')}
+                </button>
+              )}
+            </div>
+          )}
+          {decor && (
+            <p className="text-xs text-success" data-testid="captions-decor-result">
+              {decor.kind === 'emoji'
+                ? decor.count > 0
+                  ? t('captions.emojiDone', { count: decor.count })
+                  : t('captions.emojiNone')
+                : decor.count > 0
+                  ? t('captions.keywordsDone', { count: decor.count })
+                  : t('captions.keywordsNone')}
+            </p>
+          )}
+          <p className="text-xs font-medium">{t('captions.dub')}</p>
+          <p className="text-xs text-muted">{t('captions.dubIntro')}</p>
+          <label className="flex items-center gap-2 text-xs">
+            <span className="w-20 shrink-0 text-muted">{t('captions.dubVoice')}</span>
+            <select
+              data-testid="dub-voice"
+              aria-label={t('captions.dubVoice')}
+              value={voice}
+              onChange={(e) => setVoice(e.target.value)}
+              className="min-w-0 flex-1 rounded-md border border-border bg-surface-2 px-2 py-1.5 text-sm"
+            >
+              {voices.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <Toggle
+            label={t('captions.dubKeep')}
+            checked={dubKeep}
+            onChange={setDubKeep}
+            testId="dub-keep"
+          />
+          <button
+            type="button"
+            className={button}
+            data-testid="captions-dub"
+            disabled={busy !== null}
+            onClick={() => void dub()}
+          >
+            {dubProgress
+              ? t('captions.dubWorking', { done: dubProgress[0], total: dubProgress[1] })
+              : t('captions.dubRun', { language: t(`captions.languages.${toLang}`) })}
+          </button>
+          {dubbed !== null && (
+            <p className="text-xs text-success" data-testid="captions-dub-result">
+              {dubbed > 0 ? t('captions.dubDone', { count: dubbed }) : t('captions.dubNone')}
+            </p>
+          )}
+
           <Heading>{t('captions.lines')}</Heading>
           <ol className="flex flex-col gap-2" data-testid="captions-lines">
             {captions.lines.map((line, i) => (
@@ -598,6 +766,25 @@ export function CaptionsPanel() {
                   >
                     {formatTimecode(line.start)}
                   </button>
+                  {line.emoji && (
+                    <span
+                      className="text-sm"
+                      data-testid="caption-emoji"
+                      title={t('captions.emoji')}
+                    >
+                      {line.emoji}
+                    </span>
+                  )}
+                  {line.keywords?.map((k) => (
+                    <span
+                      key={k}
+                      data-testid="caption-keyword"
+                      className="rounded px-1 text-[10px] font-semibold"
+                      style={{ color: look.keywordColor, background: 'rgba(0,0,0,0.35)' }}
+                    >
+                      {k}
+                    </span>
+                  ))}
                   <button
                     type="button"
                     data-testid="caption-split"

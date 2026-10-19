@@ -55,6 +55,28 @@ describe('tìm và thay thế phụ đề', () => {
     expect(none.lines[0]).toBe(lines[0])
   })
 
+  it('"$" trong chuỗi thay được giữ nguyên, không phải mẫu đặc biệt', () => {
+    const { lines: next } = replaceInCaptions(lines, 'rất', 'cost $$ $& $1')
+    expect(next[1]!.text).toBe('lumora cost $$ $& $1 nhanh.')
+  })
+
+  it('tìm được dù phụ đề hay chuỗi tìm ở dạng Unicode tách dấu (NFD)', () => {
+    const nfd = [line('d', [w('cha\u0300o'.normalize('NFD'), 0, 300), w('ban', 300, 600)])]
+    expect(countCaptionMatches(nfd, 'chào')).toBe(1)
+    expect(countCaptionMatches(lines, 'chào'.normalize('NFD'))).toBe(1)
+    const { lines: next, count } = replaceInCaptions(nfd, 'chào', 'hi')
+    expect(count).toBe(1)
+    expect(next[0]!.text).toBe('hi ban')
+  })
+
+  it('thay cả dòng bằng rỗng thì bỏ dòng đó', () => {
+    const { lines: next, count } = replaceInCaptions(lines, 'hôm nay', '')
+    expect(count).toBe(1)
+    expect(next.map((l) => l.id)).toEqual(['a', 'b'])
+    const perWord = replaceInCaptions([line('e', [w('ừm', 0, 300)])], 'ừm', '')
+    expect(perWord.lines).toEqual([])
+  })
+
   it('áp dụng nội dung Claude trả về theo id: chỉ dòng đổi mới đánh dấu đã sửa', () => {
     const { lines: next, count } = applyCaptionTexts(lines, [
       { id: 'a', text: 'Xin chào Lumora' },

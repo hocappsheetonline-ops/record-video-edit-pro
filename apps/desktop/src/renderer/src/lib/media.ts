@@ -34,15 +34,36 @@ export function getCameraStream(deviceId: string): Promise<MediaStream> {
   })
 }
 
-export function getMicStream(deviceId: string): Promise<MediaStream> {
+/**
+ * Cách Chromium xử lý tiếng micro trước khi đưa cho ta:
+ * - `raw`: thu thô 48 kHz, tắt khử vang / lọc ồn / tự chỉnh gain của Chromium. Dùng khi quay và lồng
+ *   tiếng: ba bộ lọc đó làm tiếng bị rè, bập bùng và "nuốt" đầu câu (nhất là khi máy bận mã hóa
+ *   video), trong khi khử vang không có tác dụng vì âm thanh máy không đi qua Chromium. Lọc tạp
+ *   âm làm sau bằng RNNoise trong trình chỉnh sửa, sạch hơn nhiều.
+ * - `voice`: bật đủ ba bộ lọc, cho livestream / gọi với khách (cần khử vang tiếng loa).
+ */
+export type MicProcessing = 'raw' | 'voice'
+
+export function micConstraints(deviceId: string, processing: MicProcessing): MediaTrackConstraints {
+  const processed = processing === 'voice'
+  return {
+    deviceId: { exact: deviceId },
+    echoCancellation: processed,
+    noiseSuppression: processed,
+    autoGainControl: processed,
+    sampleRate: { ideal: 48000 },
+    // Nhiều micro USB báo stereo nhưng chỉ có một kênh có tiếng: lấy mono cho đều hai bên.
+    channelCount: { ideal: 1 },
+  }
+}
+
+export function getMicStream(
+  deviceId: string,
+  processing: MicProcessing = 'raw',
+): Promise<MediaStream> {
   return navigator.mediaDevices.getUserMedia({
     video: false,
-    audio: {
-      deviceId: { exact: deviceId },
-      echoCancellation: true,
-      noiseSuppression: true,
-      autoGainControl: true,
-    },
+    audio: micConstraints(deviceId, processing),
   })
 }
 
@@ -71,7 +92,17 @@ export function getDesktopStream(sourceId: string, fps: number): Promise<MediaSt
 /** Âm thanh hệ thống (loopback) trên Windows. Chromium yêu cầu xin kèm video nên ta bỏ video ngay. */
 export async function getSystemAudioStream(): Promise<MediaStream> {
   const constraints: DesktopConstraints = {
-    audio: { mandatory: { chromeMediaSource: 'desktop' } },
+    audio: {
+      mandatory: {
+        chromeMediaSource: 'desktop',
+        // Loopback là tiếng đã trộn sẵn của máy: không cho Chromium khử vang / lọc ồn / chỉnh gain
+        // lên nó (các bộ lọc này làm nhạc bị rè và nhấp nhô).
+        echoCancellation: false,
+        googEchoCancellation: false,
+        googAutoGainControl: false,
+        googNoiseSuppression: false,
+      },
+    },
     video: {
       mandatory: { chromeMediaSource: 'desktop', maxWidth: 1, maxHeight: 1, maxFrameRate: 1 },
     },
@@ -157,7 +188,17 @@ export class TrackRecorder {
   }
 }
 
-/** URL để phát file trong thư mục dự án qua giao thức lumora-media. */
+/**
+ * URL để phát file trong thư mục dự án qua giao thức lumora-media.
+ * Nếu `file` đã là URL tuyệt đối (vd. URL thư viện từ `libraryUrl`) thì trả nguyên để
+ * bộ xem trước có thể phát thẳng qua trường `file` của overlay.
+ */
 export function mediaUrl(folder: string, file: string): string {
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(file)) return file
   return `lumora-media://projects/${encodeURIComponent(folder)}/${encodeURIComponent(file)}`
+}
+
+/** URL để xem trước / nghe thử file trong thư viện chung (meme, nhạc) mà không cần chép vào dự án. */
+export function libraryUrl(library: 'memes' | 'music', file: string): string {
+  return `lumora-media://library/${library}/${encodeURIComponent(file)}`
 }

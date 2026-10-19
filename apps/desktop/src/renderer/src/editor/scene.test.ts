@@ -16,6 +16,7 @@ function track(x: number, y: number, clicks: number[] = []): CursorTrack {
     samples: Array.from({ length: 101 }, (_, i) => ({ s: i * 100, x, y })),
     clicks: clicks.map((s) => ({ s, x, y, button: 'left' as const })),
     keys: [],
+    combos: [],
     moves: [0, 5000, 10_000],
   }
 }
@@ -155,8 +156,8 @@ describe('computeScene', () => {
         hasCamera: false,
       }).captions
     expect(at(600)?.words).toEqual([
-      { text: 'Xin', active: false, spoken: true, since: 600 },
-      { text: 'chào', active: true, spoken: true, since: 100 },
+      { text: 'Xin', active: false, spoken: true, since: 600, keyword: false },
+      { text: 'chào', active: true, spoken: true, since: 100, keyword: false },
     ])
     expect(at(600)?.fontSize).toBe(54)
     // Dòng đã sửa: thời gian chia đều cho các từ, vẫn tô sáng từ đang nói.
@@ -497,6 +498,7 @@ describe('đoạn video nhập', () => {
       samples: [{ s: 0, x: 0.5, y: 0.5 }],
       clicks: [],
       keys: [],
+      combos: [],
       moves: [],
     }
     const base = {
@@ -511,5 +513,39 @@ describe('đoạn video nhập', () => {
     }
     expect(computeScene(base).cursor).not.toBeNull()
     expect(computeScene({ ...base, imported: true }).cursor).toBeNull()
+  })
+})
+
+describe('phím tắt đã bấm', () => {
+  it('chỉ hiện khi bật, mờ dần sau khi bấm, không hiện ở đoạn video nhập', () => {
+    const edit = createDefaultEdit(project)
+    const cursor = {
+      stepMs: 10,
+      samples: [{ s: 0, x: 0.5, y: 0.5 }],
+      clicks: [],
+      keys: [1000],
+      combos: [{ s: 1000, combo: 'Ctrl+S' }],
+      moves: [],
+    }
+    const base = {
+      edit,
+      time: 1200,
+      output,
+      video,
+      source: 1200,
+      cursor,
+      follow: null,
+      hasCamera: false,
+    }
+    expect(computeScene(base).keys).toBeNull()
+    edit.cursor = { ...edit.cursor, showKeys: true }
+    expect(computeScene(base).keys).toEqual({
+      combos: ['Ctrl+S'],
+      opacity: 1,
+      fontSize: Math.round(Math.min(output.width, output.height) * 0.04),
+    })
+    expect(computeScene({ ...base, source: 500 }).keys).toBeNull()
+    expect(computeScene({ ...base, source: 3500 }).keys).toBeNull()
+    expect(computeScene({ ...base, imported: true }).keys).toBeNull()
   })
 })

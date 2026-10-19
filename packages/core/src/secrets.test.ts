@@ -50,11 +50,17 @@ describe('isSecretKey', () => {
 })
 
 describe('key kho nội dung', () => {
-  it('Tenor là key Google Cloud (AIza…), Pixabay chỉ kiểm tra độ dài', () => {
-    expect(isSecretKey('tenor')).toBe(true)
+  it('Pixabay chỉ kiểm tra độ dài; Tenor đã ngừng hoạt động nên không còn là key', () => {
     expect(isSecretKey('pixabay')).toBe(true)
-    expect(checkKeyFormat('tenor', 'x'.repeat(39))).toBe('wrong_prefix')
-    expect(checkKeyFormat('tenor', `AIza${'x'.repeat(35)}`)).toBeNull()
+    expect(isSecretKey('tenor')).toBe(false)
     expect(checkKeyFormat('pixabay', '12345678-abcdef0123456789abcdef01')).toBeNull()
+    expect(checkKeyFormat('pixabay', 'short')).toBe('too_short')
+  })
+
+  it('Jamendo: client_id chỉ 8 ký tự nên ngưỡng ngắn hơn', () => {
+    expect(isSecretKey('jamendo')).toBe(true)
+    expect(checkKeyFormat('jamendo', 'a1b2c3d4')).toBeNull()
+    expect(checkKeyFormat('jamendo', 'abc')).toBe('too_short')
+    expect(checkKeyFormat('jamendo', 'a1b2 c3d4')).toBe('whitespace')
   })
 })

@@ -2,15 +2,18 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, open, rename, rm, type FileHandle } from 'node:fs/promises'
 import { join } from 'node:path'
 import {
+  duckVolumeExpr,
   outputDuration,
   planAudio,
   overlayAudioClips,
   planAudioClips,
+  voiceRanges,
   type EditState,
   type Project,
   applyTrackState,
 } from '@lumora/core'
-import { buildExportMuxArgs, buildGifArgs } from '../ffmpeg/args'
+import { loadWaveform } from '../projects/waveform'
+import { buildExportMuxArgs, buildGifArgs, ENHANCE_FILTER } from '../ffmpeg/args'
 import type { FfmpegRunner } from '../ffmpeg/runner'
 import { AudioProcessor } from '../audio/process'
 import { ClipReverser } from '../clips/reverse'
@@ -122,17 +125,42 @@ export class ExportManager {
       )
       // Nhạc nền, hiệu ứng âm thanh, lồng tiếng và tiếng của video meme.
       const extra = [...edit.audioClips, ...overlayAudioClips(edit.overlays)]
+      // Tự giảm nhạc khi có lời: khoảng có tiếng theo dạng sóng bản quay và các đoạn lồng tiếng.
+      const duck = edit.audio.duck
+      const hasMusic = extra.some((c) => c.kind === 'music')
+      const voice =
+        duck.enabled && hasMusic
+          ? voiceRanges(
+              await loadWaveform(project, projectDir, this.run).catch(() => null),
+              edit.clips,
+              extra,
+              durationS * 1000,
+            )
+          : []
       const added = await Promise.all(
-        planAudioClips(extra, durationS * 1000).map(async (p) => ({
-          ...p,
-          path: join(projectDir, await this.audio.process(projectDir, p.file, p.fx)),
-          speed: 1,
-        })),
+        planAudioClips(extra, durationS * 1000).map(async (p) => {
+          const expr =
+            duck.enabled && p.kind === 'music'
+              ? duckVolumeExpr(voice, duck.level, p.outputStart * 1000, p.duration * 1000)
+              : null
+          return {
+            ...p,
+            path: join(projectDir, await this.audio.process(projectDir, p.file, p.fx)),
+            speed: 1,
+            ...(expr ? { duckExpr: expr } : {}),
+          }
+        }),
       )
       const pieces = [...recorded, ...added]
       const tmpOut = join(job.dir, `.mux-${id}.mp4`)
       const muxed = await this.run(
-        buildExportMuxArgs({ video: job.tmpPath, pieces, durationS, output: tmpOut }),
+        buildExportMuxArgs({
+          video: job.tmpPath,
+          pieces,
+          durationS,
+          output: tmpOut,
+          videoFilter: edit.export.enhance ? ENHANCE_FILTER : undefined,
+        }),
         600_000,
       )
       if (muxed.code !== 0) throw new Error(`Ghép âm thanh thất bại: ${muxed.stderr.slice(-400)}`)

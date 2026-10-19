@@ -4,14 +4,20 @@ export type Language = (typeof LANGUAGES)[number]
 export const THEMES = ['system', 'dark', 'light'] as const
 export type Theme = (typeof THEMES)[number]
 
-/** Màu nhấn có sẵn; người dùng cũng có thể chọn màu bất kỳ (mã hex). */
+/**
+ * Màu nhấn có sẵn: xanh ngọc kiểu CapCut (mặc định) và bộ màu hệ thống của macOS (xanh dương,
+ * tím, hồng, đỏ, cam, vàng, xanh lá, than chì); người dùng cũng có thể chọn màu bất kỳ (mã hex).
+ */
 export const ACCENT_PRESETS = [
-  '#2563eb',
-  '#0ea5e9',
-  '#14b8a6',
-  '#8b5cf6',
-  '#ec4899',
-  '#f97316',
+  '#1ed6d6',
+  '#0a84ff',
+  '#bf5af2',
+  '#ff375f',
+  '#ff453a',
+  '#ff9f0a',
+  '#ffd60a',
+  '#30d158',
+  '#8e8e93',
 ] as const
 
 export interface AppSettings {
@@ -27,6 +33,77 @@ export interface AppSettings {
   previewQuality: PreviewQuality
   /** Mẫu cho bản quay mới mở lần đầu: tỉ lệ khung hình mặc định. */
   projectTemplate: ProjectTemplate
+  /** Giảm trong suốt: bề mặt kính mờ thành màu đặc (máy yếu hoặc muốn tương phản cao). */
+  reduceTransparency: boolean
+  /** AI cục bộ (Ollama) thay cho Claude: trợ lý, cắt từ thừa, tóm tắt, dịch chạy trên máy. */
+  localAi: LocalAiSettings
+  /** Giọng nói cục bộ (whisper.cpp + Piper) thay cho ElevenLabs: phụ đề và giọng đọc chạy trên máy. */
+  localSpeech: LocalSpeechSettings
+}
+
+/** Model Whisper (ggml) tải được trong app: cân bằng giữa cỡ file, tốc độ và chất lượng tiếng Việt. */
+export const WHISPER_MODELS = [
+  'small',
+  'medium-q5_0',
+  'large-v3-turbo-q5_0',
+  'large-v3-turbo',
+] as const
+export type WhisperModel = (typeof WHISPER_MODELS)[number]
+
+export interface LocalSpeechSettings {
+  enabled: boolean
+  /** Model Whisper dùng để nhận dạng (tải trong Cài đặt). */
+  whisperModel: WhisperModel
+  /** Giọng Piper mặc định (ví dụ vi_VN-vais1000-medium). */
+  piperVoice: string
+}
+
+export const DEFAULT_LOCAL_SPEECH: LocalSpeechSettings = {
+  enabled: false,
+  whisperModel: 'large-v3-turbo-q5_0',
+  piperVoice: 'vi_VN-vais1000-medium',
+}
+
+/** Chuẩn hóa cài đặt giọng nói cục bộ: model trong danh sách, tên giọng là tên file an toàn. */
+export function normalizeLocalSpeech(input: unknown): LocalSpeechSettings {
+  const raw = (typeof input === 'object' && input !== null ? input : {}) as Record<string, unknown>
+  const voice = typeof raw.piperVoice === 'string' ? raw.piperVoice.trim() : ''
+  return {
+    enabled: raw.enabled === true,
+    whisperModel: WHISPER_MODELS.includes(raw.whisperModel as WhisperModel)
+      ? (raw.whisperModel as WhisperModel)
+      : DEFAULT_LOCAL_SPEECH.whisperModel,
+    piperVoice: /^[\w.-]{1,80}$/.test(voice) ? voice : DEFAULT_LOCAL_SPEECH.piperVoice,
+  }
+}
+
+export interface LocalAiSettings {
+  enabled: boolean
+  /** Địa chỉ máy chủ Ollama (mặc định http://127.0.0.1:11434). */
+  baseUrl: string
+  /** Tên model đã tải trong Ollama (ví dụ qwen2.5:7b, llama3.2). */
+  model: string
+}
+
+export const DEFAULT_LOCAL_AI: LocalAiSettings = {
+  enabled: false,
+  baseUrl: 'http://127.0.0.1:11434',
+  model: 'qwen2.5:7b',
+}
+
+/** Chuẩn hóa cài đặt AI cục bộ: chỉ nhận http(s), bỏ dấu / cuối, tên model ngắn gọn. */
+export function normalizeLocalAi(input: unknown): LocalAiSettings {
+  const raw = (typeof input === 'object' && input !== null ? input : {}) as Record<string, unknown>
+  const url = typeof raw.baseUrl === 'string' ? raw.baseUrl.trim().replace(/\/+$/, '') : ''
+  const model = typeof raw.model === 'string' ? raw.model.trim().slice(0, 80) : ''
+  return {
+    enabled: raw.enabled === true,
+    baseUrl:
+      /^https?:\/\/[^\s/]+(?:\/[^\s]*)?$/.test(url) && url.length <= 200
+        ? url
+        : DEFAULT_LOCAL_AI.baseUrl,
+    model: /^[\w.:/-]+$/.test(model) ? model : DEFAULT_LOCAL_AI.model,
+  }
 }
 
 export const PREVIEW_QUALITIES = ['auto', 'high', 'low'] as const
@@ -43,6 +120,9 @@ export const DEFAULT_SETTINGS: AppSettings = {
   onboardingDone: false,
   previewQuality: 'auto',
   projectTemplate: 'tutorial',
+  reduceTransparency: false,
+  localAi: { ...DEFAULT_LOCAL_AI },
+  localSpeech: { ...DEFAULT_LOCAL_SPEECH },
 }
 
 function pick<T extends string>(allowed: readonly T[], value: unknown, fallback: T): T {
@@ -67,6 +147,9 @@ export function normalizeSettings(input: unknown): AppSettings {
     onboardingDone: raw.onboardingDone === true,
     previewQuality: pick(PREVIEW_QUALITIES, raw.previewQuality, DEFAULT_SETTINGS.previewQuality),
     projectTemplate: pick(PROJECT_TEMPLATES, raw.projectTemplate, DEFAULT_SETTINGS.projectTemplate),
+    reduceTransparency: raw.reduceTransparency === true,
+    localAi: normalizeLocalAi(raw.localAi),
+    localSpeech: normalizeLocalSpeech(raw.localSpeech),
   }
 }
 

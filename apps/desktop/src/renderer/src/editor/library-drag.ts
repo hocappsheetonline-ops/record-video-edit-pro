@@ -20,6 +20,8 @@ export type DragPayload =
   | { kind: 'emoji'; text: string }
   | { kind: 'shape'; shape: ShapeKind; color: string }
   | { kind: 'sfx'; id: SoundEffectId }
+  /** Đoạn quay gốc (theo `segment.index`): thêm lại trọn đoạn làm clip chính. */
+  | { kind: 'source'; index: number }
 
 /** Thuộc tính cho một thẻ kéo được vào timeline. */
 export function dragProps(payload: DragPayload) {
@@ -82,6 +84,9 @@ export async function dropPayload(payload: DragPayload, at: number) {
       return
     case 'sfx':
       await s.addSoundEffect(payload.id)
+      return
+    case 'source':
+      s.addSourceClips(payload.index)
       return
   }
 }

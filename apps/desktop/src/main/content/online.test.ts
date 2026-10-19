@@ -2,13 +2,12 @@ import { existsSync, readdirSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { startMockContent } from '../../../e2e/mock-content'
 import { runFfmpeg } from '../ffmpeg/runner'
 import { MemeLibrary } from '../projects/images'
 import { OnlineService } from './online'
 import { searchPixabay } from './pixabay'
-import { searchTenor } from './tenor'
 
 let dir: string
 let mock: Awaited<ReturnType<typeof startMockContent>>
@@ -50,11 +49,9 @@ beforeAll(async () => {
     gif: join(dir, 's.gif'),
     thumb: join(dir, 't.jpg'),
   })
-  process.env.LUMORA_TENOR_BASE_URL = mock.url
   process.env.LUMORA_PIXABAY_BASE_URL = mock.url
 }, 60_000)
 afterAll(async () => {
-  delete process.env.LUMORA_TENOR_BASE_URL
   delete process.env.LUMORA_PIXABAY_BASE_URL
   await mock.close()
   await rm(dir, { recursive: true, force: true })
@@ -66,63 +63,7 @@ beforeEach(async () => {
 })
 afterEach(() => rm(work, { recursive: true, force: true }))
 
-const TENOR = 'AIzaMockTenorKey0123456789'
 const PIXABAY = 'mock-pixabay-key-0123456789'
-
-describe('Tenor', () => {
-  it('tìm meme: chuẩn hóa kết quả, ưu tiên MP4, có trang tiếp và ghi nguồn', async () => {
-    const result = await searchTenor(TENOR, { q: 'bruh', kind: 'gif' })
-    expect(result.attribution).toBe('Powered by Tenor')
-    expect(result.items).toHaveLength(3)
-    expect(result.items[0]).toMatchObject({
-      id: 't0',
-      source: 'tenor',
-      kind: 'video',
-      title: 'bruh 1',
-      width: 320,
-      height: 180,
-      durationMs: 2000,
-    })
-    expect(result.items[0]!.downloadUrl).toMatch(/t0-mp4\.mp4$/)
-    expect(result.items[0]!.previewUrl).toMatch(/t0-tinymp4\.mp4$/)
-    expect(result.next).toBe('3')
-    const req = mock.requests.at(-1)!
-    expect(req.path).toBe('/v2/search')
-    expect(req.query.get('contentfilter')).toBe('medium')
-    expect(req.query.get('client_key')).toBe('lumora')
-    // Trang tiếp theo.
-    const page2 = await searchTenor(TENOR, { q: 'bruh', kind: 'gif', next: result.next })
-    expect(page2.items[0]!.id).toBe('t3')
-    expect(page2.next).toBeNull()
-  })
-
-  it('sticker: GIF nền trong suốt; không có từ khóa thì lấy danh sách nổi bật', async () => {
-    const result = await searchTenor(TENOR, { q: '', kind: 'sticker' })
-    expect(mock.requests.at(-1)!.path).toBe('/v2/featured')
-    expect(mock.requests.at(-1)!.query.get('searchfilter')).toBe('sticker')
-    expect(result.items[0]).toMatchObject({ kind: 'sticker', width: 200, height: 200 })
-    expect(result.items[0]!.downloadUrl).toMatch(/\.gif$/)
-  })
-
-  it('key sai, hết lượt, mất mạng, dữ liệu lạ: báo mã lỗi rõ ràng', async () => {
-    await expect(searchTenor('AIzaWrong', { q: 'x', kind: 'gif' })).rejects.toThrow('key_invalid')
-    const quota = vi.fn(async () => new Response('', { status: 429 }))
-    await expect(searchTenor(TENOR, { q: 'x', kind: 'gif', fetchImpl: quota })).rejects.toThrow(
-      'quota',
-    )
-    const offline = vi.fn(async () => {
-      throw new TypeError('fetch failed')
-    })
-    await expect(searchTenor(TENOR, { q: 'x', kind: 'gif', fetchImpl: offline })).rejects.toThrow(
-      'net_offline',
-    )
-    const weird = vi.fn(
-      async () =>
-        new Response(JSON.stringify({ results: [{ id: 1 }, { id: 'a', media_formats: {} }] })),
-    )
-    expect((await searchTenor(TENOR, { q: 'x', kind: 'gif', fetchImpl: weird })).items).toEqual([])
-  })
-})
 
 describe('Pixabay', () => {
   it('video và ảnh: chuẩn hóa, phân trang theo số trang', async () => {
@@ -152,7 +93,7 @@ describe('Pixabay', () => {
 })
 
 describe('OnlineService', () => {
-  function service(keys: Record<string, string | undefined> = { tenor: TENOR, pixabay: PIXABAY }) {
+  function service(keys: Record<string, string | undefined> = { pixabay: PIXABAY }) {
     const library = new MemeLibrary(join(work, 'memes'), runFfmpeg)
     const online = new OnlineService({
       getKey: async (name) => keys[name],
@@ -165,48 +106,45 @@ describe('OnlineService', () => {
   it('tìm kiếm được nhớ 10 phút; chưa nhập key thì báo key_missing', async () => {
     const { online } = service()
     const before = mock.requests.length
-    await online.search('tenor', 'Cat ', null)
-    await online.search('tenor', 'cat', null)
+    await online.search('pixabayVideo', 'Cat ', null)
+    await online.search('pixabayVideo', 'cat', null)
     expect(mock.requests.length).toBe(before + 1)
     await expect(service({}).online.search('pixabayVideo', 'x', null)).rejects.toThrow(
       'key_missing',
     )
   })
 
-  it('tải meme Tenor vào thư viện (chuẩn hóa MP4, có tiếng, nhớ nguồn), không tải lại lần hai', async () => {
+  it('tải video Pixabay vào thư viện (chuẩn hóa MP4, có tiếng, nhớ nguồn), không tải lại lần hai', async () => {
     const { online, library } = service()
-    const { items } = await online.search('tenor', 'bruh', null)
-    const item = await online.download('tenor', items[0]!.id)
+    const { items } = await online.search('pixabayVideo', 'bruh', null)
+    const item = await online.download('pixabay', items[0]!.id)
     expect(item).toMatchObject({
       kind: 'video',
       name: 'bruh 1',
       hasAudio: true,
-      origin: { source: 'tenor', id: 't0' },
+      origin: { source: 'pixabay', id: '100' },
     })
     expect(item.file).toMatch(/^meme-[0-9a-f]{12}\.mp4$/)
     // File tạm đã được dọn.
     expect(readdirSync(join(work, 'cache'))).toEqual([])
     const before = mock.requests.length
-    const again = await online.download('tenor', items[0]!.id)
+    const again = await online.download('pixabay', items[0]!.id)
     expect(again.file).toBe(item.file)
     expect(mock.requests.length).toBe(before)
     expect(await library.list()).toHaveLength(1)
   }, 60_000)
 
-  it('sticker Tenor và ảnh Pixabay tải về dạng ảnh GIF', async () => {
+  it('ảnh Pixabay tải về dạng ảnh', async () => {
     const { online } = service()
-    const stickers = await online.search('tenorSticker', 'wow', null)
-    const sticker = await online.download('tenor', stickers.items[1]!.id)
-    expect(sticker).toMatchObject({ kind: 'image', width: 100, height: 100 })
-    expect(sticker.file).toMatch(/\.gif$/)
     const images = await online.search('pixabayImage', 'dog', null)
     const image = await online.download('pixabay', images.items[0]!.id)
     expect(image).toMatchObject({ kind: 'image', origin: { source: 'pixabay', id: '100' } })
+    expect(image.file).toMatch(/\.gif$/)
   }, 60_000)
 
   it('chỉ tải mục vừa có trong kết quả tìm kiếm', async () => {
     const { online } = service()
-    await expect(online.download('tenor', 'never-seen')).rejects.toThrow('online_unknown')
+    await expect(online.download('pixabay', 'never-seen')).rejects.toThrow('online_unknown')
     expect(existsSync(join(work, 'memes'))).toBe(false)
   })
 })

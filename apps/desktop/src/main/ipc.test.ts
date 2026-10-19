@@ -50,6 +50,30 @@ const updates = {
   install: vi.fn(),
 }
 let validators: { [K in keyof Validators]: Mock<Validators[K]> }
+let ai: Parameters<typeof registerIpc>[1]['ai']
+const speechStatus = {
+  supported: true,
+  platform: 'win32',
+  whisper: { installed: true, models: ['small' as const] },
+  piper: { installed: false, voices: [] },
+}
+const sendProgress = vi.fn()
+const localSpeech = {
+  status: vi.fn(async () => speechStatus),
+  catalog: vi.fn(() => ({
+    models: [{ id: 'small' as const, label: 'Small', sizeMb: 488 }],
+    voices: [{ id: 'vi_VN-vais1000-medium', language: 'vi' as const, label: 'Vais', sizeMb: 63 }],
+  })),
+  install: vi.fn(async (_tool: string, onProgress: (c: number, t: number) => void) => {
+    onProgress(3, 4)
+  }),
+  download: vi.fn(
+    async (_kind: string, _id: string, onProgress: (c: number, t: number) => void) => {
+      onProgress(5, 6)
+    },
+  ),
+  remove: vi.fn(async () => {}),
+}
 
 // Electron biến lỗi ném ra trong handler (kể cả đồng bộ) thành promise bị từ chối.
 const call = async (channel: string, ...args: unknown[]) => handlers.get(channel)!({}, ...args)
@@ -62,8 +86,47 @@ beforeEach(async () => {
   validators = {
     elevenlabs: vi.fn<Validators['elevenlabs']>(async () => ({ ok: true })),
     anthropic: vi.fn<Validators['anthropic']>(async () => ({ ok: true })),
-    tenor: vi.fn<Validators['tenor']>(async () => ({ ok: true })),
     pixabay: vi.fn<Validators['pixabay']>(async () => ({ ok: true })),
+    jamendo: vi.fn<Validators['jamendo']>(async () => ({ ok: true })),
+  }
+  ai = {
+    highlights: vi.fn(async () => [{ start: 1000, end: 21_000, hook: 'Mẹo hay', title: 'Mẹo' }]),
+    transcribe: vi.fn(async () => ({ language: 'vi', words: [] })),
+    getTranscript: vi.fn(async () => null),
+    suggestCuts: vi.fn(async () => []),
+    plan: vi.fn(async () => [{ kind: 'captions' as const }]),
+    direct: vi.fn(async () => ({
+      summary: 'ok',
+      questions: [],
+      commands: [{ kind: 'captions' as const }],
+    })),
+    listLocalModels: vi.fn(async (url: string) => [`${url}:llama3.2`]),
+    benchmarkLocalModel: vi.fn(async () => ({
+      loadMs: 100,
+      tokensPerSecond: 20,
+      totalMs: 900,
+    })),
+    pullLocalModel: vi.fn(
+      async (_url: string, _model: string, onProgress: (p: unknown) => void) => {
+        onProgress({ status: 'pulling', completed: 5, total: 10 })
+      },
+    ),
+    summarize: vi.fn(async () => ({ titles: [], description: '', hashtags: [], chapters: [] })),
+    translate: vi.fn(async (lines: { id: string; text: string }[]) => lines),
+    editCaptions,
+    captionEmojis: vi.fn(async (lines: { id: string; text: string }[]) =>
+      lines.map((l) => ({ id: l.id, emoji: '🔥' })),
+    ),
+    captionKeywords: vi.fn(async (lines: { id: string; text: string }[]) =>
+      lines.map((l) => ({ id: l.id, keywords: [l.text.split(' ')[0]!] })),
+    ),
+    planZooms,
+    voices: vi.fn(async () => [{ id: 'v1', name: 'Anna' }]),
+    speak: vi.fn(async (_dir: string, text: string) => ({
+      file: 'asset-tts-x.mp3',
+      name: text,
+      durationMs: 800,
+    })),
   }
   registerIpc(
     {
@@ -74,6 +137,49 @@ beforeEach(async () => {
       secrets: new SecretStore(join(dir, 'secrets.json'), cipher),
       validators,
       recording,
+      music: {
+        find: vi.fn(async (q: { mood: string }) => ({
+          file: 'music-jam.mp3',
+          name: `Found ${q.mood}`,
+          durationMs: 90_000,
+          addedAt: 1,
+          source: 'jamendo' as const,
+          credit: '"Found" by Artist — CC BY 3.0 (Jamendo)',
+          origin: { source: 'jamendo' as const, id: '1' },
+        })),
+        list: vi.fn(async () => []),
+        pickAndAdd: vi.fn(async () => []),
+        add: vi.fn(async (paths: string[], source: 'youtube' | 'file') =>
+          paths.map((p, i) => ({
+            file: `music-${i}.mp3`,
+            name: p,
+            durationMs: 1000,
+            addedAt: 1,
+            source,
+          })),
+        ),
+        remove: vi.fn(async () => []),
+        useInProject: vi.fn(async (file: string) => ({
+          file: `asset-${file}`,
+          name: 'x',
+          durationMs: 1000,
+        })),
+        recentDownloads: vi.fn(async () => []),
+        openYouTube: vi.fn(async () => {}),
+      },
+      localAi: {
+        sendProgress,
+        installOllama: vi.fn(async (onProgress: (c: number, t: number) => void) => {
+          onProgress(1, 2)
+        }),
+      },
+      localSpeech,
+      window: {
+        minimize: vi.fn(),
+        toggleMaximize: vi.fn(() => true),
+        close: vi.fn(),
+        isMaximized: vi.fn(() => false),
+      },
       live: {
         getConfig: vi.fn(),
         updateConfig: vi.fn(),
@@ -88,23 +194,9 @@ beforeEach(async () => {
         stopComments: vi.fn(),
         caption: vi.fn(async () => ''),
       },
-      ai: {
-        transcribe: vi.fn(async () => ({ language: 'vi', words: [] })),
-        getTranscript: vi.fn(async () => null),
-        suggestCuts: vi.fn(async () => []),
-        summarize: vi.fn(async () => ({ titles: [], description: '', hashtags: [], chapters: [] })),
-        translate: vi.fn(async (lines: { id: string; text: string }[]) => lines),
-        editCaptions,
-        planZooms,
-        voices: vi.fn(async () => [{ id: 'v1', name: 'Anna' }]),
-        speak: vi.fn(async (_dir: string, text: string) => ({
-          file: 'asset-tts-x.mp3',
-          name: text,
-          durationMs: 800,
-        })),
-      },
+      ai,
       online: {
-        search: vi.fn(async () => ({ items: [], next: null, attribution: 'Powered by Tenor' })),
+        search: vi.fn(async () => ({ items: [], next: null, attribution: 'Video từ Pixabay' })),
         download: vi.fn(async (_source: string, id: string) => ({
           file: `meme-${id}.mp4`,
           name: id,
@@ -174,6 +266,7 @@ beforeEach(async () => {
         version: '0.0.0',
         platform: 'win32',
         encryptionAvailable: true,
+        frameless: true,
       }),
     },
   )
@@ -356,6 +449,13 @@ describe('registerIpc', () => {
     await call(IPC.aiEditCaptions, [{ id: 'l0', text: 'a' }, { bad: 1 }], 'viết hoa', 'vi')
     expect(editCaptions).toHaveBeenCalledWith([{ id: 'l0', text: 'a' }], 'viết hoa', 'vi')
     await expect(call(IPC.aiEditCaptions, 'x', '', '')).rejects.toThrow(/không hợp lệ/)
+    expect(
+      await call(IPC.aiCaptionEmojis, [{ id: 'l0', text: 'a' }, { bad: 1 }], 'vi-rất-dài-quá'),
+    ).toEqual([{ id: 'l0', emoji: '🔥' }])
+    expect(await call(IPC.aiCaptionKeywords, [{ id: 'l0', text: 'xin chào' }], 'vi')).toEqual([
+      { id: 'l0', keywords: ['xin'] },
+    ])
+    await expect(call(IPC.aiCaptionEmojis, 'x', 'vi')).rejects.toThrow(/không hợp lệ/)
 
     await call(IPC.aiPlanZooms, 'z.lumora', {
       instruction: 'đặt 2.5×',
@@ -397,15 +497,154 @@ describe('registerIpc', () => {
     )
   })
 
+  it('kho nhạc: thêm đường dẫn với nguồn, từ chối dữ liệu lạ, dùng trong dự án', async () => {
+    expect(await call(IPC.musicAddPaths, ['C:/a.mp3'], 'youtube')).toMatchObject([
+      { name: 'C:/a.mp3', source: 'youtube' },
+    ])
+    expect(await call(IPC.musicAddPaths, ['C:/b.mp3'], 'bogus')).toMatchObject([{ source: 'file' }])
+    await expect(call(IPC.musicAddPaths, 'C:/a.mp3', 'file')).rejects.toThrow('audio_unsupported')
+    expect(await call(IPC.musicUse, 'a.lumora', 'music-1.mp3')).toMatchObject({
+      file: 'asset-music-1.mp3',
+    })
+    expect(await call(IPC.musicRecentDownloads)).toEqual([])
+    await call(IPC.musicOpenYouTube)
+    expect(await call(IPC.musicList)).toEqual([])
+  })
+
+  it('trợ lý AI: chuyển lời yêu cầu và ngữ cảnh đã kiểm tra tới dịch vụ AI', async () => {
+    expect(
+      await call(IPC.aiPlan, 'thêm phụ đề', { language: 'vi', durationMs: 5000, hasTranscript: 1 }),
+    ).toEqual([{ kind: 'captions' }])
+    await expect(call(IPC.aiPlan, 42, {})).rejects.toThrow('plan_input')
+    // Địa chỉ Ollama được chuẩn hóa trước khi gọi.
+    expect(await call(IPC.aiLocalModels, 'http://localhost:11434/')).toEqual([
+      'http://localhost:11434:llama3.2',
+    ])
+    expect(await call(IPC.aiLocalModels, 'junk')).toEqual(['http://127.0.0.1:11434:llama3.2'])
+    // Tải model: tiến độ được chuyển xuống giao diện; tên model lạ bị từ chối.
+    await call(IPC.aiPullModel, 'http://127.0.0.1:11434', 'llama3.2')
+    await expect(call(IPC.aiPullModel, 'http://127.0.0.1:11434', 'bad model!')).rejects.toThrow(
+      'ollama_model',
+    )
+    await call(IPC.aiInstallOllama)
+    expect(await call(IPC.aiBenchmark, 'http://127.0.0.1:11434', 'llama3.2')).toEqual({
+      loadMs: 100,
+      tokensPerSecond: 20,
+      totalMs: 900,
+    })
+  })
+
+  it('giọng nói cục bộ: trạng thái, danh mục, cài và tải báo tiến độ kind speech, từ chối tham số lạ', async () => {
+    expect(await call(IPC.aiSpeechStatus)).toEqual(speechStatus)
+    expect(await call(IPC.aiSpeechCatalog)).toMatchObject({
+      models: [{ id: 'small' }],
+      voices: [{ id: 'vi_VN-vais1000-medium', language: 'vi' }],
+    })
+    // Cài công cụ: tiến độ chuyển xuống giao diện với item là tên công cụ.
+    await call(IPC.aiSpeechInstall, 'whisper')
+    expect(localSpeech.install).toHaveBeenCalledWith('whisper', expect.any(Function))
+    expect(sendProgress).toHaveBeenCalledWith({
+      kind: 'speech',
+      status: 'download',
+      item: 'whisper',
+      completed: 3,
+      total: 4,
+    })
+    await expect(call(IPC.aiSpeechInstall, 'ollama')).rejects.toThrow('speech_input')
+    // Tải model / giọng: item là tên model hoặc giọng; loại và tên lạ bị từ chối.
+    await call(IPC.aiSpeechDownload, 'model', 'large-v3-turbo-q5_0')
+    expect(localSpeech.download).toHaveBeenCalledWith(
+      'model',
+      'large-v3-turbo-q5_0',
+      expect.any(Function),
+    )
+    expect(sendProgress).toHaveBeenCalledWith({
+      kind: 'speech',
+      status: 'download',
+      item: 'large-v3-turbo-q5_0',
+      completed: 5,
+      total: 6,
+    })
+    await call(IPC.aiSpeechDownload, 'voice', 'vi_VN-vais1000-medium')
+    await expect(call(IPC.aiSpeechDownload, 'font', 'small')).rejects.toThrow('speech_input')
+    await expect(call(IPC.aiSpeechDownload, 'model', '../etc')).rejects.toThrow('speech_input')
+    await expect(call(IPC.aiSpeechDownload, 'model', 42)).rejects.toThrow('speech_input')
+    await expect(call(IPC.aiSpeechDownload, 'voice', '')).rejects.toThrow('speech_input')
+    await call(IPC.aiSpeechRemove, 'voice', 'vi_VN-vais1000-medium')
+    expect(localSpeech.remove).toHaveBeenCalledWith('voice', 'vi_VN-vais1000-medium')
+    await expect(call(IPC.aiSpeechRemove, 'model', 'a b')).rejects.toThrow('speech_input')
+    expect(localSpeech.remove).toHaveBeenCalledTimes(1)
+  })
+
+  it('đạo diễn AI: kiểm tra câu yêu cầu, chuẩn hóa ngữ cảnh lộn xộn rồi gọi dịch vụ AI', async () => {
+    const direct = ai.direct as Mock
+    expect(
+      await call(IPC.aiDirect, 'làm cho hay', {
+        language: 'vi-VN-extra-long',
+        durationMs: 'nope',
+        hasTranscript: 1,
+        hasCursor: true,
+        musicTracks: ['Lofi chill', 42, null],
+        projects: 'not-a-list',
+        memory: 'Quy tắc: luôn dùng phụ đề tiktok',
+        history: [
+          { role: 'user', text: 'thêm nhạc', at: 5 },
+          { role: 'robot', text: 'bỏ qua' },
+          { role: 'ai', text: 'Đã thêm nhạc.', at: 'x' },
+          'junk',
+        ],
+        transcript: '[0:00.0] Xin chào',
+        clicks: [1500, 'x', -5, 4200],
+        edit: 'duration 7 s',
+      }),
+    ).toEqual({ summary: 'ok', questions: [], commands: [{ kind: 'captions' }] })
+    expect(direct).toHaveBeenCalledWith('làm cho hay', {
+      language: 'vi-VN-extr',
+      durationMs: 0,
+      hasTranscript: false,
+      hasCursor: true,
+      musicTracks: ['Lofi chill'],
+      projects: [],
+      memory: 'Quy tắc: luôn dùng phụ đề tiktok',
+      history: [
+        { role: 'user', text: 'thêm nhạc', at: 5 },
+        { role: 'ai', text: 'Đã thêm nhạc.', at: 0 },
+      ],
+      transcript: '[0:00.0] Xin chào',
+      clicks: [1500, 4200],
+      edit: 'duration 7 s',
+    })
+    // Ngữ cảnh không phải object: dùng giá trị mặc định.
+    await call(IPC.aiDirect, 'x', null)
+    expect(direct).toHaveBeenLastCalledWith(
+      'x',
+      expect.objectContaining({ memory: '', history: [], transcript: '', clicks: [], edit: '' }),
+    )
+    await expect(call(IPC.aiDirect, 42, {})).rejects.toThrow('direct_input')
+    await expect(call(IPC.aiDirect, 'x'.repeat(2001), {})).rejects.toThrow('direct_input')
+  })
+
+  it('cửa sổ không viền: thu nhỏ, phóng to / thu về, đóng, hỏi trạng thái', async () => {
+    await call(IPC.windowMinimize)
+    expect(await call(IPC.windowToggleMaximize)).toBe(true)
+    expect(await call(IPC.windowIsMaximized)).toBe(false)
+    await call(IPC.windowClose)
+  })
+
   it('kho online: chỉ nhận nguồn đã biết, từ khóa ngắn; tải theo mã; bộ nhớ đệm', async () => {
-    expect(await call(IPC.onlineSearch, 'tenor', 'bruh', null)).toMatchObject({ items: [] })
+    expect(await call(IPC.onlineSearch, 'pixabayVideo', 'bruh', null)).toMatchObject({
+      items: [],
+    })
     await expect(call(IPC.onlineSearch, 'giphy', 'x', null)).rejects.toThrow('online_unknown')
-    await expect(call(IPC.onlineSearch, 'tenor', 'x'.repeat(101), null)).rejects.toThrow(
+    // Tenor đã ngừng hoạt động: không còn là nguồn hợp lệ.
+    await expect(call(IPC.onlineSearch, 'tenor', 'x', null)).rejects.toThrow('online_unknown')
+    await expect(call(IPC.onlineSearch, 'pixabayVideo', 'x'.repeat(101), null)).rejects.toThrow(
       'online_query',
     )
-    await expect(call(IPC.onlineSearch, 'tenor', 'x', 5)).rejects.toThrow('online_query')
+    await expect(call(IPC.onlineSearch, 'pixabayVideo', 'x', 5)).rejects.toThrow('online_query')
     expect(await call(IPC.onlineDownload, 'pixabay', '42')).toMatchObject({ file: 'meme-42.mp4' })
     await expect(call(IPC.onlineDownload, 'http://evil', '42')).rejects.toThrow('online_unknown')
+    await expect(call(IPC.onlineDownload, 'tenor', '42')).rejects.toThrow('online_unknown')
     expect(await call(IPC.cacheInfo)).toBe(1234)
     expect(await call(IPC.cacheClear)).toBe(1234)
   })

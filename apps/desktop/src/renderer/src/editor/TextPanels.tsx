@@ -32,6 +32,7 @@ import { lumora } from '../api'
 import { useAppStore } from '../store/app'
 import { loadFonts } from './fonts'
 import { VoiceSettings } from './library/AudioTab'
+import { usePreviewHover } from './library/common'
 import { drawShape } from './shape-draw'
 import { dragProps } from './library-drag'
 import { useEditorStore } from './store'
@@ -79,6 +80,49 @@ export function textStyleCss(s: TextStyleProps, px = 18): CSSProperties {
 }
 
 /** Thư viện "Văn bản": 24 mẫu chữ có xem trước; bấm để thêm tại đầu phát. */
+/** Ô mẫu chữ: rê chuột để xem thử trên khung xem trước, bấm để thêm. */
+function TextTemplateCard({
+  id,
+  style,
+  onAdd,
+}: {
+  id: string
+  style: TextStyleProps
+  onAdd: () => void
+}) {
+  const { t } = useTranslation()
+  const hover = usePreviewHover(() => ({
+    kind: 'overlay',
+    overlay: {
+      kind: 'text',
+      text: t('editor.library.defaultText'),
+      style: (TEXT_STYLES as readonly string[]).includes(id) ? (id as TextStyle) : 'title',
+      color: style.color,
+      textStyle: style,
+    },
+  }))
+  return (
+    <button
+      type="button"
+      data-testid={`text-add-${id}`}
+      {...dragProps({ kind: 'text', id, text: t('editor.library.defaultText') })}
+      {...hover.props}
+      aria-label={t(`editor.textTemplates.${id}`)}
+      data-tooltip={t(`editor.textTemplates.${id}`)}
+      onClick={() => {
+        hover.stop()
+        onAdd()
+      }}
+      className="flex flex-col gap-1 rounded-lg p-1 text-left text-[11px] text-muted hover:bg-surface-2 hover:text-text"
+    >
+      <span className="flex aspect-video items-center justify-center overflow-hidden rounded-md bg-gradient-to-br from-slate-600 to-slate-900">
+        <span style={textStyleCss(style, 17)}>{t('editor.library.sample')}</span>
+      </span>
+      <span className="truncate">{t(`editor.textTemplates.${id}`)}</span>
+    </button>
+  )
+}
+
 export function TextTemplatesTab() {
   const { t } = useTranslation()
   const addOverlay = useEditorStore((s) => s.addOverlay)
@@ -104,21 +148,7 @@ export function TextTemplatesTab() {
       </button>
       <div className="grid grid-cols-2 gap-2">
         {TEXT_TEMPLATES.map(({ id, style }) => (
-          <button
-            key={id}
-            type="button"
-            data-testid={`text-add-${id}`}
-            {...dragProps({ kind: 'text', id, text: t('editor.library.defaultText') })}
-            aria-label={t(`editor.textTemplates.${id}`)}
-            data-tooltip={t(`editor.textTemplates.${id}`)}
-            onClick={() => add(id, style)}
-            className="flex flex-col gap-1 rounded-lg p-1 text-left text-[11px] text-muted hover:bg-surface-2 hover:text-text"
-          >
-            <span className="flex aspect-video items-center justify-center overflow-hidden rounded-md bg-gradient-to-br from-slate-600 to-slate-900">
-              <span style={textStyleCss(style, 17)}>{t('editor.library.sample')}</span>
-            </span>
-            <span className="truncate">{t(`editor.textTemplates.${id}`)}</span>
-          </button>
+          <TextTemplateCard key={id} id={id} style={style} onAdd={() => add(id, style)} />
         ))}
       </div>
       <p className="text-[11px] text-muted">{t('editor.library.textHint')}</p>

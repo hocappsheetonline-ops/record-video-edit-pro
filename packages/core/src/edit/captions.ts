@@ -26,6 +26,10 @@ export interface CaptionLine {
   edited: boolean
   /** Bản dịch (phụ đề song ngữ: hiện dưới dòng gốc). */
   translation?: string
+  /** Emoji theo nội dung dòng (kiểu app Captions), vẽ ngay sau chữ. */
+  emoji?: string
+  /** Từ khóa của dòng (đúng chữ như trong dòng) được tô màu riêng. */
+  keywords?: string[]
 }
 
 export interface CaptionsState {
@@ -218,10 +222,19 @@ export function captionSearchPattern(
   options: CaptionReplaceOptions = {},
 ): RegExp | null {
   if (!find) return null
-  const body = options.wholeWord
-    ? `(?<![\\p{L}\\p{N}])${escapeRegExp(find)}(?![\\p{L}\\p{N}])`
-    : escapeRegExp(find)
+  const needle = escapeRegExp(find.normalize('NFC'))
+  const body = options.wholeWord ? `(?<![\\p{L}\\p{N}])${needle}(?![\\p{L}\\p{N}])` : needle
   return new RegExp(body, `gu${options.matchCase ? '' : 'i'}`)
+}
+
+/**
+ * Chuỗi có khớp biểu thức tìm không. Nội dung được chuẩn hóa NFC trước khi so (phụ đề dán từ
+ * macOS hay vài nguồn nhận dạng để dấu tiếng Việt ở dạng tách rời, gõ "chào" sẽ không thấy).
+ */
+export function captionTextMatches(pattern: RegExp, text: string | undefined): boolean {
+  if (text === undefined) return false
+  pattern.lastIndex = 0
+  return pattern.test(text.normalize('NFC'))
 }
 
 /** Số dòng phụ đề (nội dung hoặc bản dịch) chứa chuỗi tìm. */
@@ -232,11 +245,9 @@ export function countCaptionMatches(
 ): number {
   const pattern = captionSearchPattern(find, options)
   if (!pattern) return 0
-  const test = (text: string | undefined) => {
-    pattern.lastIndex = 0
-    return text !== undefined && pattern.test(text)
-  }
-  return lines.filter((l) => test(l.text) || test(l.translation)).length
+  return lines.filter(
+    (l) => captionTextMatches(pattern, l.text) || captionTextMatches(pattern, l.translation),
+  ).length
 }
 
 /**
@@ -252,16 +263,14 @@ export function replaceInCaptions(
 ): { lines: CaptionLine[]; count: number } {
   const pattern = captionSearchPattern(find, options)
   if (!pattern) return { lines: [...lines], count: 0 }
-  const has = (text: string) => {
-    pattern.lastIndex = 0
-    return pattern.test(text)
-  }
-  const swap = (text: string) => text.replace(pattern, replacement)
+  const has = (text: string | undefined) => captionTextMatches(pattern, text)
+  // Hàm thay thế để "$" trong chuỗi thay không bị hiểu là mẫu đặc biệt ($&, $1, $$…).
+  const swap = (text: string) => text.normalize('NFC').replace(pattern, () => replacement)
   let count = 0
-  const result = lines.map((line) => {
+  const result = lines.flatMap((line): CaptionLine[] => {
     const inText = has(line.text)
-    const inTranslation = line.translation !== undefined && has(line.translation)
-    if (!inText && !inTranslation) return line
+    const inTranslation = has(line.translation)
+    if (!inText && !inTranslation) return [line]
     count += 1
     let next: CaptionLine = { ...line }
     if (inTranslation) next.translation = swap(line.translation!)
@@ -283,7 +292,8 @@ export function replaceInCaptions(
         }
       }
     }
-    return next
+    // Thay cả dòng bằng rỗng thì bỏ dòng (không để ô trống vẫn chiếm thời lượng trên video).
+    return next.text.trim() === '' ? [] : [next]
   })
   return { lines: result, count }
 }

@@ -85,6 +85,24 @@ describe('các lệnh phụ', () => {
     )
   })
 
+  it('track âm thanh của MediaRecorder: sửa mốc thời gian (điền im lặng chỗ hụt) và mã hóa lại Opus 48 kHz', async () => {
+    const { buildAudioRemuxArgs, buildTrackRemuxArgs, AUDIO_TIMESTAMP_FIX } = await import('./args')
+    const args = buildAudioRemuxArgs('seg0-mic.rec.webm', 'seg0-mic.webm')
+    expect(args.join(' ')).toContain(
+      `-i seg0-mic.rec.webm -vn -af ${AUDIO_TIMESTAMP_FIX} -c:a libopus -b:a 160k -y seg0-mic.webm`,
+    )
+    expect(AUDIO_TIMESTAMP_FIX).toContain('async=1')
+    expect(AUDIO_TIMESTAMP_FIX).toContain('first_pts=0')
+    // Theo đuôi file đích: .webm là âm thanh (mic / tiếng máy), .mkv là video (chép luồng).
+    expect(buildTrackRemuxArgs('a.rec.webm', 'seg0-mic.webm')).toEqual(
+      args.map((a) => a.replace('seg0-mic.rec.webm', 'a.rec.webm')),
+    )
+    expect(buildTrackRemuxArgs('a.rec.webm', 'seg0-screen.mkv')).toEqual(
+      buildRemuxArgs('a.rec.webm', 'seg0-screen.mkv'),
+    )
+    expect(buildTrackRemuxArgs('a.rec.webm', 'seg0-screen.mkv.tmp.mkv')).toContain('copy')
+  })
+
   it('thumbnail lấy một khung hình', () => {
     expect(buildThumbnailArgs('a.mkv', 't.jpg').join(' ')).toContain('-frames:v 1')
   })
@@ -98,10 +116,48 @@ describe('xuất video: ghép âm thanh', () => {
     expect(atempoChain(0.25)).toEqual(['atempo=0.5', 'atempo=0.5'])
   })
 
+  it('nhạc nền tự giảm khi có lời: thêm bộ lọc volume theo biểu thức, đặt trong nháy đơn', async () => {
+    const { buildExportMuxArgs } = await import('./args')
+    const expr = '1-0.7*clip(min((t-(0.2))/0.3,(1.8-t)/0.3),0,1)'
+    const args = buildExportMuxArgs({
+      video: 'v.mp4',
+      durationS: 5,
+      output: 'o.mp4',
+      pieces: [
+        {
+          path: 'song.mp3',
+          mediaStart: 0,
+          duration: 5,
+          outputStart: 0,
+          speed: 1,
+          volume: 0.5,
+          duckExpr: expr,
+        },
+      ],
+    })
+    const graph = args[args.indexOf('-filter_complex') + 1]!
+    expect(graph).toContain(
+      `volume=0.5,volume=volume='${expr}':eval=frame,afade=t=in:st=0:d=0.005,afade=t=out:st=4.995:d=0.005,adelay=0:all=1`,
+    )
+  })
+
   it('không có âm thanh thì chỉ chép video', async () => {
     const { buildExportMuxArgs } = await import('./args')
     const args = buildExportMuxArgs({ video: 'v.mp4', pieces: [], durationS: 3, output: 'o.mp4' })
     expect(args.join(' ')).toContain('-map 0:v -c:v copy -an -movflags +faststart -t 3 o.mp4')
+  })
+
+  it('nâng cao chất lượng: mã hóa lại với bộ lọc giảm nhiễu + làm nét thay vì chép video', async () => {
+    const { buildExportMuxArgs, ENHANCE_FILTER } = await import('./args')
+    const args = buildExportMuxArgs({
+      video: 'v.mp4',
+      pieces: [],
+      durationS: 3,
+      output: 'o.mp4',
+      videoFilter: ENHANCE_FILTER,
+    })
+    expect(args.join(' ')).toContain(`-vf ${ENHANCE_FILTER} -c:v libx264 -preset medium -crf 18`)
+    expect(args).not.toContain('copy')
   })
 
   it('cắt, đổi tốc độ, đặt vị trí và trộn các mảnh âm thanh', async () => {
@@ -118,16 +174,37 @@ describe('xuất video: ghép âm thanh', () => {
     })
     expect(args.slice(4, 10)).toEqual(['-i', 'v.mp4', '-i', 'mic.webm', '-i', 'sys.webm'])
     const graph = args[args.indexOf('-filter_complex') + 1]!
+    // Mỗi mảnh: về 48 kHz, vuốt 5 ms hai đầu (hết tiếng "tách" ở điểm cắt); sau khi trộn chặn đỉnh
+    // (không rè khi mic + tiếng máy + nhạc cộng lại vượt 0 dB), có bù độ trễ nên tiếng không lệch hình.
     expect(graph.split(';')).toEqual([
       '[1:a]asplit=2[f0_0][f0_1]',
       '[2:a]anull[f1_0]',
-      '[f0_0]atrim=start=1.2:end=3.2,asetpts=PTS-STARTPTS,volume=1,adelay=0:all=1[p0]',
-      '[f0_1]atrim=start=5:end=7,asetpts=PTS-STARTPTS,atempo=2,volume=1,adelay=2000:all=1[p1]',
-      '[f1_0]atrim=start=0:end=1.5,asetpts=PTS-STARTPTS,volume=0.5,adelay=500:all=1[p2]',
-      '[p0][p1][p2]amix=inputs=3:duration=longest:normalize=0,apad=whole_dur=3,asetpts=N/SR/TB[aout]',
+      '[f0_0]atrim=start=1.2:end=3.2,asetpts=PTS-STARTPTS,aresample=48000,volume=1,afade=t=in:st=0:d=0.005,afade=t=out:st=1.995:d=0.005,adelay=0:all=1[p0]',
+      '[f0_1]atrim=start=5:end=7,asetpts=PTS-STARTPTS,aresample=48000,atempo=2,volume=1,afade=t=in:st=0:d=0.005,afade=t=out:st=0.995:d=0.005,adelay=2000:all=1[p1]',
+      '[f1_0]atrim=start=0:end=1.5,asetpts=PTS-STARTPTS,aresample=48000,volume=0.5,afade=t=in:st=0:d=0.005,afade=t=out:st=1.495:d=0.005,adelay=500:all=1[p2]',
+      '[p0][p1][p2]amix=inputs=3:duration=longest:normalize=0,alimiter=limit=0.97:attack=5:release=50:level=0:latency=1,apad=whole_dur=3,asetpts=N/SR/TB[aout]',
     ])
     expect(args.join(' ')).toContain('-map 0:v -map [aout] -c:v copy -c:a aac')
     expect(args.slice(-4)).toEqual(['+faststart', '-t', '3', 'o.mp4'])
+  })
+})
+
+describe('xuất video: vuốt hai đầu mảnh', () => {
+  it('fade do người dùng đặt thay cho vuốt 5 ms; mảnh quá ngắn thì không vuốt', async () => {
+    const { buildExportMuxArgs } = await import('./args')
+    const graph = (pieces: Parameters<typeof buildExportMuxArgs>[0]['pieces']) => {
+      const args = buildExportMuxArgs({ video: 'v.mp4', pieces, durationS: 10, output: 'o.mp4' })
+      return args[args.indexOf('-filter_complex') + 1]!
+    }
+    const base = { path: 'song.mp3', mediaStart: 0, outputStart: 0, speed: 1, volume: 1 }
+    expect(graph([{ ...base, duration: 8, fadeIn: 1, fadeOut: 2 }])).toContain(
+      'afade=t=in:st=0:d=1,afade=t=out:st=6:d=2,adelay=0',
+    )
+    // Chỉ đặt fade vào: đầu ra vẫn vuốt 5 ms.
+    expect(graph([{ ...base, duration: 8, fadeIn: 1 }])).toContain(
+      'afade=t=in:st=0:d=1,afade=t=out:st=7.995:d=0.005,adelay=0',
+    )
+    expect(graph([{ ...base, duration: 0.015 }])).not.toContain('afade')
   })
 })
 

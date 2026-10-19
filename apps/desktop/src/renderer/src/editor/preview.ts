@@ -4,6 +4,7 @@ import {
   audioClipMediaTime,
   clipGain,
   clipSpeedAt,
+  duckGainAt,
   isDefaultFx,
   mediaTime,
   outputDuration,
@@ -18,7 +19,10 @@ import {
   type Size,
   type SourceSegment,
   type TrackKind,
+  type DuckRange,
+  type Waveform,
   applyTrackState,
+  voiceRanges,
 } from '@lumora/core'
 import { mediaUrl } from '../lib/media'
 import { drawScene, videoElementSource, type AnyCanvas } from './draw'
@@ -29,9 +33,12 @@ import { OverlayImages } from './overlay-images'
 import { computeScene } from './scene'
 import { useAppStore } from '../store/app'
 import { fxKeyOf, revKeyOf, useEditorStore } from './store'
+import { withPreview, type TryPreview } from './try-preview'
 
 type MediaEl = HTMLVideoElement | HTMLAudioElement
 const RESYNC_S = 0.25
+/** Bậc làm tròn tốc độ phát của thẻ media (xem `drive`). */
+const RATE_STEP = 0.02
 
 /** Phát thẻ media, bỏ qua lỗi (trình duyệt chặn tự phát, thẻ đã bị gỡ…). */
 function safePlay(el: HTMLMediaElement) {
@@ -128,8 +135,62 @@ export class PreviewEngine {
   private drawn: unknown[] = []
   private changedSinceDraw(): boolean {
     const s = useEditorStore.getState()
-    const deps = [s.edit, s.time, s.videoSize, s.cursor, s.follow, s.selection, s.playing]
+    const deps = [
+      s.edit,
+      s.time,
+      s.videoSize,
+      s.cursor,
+      s.follow,
+      s.selection,
+      s.playing,
+      s.preview,
+    ]
     return deps.some((d, i) => d !== this.drawn[i])
+  }
+
+  /** Bản chỉnh sửa đang vẽ: có mục xem thử thì ghép vào (nhớ lại để không tạo mới mỗi khung). */
+  private previewed: {
+    base: EditState
+    preview: TryPreview
+    start: number
+    out: EditState
+  } | null = null
+  private editToDraw(): EditState | null {
+    const s = useEditorStore.getState()
+    if (!s.edit) return null
+    if (!s.preview) {
+      this.previewed = null
+      return s.edit
+    }
+    const start = s.previewWindow?.start ?? s.time
+    const p = this.previewed
+    if (p && p.base === s.edit && p.preview === s.preview && p.start === start) return p.out
+    const out = withPreview(s.edit, s.preview, start)
+    this.previewed = { base: s.edit, preview: s.preview, start, out }
+    return out
+  }
+
+  /** Nghe thử nhạc trong kho (rê / bấm ở thư viện): phát lặp, tắt khi thôi. */
+  private audition: HTMLAudioElement | null = null
+  private syncAudition(preview: TryPreview | null) {
+    const url = preview?.kind === 'music' ? preview.url : null
+    if (!url) {
+      if (this.audition && !this.audition.paused) this.audition.pause()
+      return
+    }
+    if (!this.audition) {
+      this.audition = document.createElement('audio')
+      this.audition.preload = 'auto'
+      this.audition.loop = true
+      this.audition.volume = 0.8
+    }
+    const el = this.audition
+    if (el.dataset.src !== url) {
+      el.dataset.src = url
+      el.src = url
+      el.currentTime = 0
+    }
+    if (el.paused) safePlay(el)
   }
 
   /** File cần phát: bản đã lọc tạp âm / hiệu ứng nếu đã xử lý xong (và không giữ "nghe bản gốc"). */
@@ -165,14 +226,20 @@ export class PreviewEngine {
     if (this.disposed) return
     const store = useEditorStore.getState()
     const { playing } = store
+    this.syncAudition(store.preview)
     // Hàng bị ẩn / tắt tiếng trên timeline: không vẽ / không phát (giống khi xuất).
-    const edit = store.edit && applyTrackState(store.edit)
+    const drawn = this.editToDraw()
+    const edit = drawn && applyTrackState(drawn)
     if (edit) {
       if (playing) {
         const dt = this.lastTick ? now - this.lastTick : 0
         const duration = outputDuration(edit.clips)
         const next = store.time + dt
-        if (next >= duration) {
+        const loop = store.previewWindow
+        if (loop && next >= loop.end) {
+          // Đang xem thử: phát lặp trong khoảng xem thử.
+          store.setTime(loop.start)
+        } else if (next >= duration) {
           store.setTime(duration)
           store.setPlaying(false)
         } else store.setTime(next)
@@ -211,8 +278,13 @@ export class PreviewEngine {
 
   /** Đưa một thẻ media tới đúng thời điểm, phát / dừng theo trạng thái và tốc độ. */
   private drive(el: MediaEl, target: number, playing: boolean, rate: number) {
-    if (rate > 0 && Math.abs(el.playbackRate - rate) > 0.01)
-      el.playbackRate = Math.min(16, Math.max(0.0625, rate))
+    // Clip có đường cong tốc độ đổi tốc độ liên tục: làm tròn theo bậc 0.02 để không đặt lại
+    // playbackRate mỗi khung hình (mỗi lần đổi, bộ kéo giãn âm thanh của Chromium khựng một chút,
+    // nghe lạo xạo). Lệch tối đa 1 % được kéo về bằng mốc đồng bộ RESYNC_S như bình thường.
+    if (rate > 0) {
+      const want = Math.min(16, Math.max(0.0625, Math.round(rate / RATE_STEP) * RATE_STEP))
+      if (Math.abs(el.playbackRate - want) > 1e-6) el.playbackRate = want
+    }
     const drift = Math.abs(el.currentTime - target)
     if (playing && rate > 0) {
       if (drift > RESYNC_S) el.currentTime = target
@@ -300,8 +372,22 @@ export class PreviewEngine {
     for (const el of this.revMedia.values()) if (!usedRev.has(el) && !el.paused) el.pause()
   }
 
-  /** Nhạc nền / hiệu ứng: phát đúng đoạn, đúng vị trí trong file, âm lượng theo fade. */
+  /** Khoảng có lời thoại (để tự giảm nhạc), tính lại khi clip / đoạn âm thanh / dạng sóng đổi. */
+  private duckCache: { key: readonly unknown[]; ranges: DuckRange[] } | null = null
+
+  private duckRanges(edit: EditState, wave: Waveform | null): DuckRange[] {
+    const key = [edit.clips, edit.audioClips, wave]
+    const hit = this.duckCache
+    if (hit && hit.key.every((k, i) => k === key[i])) return hit.ranges
+    const ranges = voiceRanges(wave, edit.clips, edit.audioClips, outputDuration(edit.clips))
+    this.duckCache = { key, ranges }
+    return ranges
+  }
+
+  /** Nhạc nền / hiệu ứng: phát đúng đoạn, đúng vị trí trong file, âm lượng theo fade (và tự giảm khi có lời). */
   private syncAudioClips(edit: EditState, time: number, playing: boolean) {
+    const duck = edit.audio.duck
+    const ranges = duck.enabled ? this.duckRanges(edit, useEditorStore.getState().waveform) : null
     const ids = new Set(edit.audioClips.map((c) => c.id))
     for (const [id, el] of this.audioClips) {
       if (ids.has(id)) continue
@@ -322,7 +408,8 @@ export class PreviewEngine {
         if (!el.paused) el.pause()
         continue
       }
-      el.volume = Math.min(1, audioClipGain(clip, time))
+      const ducked = ranges && clip.kind === 'music' ? duckGainAt(ranges, time, duck.level) : 1
+      el.volume = Math.min(1, audioClipGain(clip, time) * ducked)
       const target = at / 1000
       if (Math.abs(el.currentTime - target) > RESYNC_S) el.currentTime = target
       if (el.paused) safePlay(el)
@@ -389,10 +476,12 @@ export class PreviewEngine {
       store.follow,
       store.selection,
       store.playing,
+      store.preview,
     ]
     const hit = outputToSource(edit.clips, time)
     const source = hit?.source ?? 0
-    const item = segmentAt(this.segments, source)
+    // Timeline trống (đã xóa hết clip): chỉ vẽ nền, không lấy khung hình nào của bản quay.
+    const item = hit ? segmentAt(this.segments, source) : null
     const size = this.outputSize()
     if (this.canvas.width !== size.width || this.canvas.height !== size.height) {
       this.canvas.width = size.width
@@ -562,6 +651,11 @@ export class PreviewEngine {
   dispose() {
     this.disposed = true
     cancelAnimationFrame(this.frame)
+    if (this.audition) {
+      this.audition.pause()
+      this.audition.removeAttribute('src')
+      this.audition = null
+    }
     for (const el of this.media.values()) {
       el.pause()
       el.removeAttribute('src')

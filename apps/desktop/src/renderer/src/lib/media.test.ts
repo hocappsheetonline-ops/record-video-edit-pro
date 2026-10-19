@@ -1,5 +1,33 @@
 import { describe, expect, it, vi } from 'vitest'
-import { mediaUrl, pickMimeType, TrackRecorder, type ChunkSink } from './media'
+import {
+  libraryUrl,
+  mediaUrl,
+  micConstraints,
+  pickMimeType,
+  TrackRecorder,
+  type ChunkSink,
+} from './media'
+
+describe('micConstraints', () => {
+  it('quay / lồng tiếng thu thô 48 kHz mono: tắt khử vang, lọc ồn, tự chỉnh gain của Chromium', () => {
+    expect(micConstraints('mic-1', 'raw')).toEqual({
+      deviceId: { exact: 'mic-1' },
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+      sampleRate: { ideal: 48000 },
+      channelCount: { ideal: 1 },
+    })
+  })
+
+  it('livestream vẫn bật xử lý giọng (cần khử vang tiếng loa)', () => {
+    expect(micConstraints('mic-1', 'voice')).toMatchObject({
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    })
+  })
+})
 
 describe('pickMimeType', () => {
   it('ưu tiên H.264 cho video và Opus cho âm thanh', () => {
@@ -21,6 +49,22 @@ describe('mediaUrl', () => {
     expect(mediaUrl('2026-10-12 09.00.00.lumora', 'seg0-screen.mkv')).toBe(
       'lumora-media://projects/2026-10-12%2009.00.00.lumora/seg0-screen.mkv',
     )
+  })
+
+  it('giữ nguyên khi file đã là URL tuyệt đối', () => {
+    const lib = libraryUrl('memes', 'meme-1.gif')
+    expect(mediaUrl('a.lumora', lib)).toBe(lib)
+    expect(mediaUrl('a.lumora', 'https://example.com/x.mp4')).toBe('https://example.com/x.mp4')
+    expect(mediaUrl('a.lumora', 'c:v.mp4')).toBe('lumora-media://projects/a.lumora/c%3Av.mp4')
+  })
+})
+
+describe('libraryUrl', () => {
+  it('trỏ tới thư viện chung và mã hóa tên file', () => {
+    expect(libraryUrl('music', 'music-abc123.mp3')).toBe(
+      'lumora-media://library/music/music-abc123.mp3',
+    )
+    expect(libraryUrl('memes', 'a b.gif')).toBe('lumora-media://library/memes/a%20b.gif')
   })
 })
 

@@ -95,12 +95,12 @@ export function TooltipLayer() {
       ref={ref}
       role="tooltip"
       data-testid="tooltip"
-      className="pointer-events-none fixed z-[100] flex max-w-xs items-center gap-2 rounded-md border border-border bg-surface-2 px-2 py-1 text-xs text-text shadow-lg"
+      className="glass-strong pointer-events-none fixed z-[100] flex max-w-xs items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs text-text shadow-lg"
       style={pos ? { left: pos.left, top: pos.top } : { left: -9999, top: -9999 }}
     >
       <span>{tip.text}</span>
       {tip.shortcut && (
-        <kbd className="rounded border border-border bg-bg px-1 font-sans text-[10px] text-muted">
+        <kbd className="rounded-md border border-border bg-surface-2 px-1 text-[10px] text-muted">
           {tip.shortcut}
         </kbd>
       )}

@@ -4,12 +4,17 @@ import { Check, CloudOff, Download, KeyRound, Loader2, Play } from 'lucide-react
 import type { MemeItem, OnlineItem, OnlineSearch, OnlineSource } from '@shared/ipc'
 import { lumora } from '../../api'
 import { useAppStore } from '../../store/app'
-import { EmptyState, ErrorNote, formatDuration, SearchBox, useErrorText } from './common'
+import {
+  EmptyState,
+  ErrorNote,
+  formatDuration,
+  SearchBox,
+  useErrorText,
+  usePreviewHover,
+} from './common'
 
 /** Từ khóa gợi ý cho từng nguồn (bấm là tìm luôn). */
 const SUGGESTIONS: Record<OnlineSource, string[]> = {
-  tenor: ['bruh', 'green screen', 'cat', 'laugh', 'cry', 'wow', 'fail', 'dance'],
-  tenorSticker: ['wow', 'lol', 'heart', 'fire', 'arrow', 'subscribe', 'cat', 'ok'],
   pixabayVideo: ['city', 'nature', 'technology', 'abstract', 'ocean', 'night'],
   pixabayImage: ['background', 'texture', 'gradient', 'workspace', 'sky'],
 }
@@ -28,6 +33,18 @@ function ResultCard({
   const [hover, setHover] = useState(false)
   const playable = item.kind === 'video' && item.previewUrl !== item.thumbUrl
   const square = item.kind === 'sticker'
+  // Xem thử ngay trên khung xem trước bằng bản nhỏ (chưa tải về).
+  const tryIt = usePreviewHover(() => ({
+    kind: 'overlay',
+    overlay: {
+      kind: item.kind === 'video' ? 'video' : 'image',
+      file: item.previewUrl,
+      text: item.title,
+      aspect: item.width / Math.max(1, item.height),
+      sourceDuration: item.kind === 'video' ? item.durationMs : 0,
+      hasAudio: false,
+    },
+  }))
   return (
     <button
       type="button"
@@ -36,9 +53,20 @@ function ResultCard({
       disabled={state === 'busy'}
       data-tooltip={item.title}
       aria-label={item.title}
-      onClick={onClick}
-      onPointerEnter={() => setHover(true)}
-      onPointerLeave={() => setHover(false)}
+      onClick={() => {
+        tryIt.stop()
+        onClick()
+      }}
+      onFocus={tryIt.props.onFocus}
+      onBlur={tryIt.props.onBlur}
+      onPointerEnter={() => {
+        setHover(true)
+        tryIt.props.onPointerEnter?.()
+      }}
+      onPointerLeave={() => {
+        setHover(false)
+        tryIt.props.onPointerLeave?.()
+      }}
       className="group relative flex flex-col overflow-hidden rounded-lg bg-black/40 text-left ring-1 ring-transparent hover:ring-accent disabled:cursor-wait"
     >
       <span className={`relative block w-full ${square ? 'aspect-square' : 'aspect-video'}`}>
@@ -91,8 +119,8 @@ function ResultCard({
 }
 
 /**
- * Tìm và tải nội dung từ kho online (Tenor / Pixabay). Tải xong được lưu vào thư viện của tôi để
- * dùng offline, rồi `onUse` thêm vào video tại đầu phát.
+ * Tìm và tải nội dung từ kho online (Pixabay). Tải xong được lưu vào thư viện của tôi để dùng
+ * offline, rồi `onUse` thêm vào video tại đầu phát.
  */
 export function OnlineGrid({
   source,
@@ -102,8 +130,7 @@ export function OnlineGrid({
   onUse: (item: MemeItem) => Promise<void>
 }) {
   const { t } = useTranslation()
-  const keyName = source.startsWith('tenor') ? 'tenor' : 'pixabay'
-  const hasKey = useAppStore((s) => s.secrets?.[keyName]?.state === 'saved')
+  const hasKey = useAppStore((s) => s.secrets?.pixabay?.state === 'saved')
   const setPage = useAppStore((s) => s.setPage)
   const [q, setQ] = useState('')
   const [items, setItems] = useState<OnlineItem[]>([])
@@ -179,7 +206,7 @@ export function OnlineGrid({
     return (
       <EmptyState
         icon={KeyRound}
-        title={t(`editor.library.noKey.${keyName}`)}
+        title={t('editor.library.noKey.pixabay')}
         text={t('editor.library.noKeyText')}
         action={
           <button
@@ -194,7 +221,6 @@ export function OnlineGrid({
       />
     )
 
-  const square = source === 'tenorSticker'
   return (
     <div className="flex flex-col gap-3" data-testid="online-grid">
       <SearchBox
@@ -215,7 +241,7 @@ export function OnlineGrid({
               setQ(s)
               void search(s, null)
             }}
-            className={`rounded-full border px-2 py-0.5 text-[11px] ${
+            className={`rounded-md border px-2 py-0.5 text-[11px] ${
               q === s
                 ? 'border-accent bg-accent/15 text-accent'
                 : 'border-border text-muted hover:text-text'
@@ -233,7 +259,7 @@ export function OnlineGrid({
           text={t('editor.library.noResultsText')}
         />
       ) : (
-        <div className={`grid gap-1.5 ${square ? 'grid-cols-3' : 'grid-cols-2'}`}>
+        <div className="grid grid-cols-2 gap-1.5">
           {items.map((item) => {
             const key = `${item.source}:${item.id}`
             return (

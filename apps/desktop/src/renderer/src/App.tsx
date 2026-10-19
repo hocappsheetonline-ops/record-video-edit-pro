@@ -1,7 +1,9 @@
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { accentForeground, type Theme } from '@lumora/core'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { Sidebar } from './components/Sidebar'
+import { TitleBar } from './components/TitleBar'
 import { TooltipLayer } from './components/TooltipLayer'
 import { UpdateBanner } from './components/UpdateBanner'
 import { EditorPage } from './pages/EditorPage'
@@ -21,6 +23,7 @@ export function App() {
   const { i18n } = useTranslation()
   const ready = useAppStore((s) => s.ready)
   const page = useAppStore((s) => s.page)
+  const editorFolder = useAppStore((s) => s.editorFolder)
   const settings = useAppStore((s) => s.settings)
   const init = useAppStore((s) => s.init)
   const showProject = useAppStore((s) => s.showProject)
@@ -39,24 +42,31 @@ export function App() {
     document.documentElement.dataset.theme = resolveTheme(settings.theme)
     document.documentElement.style.setProperty('--lm-accent', settings.accent)
     document.documentElement.style.setProperty('--lm-accent-fg', accentForeground(settings.accent))
+    // Kính mờ (kiểu Apple) bật / tắt theo "Giảm trong suốt".
+    document.documentElement.dataset.glass = settings.reduceTransparency ? 'off' : 'on'
   }, [settings, i18n])
 
   if (!ready) return <div className="h-full bg-bg" />
 
   return (
-    <div className="flex h-full bg-bg text-text">
-      <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <UpdateBanner />
-        <main
-          className={`min-h-0 flex-1 ${page === 'editor' || page === 'live' ? 'overflow-hidden' : 'overflow-y-auto'}`}
-        >
-          {page === 'record' && <RecordPage />}
-          {page === 'projects' && <ProjectsPage />}
-          {page === 'editor' && <EditorPage />}
-          {page === 'live' && <LivePage />}
-          {page === 'settings' && <SettingsPage />}
-        </main>
+    <div className="flex h-full flex-col bg-bg text-text">
+      <TitleBar />
+      <div className="flex min-h-0 flex-1">
+        <Sidebar />
+        <div className="flex min-w-0 flex-1 flex-col">
+          <UpdateBanner />
+          <main
+            className={`min-h-0 flex-1 ${page === 'editor' || page === 'live' ? 'overflow-hidden' : 'overflow-y-auto'}`}
+          >
+            <ErrorBoundary resetKey={page === 'editor' ? `editor:${editorFolder}` : page}>
+              {page === 'record' && <RecordPage />}
+              {page === 'projects' && <ProjectsPage />}
+              {page === 'editor' && <EditorPage />}
+              {page === 'live' && <LivePage />}
+              {page === 'settings' && <SettingsPage />}
+            </ErrorBoundary>
+          </main>
+        </div>
       </div>
       <TooltipLayer />
     </div>

@@ -26,7 +26,22 @@ describe('normalizeSettings', () => {
       onboardingDone: true,
       previewQuality: 'low',
       projectTemplate: 'tiktok',
+      reduceTransparency: false,
+      localAi: { enabled: false, baseUrl: 'http://127.0.0.1:11434', model: 'qwen2.5:7b' },
+      localSpeech: DEFAULT_SETTINGS.localSpeech,
     })
+  })
+
+  it('AI cục bộ: nhận địa chỉ http(s) hợp lệ và tên model, bỏ giá trị sai', () => {
+    expect(
+      normalizeSettings({
+        localAi: { enabled: true, baseUrl: 'http://192.168.1.5:11434/', model: 'llama3.2:3b' },
+      }).localAi,
+    ).toEqual({ enabled: true, baseUrl: 'http://192.168.1.5:11434', model: 'llama3.2:3b' })
+    expect(
+      normalizeSettings({ localAi: { baseUrl: 'ftp://x', model: 'bad model!' } }).localAi,
+    ).toEqual(DEFAULT_SETTINGS.localAi)
+    expect(normalizeSettings({ localAi: 'nope' }).localAi).toEqual(DEFAULT_SETTINGS.localAi)
   })
 
   it('thay giá trị sai bằng mặc định và bỏ trường lạ', () => {
@@ -53,14 +68,32 @@ describe('mergeSettings', () => {
 
 describe('màu nhấn', () => {
   it('mặc định là xanh dương; nhận mã hex hợp lệ, bỏ giá trị sai', () => {
-    expect(DEFAULT_SETTINGS.accent).toBe('#2563eb')
+    expect(DEFAULT_SETTINGS.accent).toBe('#1ed6d6')
     expect(normalizeSettings({ accent: ' #1A73E8 ' }).accent).toBe('#1a73e8')
-    expect(normalizeSettings({ accent: 'blue' }).accent).toBe('#2563eb')
-    expect(normalizeSettings({ accent: '#12345' }).accent).toBe('#2563eb')
+    expect(normalizeSettings({ accent: 'blue' }).accent).toBe('#1ed6d6')
+    expect(normalizeSettings({ accent: '#12345' }).accent).toBe('#1ed6d6')
+    expect(normalizeSettings({ reduceTransparency: true }).reduceTransparency).toBe(true)
+    expect(normalizeSettings({ reduceTransparency: 'yes' }).reduceTransparency).toBe(false)
   })
 
   it('chữ trên nền màu nhấn đủ tương phản', () => {
     expect(accentForeground('#2563eb')).toBe('#ffffff')
     expect(accentForeground('#facc15')).toBe('#0b0b10')
+  })
+
+  it('giọng nói cục bộ: model trong danh sách, tên giọng an toàn, mặc định khi sai', () => {
+    expect(normalizeSettings({}).localSpeech).toEqual({
+      enabled: false,
+      whisperModel: 'large-v3-turbo-q5_0',
+      piperVoice: 'vi_VN-vais1000-medium',
+    })
+    expect(
+      normalizeSettings({
+        localSpeech: { enabled: true, whisperModel: 'small', piperVoice: 'en_US-lessac-medium' },
+      }).localSpeech,
+    ).toEqual({ enabled: true, whisperModel: 'small', piperVoice: 'en_US-lessac-medium' })
+    expect(
+      normalizeSettings({ localSpeech: { whisperModel: 'huge', piperVoice: '../x' } }).localSpeech,
+    ).toEqual(DEFAULT_SETTINGS.localSpeech)
   })
 })

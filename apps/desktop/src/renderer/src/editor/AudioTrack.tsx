@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { useEffect, useMemo, useState, type PointerEvent as ReactPointerEvent } from 'react'
-import { Mic, Music2, Sparkles, type LucideIcon } from 'lucide-react'
+import { Mic, Music2, Sparkle, type LucideIcon } from 'lucide-react'
 import {
   audioClipBars,
   clipBeats,
@@ -18,11 +18,14 @@ import { assignLanes } from './timeline-math'
 
 type Drag = { id: string; mode: 'move' | 'start' | 'end'; originX: number; origin: AudioClip }
 
-/** Màu và biểu tượng từng loại: nhạc (xanh lá), hiệu ứng (xanh dương), lồng tiếng (cam). */
+/**
+ * Màu và biểu tượng từng loại (khối màu đặc, sóng trắng mờ như CapCut): nhạc (xanh lá),
+ * hiệu ứng (xanh dương), lồng tiếng (cam).
+ */
 const KIND: Record<AudioClip['kind'], { className: string; icon: LucideIcon }> = {
-  music: { className: 'bg-emerald-500/25 text-emerald-300', icon: Music2 },
-  sfx: { className: 'bg-sky-500/25 text-sky-300', icon: Sparkles },
-  voice: { className: 'bg-orange-500/25 text-orange-300', icon: Mic },
+  music: { className: 'bg-emerald-700/90 text-white/70', icon: Music2 },
+  sfx: { className: 'bg-sky-700/90 text-white/70', icon: Sparkle },
+  voice: { className: 'bg-orange-700/90 text-white/70', icon: Mic },
 }
 
 /** Hàng "Âm thanh" trên timeline: nhạc nền và hiệu ứng, kéo để di chuyển, kéo mép để cắt. */
@@ -128,7 +131,7 @@ export function AudioTrack({
                 style={{ left: `${((t - clip.start) / clip.duration) * 100}%` }}
               />
             ))}
-            <span className="relative ml-2 flex min-w-0 items-center gap-1 rounded bg-black/50 px-1 text-white">
+            <span className="relative ml-2 flex min-w-0 items-center gap-1 rounded bg-black/45 px-1 text-white">
               <Icon size={11} aria-hidden className="shrink-0" />
               <span className="truncate">{clip.name}</span>
               {!isDefaultFx(clip.fx) && (

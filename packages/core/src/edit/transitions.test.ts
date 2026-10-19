@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultEdit, parseEditState } from './edit-state'
 import { type Clip } from './timeline'
-import { cutPoints, parseTransitions, pruneTransitions, transitionAt } from './transitions'
+import {
+  cutPoints,
+  isSceneCut,
+  parseTransitions,
+  pruneTransitions,
+  sceneCuts,
+  transitionAt,
+} from './transitions'
+import { sourceSegments } from './timeline'
 
 const clips: Clip[] = [
   { id: 'a', sourceStart: 0, sourceEnd: 3000, speed: 1 },
@@ -15,6 +23,49 @@ describe('transitions', () => {
       { afterClip: 'a', at: 3000 },
       { afterClip: 'b', at: 5000 },
     ])
+  })
+
+  it('chỗ đổi cảnh: bỏ một đoạn dài hoặc đổi đoạn quay; tách tại chỗ / cắt lặng thì không', () => {
+    const list: Clip[] = [
+      { id: 'a', sourceStart: 0, sourceEnd: 3000, speed: 1 },
+      // Tách tại chỗ: hình liền.
+      { id: 'b', sourceStart: 3000, sourceEnd: 6000, speed: 1 },
+      // Cắt khoảng lặng 1,5 s: vẫn liền (không phải đổi cảnh).
+      { id: 'c', sourceStart: 7500, sourceEnd: 10_000, speed: 1 },
+      // Bỏ đi 5 s: đổi cảnh.
+      { id: 'd', sourceStart: 15_000, sourceEnd: 18_000, speed: 1 },
+      // Khung đứng yên rồi tiếp tục: không đổi cảnh.
+      { id: 'e', sourceStart: 18_000, sourceEnd: 18_000, speed: 1, freeze: 1000 },
+      { id: 'f', sourceStart: 18_000, sourceEnd: 20_000, speed: 1 },
+      // Đảo thứ tự (quay lại đoạn đầu): đổi cảnh.
+      { id: 'g', sourceStart: 0, sourceEnd: 2000, speed: 1 },
+    ]
+    expect(sceneCuts(list).map((c) => c.afterClip)).toEqual(['c', 'f'])
+    expect(cutPoints(list).length).toBe(6)
+    // Hai đoạn quay nối nhau: chỗ nối giữa hai đoạn là đổi cảnh dù nguồn liền số.
+    const segments = sourceSegments([
+      { index: 0, startedAt: 1000, endedAt: 4000, tracks: {} },
+      { index: 1, startedAt: 9000, endedAt: 15_000, tracks: {} },
+    ])
+    const two: Clip[] = [
+      { id: 'x', sourceStart: 0, sourceEnd: 3000, speed: 1 },
+      { id: 'y', sourceStart: 3000, sourceEnd: 9000, speed: 1 },
+    ]
+    expect(sceneCuts(two)).toEqual([])
+    expect(sceneCuts(two, segments).map((c) => c.afterClip)).toEqual(['x'])
+    // Clip phát ngược: mép theo chiều phát.
+    expect(
+      isSceneCut(
+        { id: 'r', sourceStart: 0, sourceEnd: 3000, speed: 1, reversed: true },
+        { id: 's', sourceStart: 0, sourceEnd: 2000, speed: 1 },
+      ),
+    ).toBe(false)
+    expect(
+      isSceneCut(
+        { id: 'r', sourceStart: 0, sourceEnd: 3000, speed: 1, reversed: true },
+        { id: 's', sourceStart: 3000, sourceEnd: 5000, speed: 1 },
+      ),
+    ).toBe(true)
   })
 
   it('tiến trình và độ mạnh quanh chỗ nối: mạnh nhất đúng chỗ nối', () => {
@@ -62,5 +113,28 @@ describe('transitions', () => {
     const old = { ...createDefaultEdit(project) } as Record<string, unknown>
     delete old.transitions
     expect(parseEditState(old, project as never).transitions).toEqual([])
+  })
+})
+
+describe('thư viện chuyển cảnh', () => {
+  it('mỗi chuyển cảnh có nhóm, mô tả cho AI và phân tích được từ file dự án', async () => {
+    const { TRANSITION_CATEGORIES, TRANSITION_CATEGORY, TRANSITION_INFO, TRANSITION_KINDS } =
+      await import('./transitions')
+    expect(TRANSITION_KINDS.length).toBeGreaterThanOrEqual(21)
+    expect(new Set(TRANSITION_KINDS).size).toBe(TRANSITION_KINDS.length)
+    for (const kind of TRANSITION_KINDS) {
+      expect(TRANSITION_CATEGORIES).toContain(TRANSITION_CATEGORY[kind])
+      expect(TRANSITION_INFO[kind].length).toBeGreaterThan(10)
+    }
+    for (const cat of TRANSITION_CATEGORIES)
+      expect(
+        TRANSITION_KINDS.some((k) => TRANSITION_CATEGORY[k] === cat),
+        cat,
+      ).toBe(true)
+    const parsed = parseTransitions(
+      TRANSITION_KINDS.map((kind) => ({ afterClip: `c-${kind}`, kind, durationMs: 400 })),
+    )
+    expect(parsed.map((t) => t.kind)).toEqual([...TRANSITION_KINDS])
+    expect(parseTransitions([{ afterClip: 'a', kind: 'crossfade' }])).toEqual([])
   })
 })

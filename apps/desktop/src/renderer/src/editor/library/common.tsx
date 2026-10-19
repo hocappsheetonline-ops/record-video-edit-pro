@@ -1,7 +1,9 @@
 import { dragProps, type DragPayload } from '../library-drag'
-import { useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, Search, X, type LucideIcon } from 'lucide-react'
+import { Eye, Plus, Search, X, type LucideIcon } from 'lucide-react'
+import { useEditorStore } from '../store'
+import type { TryPreview } from '../try-preview'
 import { ipcErrorMessage } from '../../lib/prefs'
 
 /** Mã lỗi có lời giải thích riêng (các mã khác hiện dạng "Lỗi: …"). */
@@ -34,6 +36,49 @@ export function useErrorText() {
   }
 }
 
+/** Cột mục con bên trái của một mục thư viện (như CapCut: Nhập / Của tôi / Video / Ảnh…). */
+export function SubNav<T extends string>({
+  items,
+  value,
+  onChange,
+  testIdPrefix,
+  label,
+}: {
+  items: readonly { value: T; label: string }[]
+  value: T
+  onChange: (v: T) => void
+  testIdPrefix?: string
+  label?: string
+}) {
+  return (
+    <nav
+      role="tablist"
+      aria-orientation="vertical"
+      aria-label={label}
+      className="flex w-[88px] shrink-0 flex-col gap-0.5 self-start"
+    >
+      {items.map((item) => {
+        const active = item.value === value
+        return (
+          <button
+            key={item.value}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            data-testid={testIdPrefix ? `${testIdPrefix}${item.value}` : undefined}
+            onClick={() => onChange(item.value)}
+            className={`truncate rounded-md px-2.5 py-1.5 text-left text-xs transition-colors ${
+              active ? 'bg-surface-2 font-medium text-text' : 'text-muted hover:text-text'
+            }`}
+          >
+            {item.label}
+          </button>
+        )
+      })}
+    </nav>
+  )
+}
+
 export function ErrorNote({ text }: { text: string | null }) {
   if (!text) return null
   return (
@@ -43,7 +88,52 @@ export function ErrorNote({ text }: { text: string | null }) {
   )
 }
 
-/** Thẻ trong thư viện: bấm để thêm tại đầu phát (nút + hiện khi rê chuột). */
+/** Rê chuột bao lâu thì bắt đầu xem thử (lướt nhanh qua lưới không làm khung xem trước nhảy). */
+const PREVIEW_DELAY_MS = 220
+
+/**
+ * Xem thử một mục thư viện khi rê chuột / đặt tiêu điểm (như CapCut): trả về props gắn vào thẻ.
+ * `make` trả về mục xem thử (null = mục này không xem thử được). Bỏ chuột ra thì thôi xem thử.
+ */
+export function usePreviewHover(make: (() => TryPreview | null) | undefined) {
+  const timer = useRef<number | null>(null)
+  const active = useRef(false)
+  const stop = () => {
+    if (timer.current !== null) {
+      window.clearTimeout(timer.current)
+      timer.current = null
+    }
+    if (active.current) {
+      active.current = false
+      useEditorStore.getState().endPreview()
+    }
+  }
+  const start = () => {
+    if (!make) return
+    stop()
+    timer.current = window.setTimeout(() => {
+      timer.current = null
+      const preview = make()
+      if (!preview) return
+      active.current = true
+      useEditorStore.getState().tryPreview(preview)
+    }, PREVIEW_DELAY_MS)
+  }
+  // Rời khỏi tab / thẻ bị gỡ khi đang xem thử: trả lại như cũ.
+  useEffect(() => stop, [])
+  if (!make) return { stop, props: {} as const }
+  return {
+    stop,
+    props: {
+      onPointerEnter: start,
+      onPointerLeave: stop,
+      onFocus: start,
+      onBlur: stop,
+    } as const,
+  }
+}
+
+/** Thẻ trong thư viện: rê chuột để xem thử (nếu có), bấm để thêm tại đầu phát (nút + hiện khi rê chuột). */
 export function Card({
   onClick,
   children,
@@ -51,6 +141,7 @@ export function Card({
   title,
   disabled,
   drag,
+  preview,
 }: {
   onClick: () => void
   children: ReactNode
@@ -59,12 +150,21 @@ export function Card({
   disabled?: boolean
   /** Kéo thẻ vào timeline để thêm đúng chỗ thả. */
   drag?: DragPayload
+  /** Mục xem thử khi rê chuột (không có = thẻ không xem thử được). */
+  preview?: () => TryPreview | null
 }) {
+  const { t } = useTranslation()
+  const hover = usePreviewHover(preview)
   return (
     <button
       type="button"
       {...(drag ? dragProps(drag) : {})}
-      onClick={onClick}
+      {...hover.props}
+      onClick={() => {
+        // Thôi xem thử trước khi thêm thật để thêm đúng chỗ đầu phát ban đầu.
+        hover.stop()
+        onClick()
+      }}
       disabled={disabled}
       data-testid={testId}
       data-tooltip={title}
@@ -75,6 +175,15 @@ export function Card({
       <span className="absolute right-2 top-2 hidden rounded-full bg-accent p-0.5 text-accent-fg shadow group-hover:block">
         <Plus size={12} aria-hidden />
       </span>
+      {preview && (
+        <span
+          className="absolute left-2 top-2 hidden items-center gap-0.5 rounded bg-black/60 px-1 py-0.5 text-[9px] font-medium text-white group-hover:flex"
+          aria-hidden
+        >
+          <Eye size={9} />
+          {t('editor.library.previewing')}
+        </span>
+      )}
     </button>
   )
 }
@@ -163,7 +272,5 @@ export const formatDuration = (ms: number) => {
 
 /** Tiêu đề nhỏ trong thư viện. */
 export function Heading({ children }: { children: ReactNode }) {
-  return (
-    <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted">{children}</h4>
-  )
+  return <h4 className="text-[11px] font-semibold text-muted">{children}</h4>
 }

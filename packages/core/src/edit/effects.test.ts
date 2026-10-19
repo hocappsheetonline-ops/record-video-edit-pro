@@ -41,3 +41,27 @@ describe('effects', () => {
     expect(parseEffects(null)).toEqual([])
   })
 })
+
+describe('thư viện hiệu ứng', () => {
+  it('mỗi hiệu ứng có nhóm, mô tả cho AI và phân tích được từ file dự án', async () => {
+    const { EFFECT_CATEGORIES, EFFECT_CATEGORY, EFFECT_INFO, EFFECT_KINDS } =
+      await import('./effects')
+    expect(EFFECT_KINDS.length).toBeGreaterThanOrEqual(27)
+    expect(new Set(EFFECT_KINDS).size).toBe(EFFECT_KINDS.length)
+    for (const kind of EFFECT_KINDS) {
+      expect(EFFECT_CATEGORIES).toContain(EFFECT_CATEGORY[kind])
+      expect(EFFECT_INFO[kind].length).toBeGreaterThan(10)
+    }
+    // Mỗi nhóm có ít nhất một hiệu ứng.
+    for (const cat of EFFECT_CATEGORIES)
+      expect(
+        EFFECT_KINDS.some((k) => EFFECT_CATEGORY[k] === cat),
+        cat,
+      ).toBe(true)
+    const parsed = parseEffects(
+      EFFECT_KINDS.map((kind, i) => ({ id: `x${i}`, kind, start: 0, end: 1000, intensity: 0.5 })),
+    )
+    expect(parsed.map((e) => e.kind)).toEqual([...EFFECT_KINDS])
+    expect(parseEffects([{ id: 'q', kind: 'notAnEffect', start: 0, end: 1000 }])).toEqual([])
+  })
+})

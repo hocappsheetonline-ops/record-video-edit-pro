@@ -11,6 +11,13 @@ import { FONTS, type FontId } from './text-style'
  * - `underline`: gạch chân màu dưới từ đang nói.
  * - `neon`: chữ phát sáng theo màu nhấn.
  * - `tiktok`: chữ in hoa đậm, từ đang nói có khối màu phía sau.
+ * Mẫu động kiểu app Captions (1.12.0):
+ * - `typewriter`: chữ hiện dần từng ký tự theo lời nói (chỉ hiện các từ đã nói).
+ * - `wave`: các từ nhấp nhô lượn sóng, từ đang nói đổi màu.
+ * - `slideUp`: mỗi từ trượt lên và hiện rõ khi được nói, từ chưa nói mờ.
+ * - `shadowPop`: chữ to đậm có bóng cứng lệch góc, từ đang nói phóng to.
+ * - `gradient`: chữ tô chuyển màu (màu chữ → màu nhấn), viền mảnh.
+ * - `comic`: phông truyện tranh, chữ vàng viền đen dày, từ đang nói nảy.
  */
 export const CAPTION_TEMPLATES = [
   'box',
@@ -21,6 +28,12 @@ export const CAPTION_TEMPLATES = [
   'underline',
   'neon',
   'tiktok',
+  'typewriter',
+  'wave',
+  'slideUp',
+  'shadowPop',
+  'gradient',
+  'comic',
 ] as const
 export type CaptionTemplate = (typeof CAPTION_TEMPLATES)[number]
 
@@ -31,6 +44,8 @@ export interface CaptionLook {
   color: string
   /** Màu nhấn của từ đang nói (hoặc khối nền / gạch chân / ánh sáng tùy mẫu). */
   highlightColor: string
+  /** Màu của từ khóa do AI chọn (kiểu app Captions). */
+  keywordColor: string
   uppercase: boolean
   /** Số từ tối đa hiện cùng lúc (0 = cả dòng). Kiểu TikTok thường 2–3 từ. */
   maxWords: number
@@ -45,6 +60,7 @@ const PRESETS: Record<CaptionTemplate, Preset> = {
     font: 'beVietnamPro',
     color: '#ffffff',
     highlightColor: '#facc15',
+    keywordColor: '#fb923c',
     uppercase: false,
     maxWords: 0,
   },
@@ -52,6 +68,7 @@ const PRESETS: Record<CaptionTemplate, Preset> = {
     font: 'montserrat',
     color: '#ffffff',
     highlightColor: '#22d3ee',
+    keywordColor: '#fde047',
     uppercase: false,
     maxWords: 0,
   },
@@ -59,6 +76,7 @@ const PRESETS: Record<CaptionTemplate, Preset> = {
     font: 'beVietnamPro',
     color: '#ffffff',
     highlightColor: '#ffffff',
+    keywordColor: '#fde047',
     uppercase: false,
     maxWords: 0,
   },
@@ -66,6 +84,7 @@ const PRESETS: Record<CaptionTemplate, Preset> = {
     font: 'montserrat',
     color: '#ffffff',
     highlightColor: '#a3e635',
+    keywordColor: '#fb923c',
     uppercase: true,
     maxWords: 4,
   },
@@ -73,6 +92,7 @@ const PRESETS: Record<CaptionTemplate, Preset> = {
     font: 'anton',
     color: '#ffffff',
     highlightColor: '#ffffff',
+    keywordColor: '#fde047',
     uppercase: true,
     maxWords: 3,
   },
@@ -80,6 +100,7 @@ const PRESETS: Record<CaptionTemplate, Preset> = {
     font: 'inter',
     color: '#ffffff',
     highlightColor: '#f43f5e',
+    keywordColor: '#fde047',
     uppercase: false,
     maxWords: 0,
   },
@@ -87,6 +108,7 @@ const PRESETS: Record<CaptionTemplate, Preset> = {
     font: 'montserrat',
     color: '#ffffff',
     highlightColor: '#e879f9',
+    keywordColor: '#22d3ee',
     uppercase: false,
     maxWords: 0,
   },
@@ -94,6 +116,55 @@ const PRESETS: Record<CaptionTemplate, Preset> = {
     font: 'montserrat',
     color: '#ffffff',
     highlightColor: '#8b5cf6',
+    keywordColor: '#fde047',
+    uppercase: true,
+    maxWords: 3,
+  },
+  typewriter: {
+    font: 'robotoMono',
+    color: '#ffffff',
+    highlightColor: '#4ade80',
+    keywordColor: '#fde047',
+    uppercase: false,
+    maxWords: 0,
+  },
+  wave: {
+    font: 'montserrat',
+    color: '#ffffff',
+    highlightColor: '#38bdf8',
+    keywordColor: '#fde047',
+    uppercase: true,
+    maxWords: 4,
+  },
+  slideUp: {
+    font: 'inter',
+    color: '#ffffff',
+    highlightColor: '#f472b6',
+    keywordColor: '#fde047',
+    uppercase: false,
+    maxWords: 0,
+  },
+  shadowPop: {
+    font: 'anton',
+    color: '#ffffff',
+    highlightColor: '#facc15',
+    keywordColor: '#f97316',
+    uppercase: true,
+    maxWords: 3,
+  },
+  gradient: {
+    font: 'montserrat',
+    color: '#ffffff',
+    highlightColor: '#c084fc',
+    keywordColor: '#fde047',
+    uppercase: false,
+    maxWords: 0,
+  },
+  comic: {
+    font: 'bangers',
+    color: '#fde047',
+    highlightColor: '#f43f5e',
+    keywordColor: '#ffffff',
     uppercase: true,
     maxWords: 3,
   },
@@ -129,6 +200,10 @@ export function parseCaptionLook(value: unknown, position: 'top' | 'bottom'): Ca
       typeof v.highlightColor === 'string' && HEX.test(v.highlightColor)
         ? v.highlightColor.toLowerCase()
         : base.highlightColor,
+    keywordColor:
+      typeof v.keywordColor === 'string' && HEX.test(v.keywordColor)
+        ? v.keywordColor.toLowerCase()
+        : base.keywordColor,
     uppercase: typeof v.uppercase === 'boolean' ? v.uppercase : base.uppercase,
     maxWords: Number.isNaN(maxWords)
       ? base.maxWords
@@ -193,6 +268,10 @@ export function mergeCaptionLine(lines: readonly CaptionLine[], id: string): Cap
     ...(a.translation !== undefined || b.translation !== undefined
       ? { translation: `${a.translation ?? ''} ${b.translation ?? ''}`.trim() }
       : {}),
+    ...(a.emoji || b.emoji ? { emoji: a.emoji || b.emoji } : {}),
+    ...(a.keywords || b.keywords
+      ? { keywords: [...new Set([...(a.keywords ?? []), ...(b.keywords ?? [])])] }
+      : {}),
   }
   return [...lines.slice(0, i), merged, ...lines.slice(i + 2)]
 }
@@ -234,6 +313,18 @@ export function splitCaptionLine(lines: readonly CaptionLine[], id: string): Cap
   }
   delete first.translation
   delete second.translation
+  // Emoji ở lại nửa sau (cuối câu); từ khóa chỉ giữ ở nửa có từ đó.
+  delete first.emoji
+  const keep = (part: CaptionLine) => {
+    const words = part.text.split(/\s+/)
+    const keywords = (line.keywords ?? []).filter((k) =>
+      words.some((w) => w.replace(/[^\p{L}\p{N}]/gu, '').toLowerCase() === k.toLowerCase()),
+    )
+    if (keywords.length > 0) part.keywords = keywords
+    else delete part.keywords
+  }
+  keep(first)
+  keep(second)
   return [...lines.slice(0, i), first, second, ...lines.slice(i + 1)]
 }
 

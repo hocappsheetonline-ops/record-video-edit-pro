@@ -1,19 +1,90 @@
-import { clipPositions, clipDuration, type Clip } from './timeline'
+import { clipPositions, clipDuration, segmentAt, type Clip, type SourceSegment } from './timeline'
 
 /**
  * Hiệu ứng chuyển tiếp tại chỗ nối giữa hai clip (kiểu CapCut). Chỉ vẽ lại khung hình quanh chỗ
  * nối nên không làm thay đổi độ dài video hay lệch tiếng.
  */
 export const TRANSITION_KINDS = [
+  // Cơ bản
   'fadeBlack',
   'fadeWhite',
   'flash',
+  'lightLeak',
+  // Chuyển động
   'zoom',
-  'blur',
+  'zoomOut',
+  'whip',
+  'spin',
   'slide',
+  'slideRight',
+  'slideUp',
+  'slideDown',
+  'shake',
+  // Hình khối
+  'wipe',
+  'iris',
+  'blinds',
+  'squeeze',
+  'flip',
+  // Cách điệu
+  'blur',
   'glitch',
+  'pixelate',
 ] as const
 export type TransitionKind = (typeof TRANSITION_KINDS)[number]
+
+export const TRANSITION_CATEGORIES = ['basic', 'motion', 'shape', 'stylized'] as const
+export type TransitionCategory = (typeof TRANSITION_CATEGORIES)[number]
+
+/** Nhóm của từng chuyển cảnh (bày trong Thư viện, AI chọn theo mục đích). */
+export const TRANSITION_CATEGORY: Record<TransitionKind, TransitionCategory> = {
+  fadeBlack: 'basic',
+  fadeWhite: 'basic',
+  flash: 'basic',
+  lightLeak: 'basic',
+  zoom: 'motion',
+  zoomOut: 'motion',
+  whip: 'motion',
+  spin: 'motion',
+  slide: 'motion',
+  slideRight: 'motion',
+  slideUp: 'motion',
+  slideDown: 'motion',
+  shake: 'motion',
+  wipe: 'shape',
+  iris: 'shape',
+  blinds: 'shape',
+  squeeze: 'shape',
+  flip: 'shape',
+  blur: 'stylized',
+  glitch: 'stylized',
+  pixelate: 'stylized',
+}
+
+/** Mô tả ngắn (tiếng Anh, cho lời nhắc AI) — khi nào nên dùng chuyển cảnh này. */
+export const TRANSITION_INFO: Record<TransitionKind, string> = {
+  fadeBlack: 'fade through black; calm section change, time passing (400-800 ms)',
+  fadeWhite: 'fade through white; soft, bright, dreamy section change',
+  flash: 'quick white flash; energetic beat cut, short-form (200-300 ms)',
+  lightLeak: 'warm light leak sweep; vlog, summer, memories',
+  zoom: 'zoom-in punch into the cut; TikTok / Shorts default, fast (200-400 ms)',
+  zoomOut: 'zoom-out pull back through the cut; reveal the bigger picture',
+  whip: 'whip pan with heavy motion blur; fast scene changes, travel vlogs',
+  spin: 'spin rotate through the cut; playful, hype',
+  slide: 'slide left (new clip comes from the right); next step / forward',
+  slideRight: 'slide right (new clip comes from the left); back / previous',
+  slideUp: 'slide up; vertical video, scrolling to the next point',
+  slideDown: 'slide down; dropping into a detail',
+  shake: 'camera shake over the cut; impact, "boom"',
+  wipe: 'black curtain wipe left to right; classic, clean',
+  iris: 'circle iris close / open; cartoon, focus on one thing',
+  blinds: 'horizontal blinds; retro slideshow',
+  squeeze: 'vertical squeeze to a line and back; snappy, mechanical',
+  flip: 'horizontal card flip; comparing two things, before / after',
+  blur: 'blur through the cut; dreamy, soft',
+  glitch: 'digital glitch; tech, errors, edgy',
+  pixelate: 'pixelate to blocks and back; 8-bit, "loading"',
+}
 
 export interface Transition {
   /** Chuyển tiếp nằm giữa clip này và clip ngay sau nó. */
@@ -40,6 +111,45 @@ export function cutPoints(clips: readonly Clip[]): { afterClip: string; at: numb
   return clipPositions(clips)
     .slice(0, -1)
     .map(({ clip, outputStart }) => ({ afterClip: clip.id, at: outputStart + clipDuration(clip) }))
+}
+
+/**
+ * Chỗ nối được coi là "đổi cảnh" khi hai bên không liền mạch: bỏ đi ít nhất chừng này ms nguồn
+ * (cắt khoảng lặng / từ đệm chỉ bỏ vài trăm ms tới ~2 s, không tính).
+ */
+export const SCENE_JUMP_MS = 3000
+
+/** Thời điểm nguồn mà clip kết thúc / bắt đầu theo chiều phát. */
+function sourceEdge(clip: Clip, edge: 'start' | 'end'): number {
+  if (clip.freeze) return clip.sourceStart
+  if (edge === 'start') return clip.reversed ? clip.sourceEnd : clip.sourceStart
+  return clip.reversed ? clip.sourceStart : clip.sourceEnd
+}
+
+/**
+ * Chỗ nối là đổi cảnh: hai clip thuộc hai đoạn quay khác nhau, hoặc nguồn nhảy ít nhất
+ * `SCENE_JUMP_MS` (bỏ một đoạn dài, đảo thứ tự). Tách clip tại chỗ, cắt khoảng lặng hay khung
+ * đứng yên thì hình vẫn liền nên không phải đổi cảnh — chuyển cảnh ở đó chỉ làm mất hình.
+ */
+export function isSceneCut(a: Clip, b: Clip, segments?: readonly SourceSegment[]): boolean {
+  if (a.freeze || b.freeze) return false
+  const from = sourceEdge(a, 'end')
+  const to = sourceEdge(b, 'start')
+  if (segments && segments.length > 1) {
+    // Mép cuối của clip trước nằm trong đoạn quay nào (lùi 1 ms để không rơi sang đoạn sau).
+    const segA = segmentAt(segments, Math.max(0, from - 1))?.segment.index
+    const segB = segmentAt(segments, to)?.segment.index
+    if (segA !== undefined && segB !== undefined && segA !== segB) return true
+  }
+  return Math.abs(to - from) >= SCENE_JUMP_MS
+}
+
+/** Các chỗ nối đổi cảnh (xem `isSceneCut`) — nơi nên đặt chuyển cảnh; chỗ còn lại cắt thẳng. */
+export function sceneCuts(
+  clips: readonly Clip[],
+  segments?: readonly SourceSegment[],
+): { afterClip: string; at: number }[] {
+  return cutPoints(clips).filter((cut, i) => isSceneCut(clips[i]!, clips[i + 1]!, segments))
 }
 
 /** Chuyển tiếp đang diễn ra tại thời điểm xuất `t` (null nếu không có). */

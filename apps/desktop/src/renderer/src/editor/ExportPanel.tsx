@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { outputSize, RESOLUTIONS, type Resolution } from '@lumora/core'
 import type { ExportResult } from '@shared/ipc'
@@ -7,6 +7,7 @@ import { ipcErrorMessage } from '../lib/prefs'
 import { ExportCancelled, exportVideo, type ExportProgress } from './exporter'
 import { runJob, useJobs } from './jobs'
 import { useEditorStore } from './store'
+import { Toggle } from './ui'
 
 const segmented = (active: boolean) =>
   `rounded-md px-2.5 py-1 text-xs ${active ? 'bg-accent text-accent-fg' : 'bg-surface-2 text-muted hover:text-text'}`
@@ -20,11 +21,9 @@ export function ExportPanel() {
   const [result, setResult] = useState<ExportResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const abort = useRef<AbortController | null>(null)
-  if (!edit) return null
-
-  const size = outputSize(edit.frame.aspect, edit.export.resolution, videoSize)
-  const setExport = (patch: Partial<typeof edit.export>) =>
-    change((e) => ({ ...e, export: { ...e.export, ...patch } }))
+  const autoExport = useEditorStore((s) => s.autoExport)
+  const clips = edit?.clips.length ?? 0
+  const busy = progress !== null
 
   const run = async () => {
     const { folder, project, events } = useEditorStore.getState()
@@ -89,7 +88,22 @@ export function ExportPanel() {
     }
   }
 
-  const busy = progress !== null
+  // Trợ lý / Đạo diễn AI yêu cầu xuất ngay: bắt đầu khi bảng hiện và đang rảnh, chỉ một lần
+  // (bảng luôn được giữ trong hộp thoại ẩn nên cờ đổi là chạy). Bắt đầu ở lượt sau để không
+  // đổi trạng thái ngay trong effect.
+  useEffect(() => {
+    if (!autoExport || busy || !useEditorStore.getState().autoExport) return
+    useEditorStore.setState({ autoExport: false })
+    queueMicrotask(() => void run())
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `run` đổi mỗi lần vẽ; chỉ chạy khi cờ đổi
+  }, [autoExport, busy])
+
+  if (!edit) return null
+
+  const size = outputSize(edit.frame.aspect, edit.export.resolution, videoSize)
+  const setExport = (patch: Partial<typeof edit.export>) =>
+    change((e) => ({ ...e, export: { ...e.export, ...patch } }))
+
   return (
     <div className="flex flex-col gap-4" data-testid="export-panel">
       <div className="flex flex-col gap-1.5 text-sm">
@@ -142,6 +156,13 @@ export function ExportPanel() {
           ))}
         </div>
       </div>
+      <Toggle
+        label={t('editor.export.enhance')}
+        hint={t('editor.export.enhanceHint')}
+        checked={edit.export.enhance}
+        testId="export-enhance"
+        onChange={(enhance) => setExport({ enhance })}
+      />
       <p className="text-xs text-muted" data-testid="export-size">
         {size.width} × {size.height}
       </p>
@@ -175,8 +196,10 @@ export function ExportPanel() {
         <button
           type="button"
           data-testid="export-start"
+          disabled={clips === 0}
+          data-tooltip={clips === 0 ? t('editor.export.noClips') : undefined}
           onClick={() => void run()}
-          className="rounded-xl bg-accent px-4 py-2.5 font-medium text-accent-fg hover:opacity-90"
+          className="rounded-xl bg-accent px-4 py-2.5 font-medium text-accent-fg hover:opacity-90 disabled:opacity-40"
         >
           {t('editor.export.start')}
         </button>

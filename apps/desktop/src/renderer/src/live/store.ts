@@ -156,7 +156,8 @@ export const useLiveStore = create<LiveStore>((set, get) => ({
     const tracks: MediaStreamTrack[] = []
     if (cameraId)
       tracks.push(...((await getCameraStream(cameraId).catch(() => null))?.getTracks() ?? []))
-    if (micId) tracks.push(...((await getMicStream(micId).catch(() => null))?.getTracks() ?? []))
+    if (micId)
+      tracks.push(...((await getMicStream(micId, 'voice').catch(() => null))?.getTracks() ?? []))
     hostStream = new MediaStream(tracks)
     engine.setHost(hostStream, get().hostName || 'Host')
     engine.setOnStage(HOST_ID, get().hostOnStage)

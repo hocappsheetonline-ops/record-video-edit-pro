@@ -47,6 +47,47 @@ describe('resolveMediaPath', () => {
     expect(resolveMediaPath('lumora-media://other/a.lumora/x.mkv', dir)).toBeNull()
     expect(resolveMediaPath('lumora-media://projects/a.lumora/x/y.mkv', dir)).toBeNull()
   })
+
+  describe('thư viện chung (library/<tên>/<file>)', () => {
+    const libraries = () => ({ memes: join(dir, 'memes'), music: join(dir, 'music') })
+
+    it('trả về file trong thư mục thư viện', () => {
+      expect(
+        resolveMediaPath('lumora-media://library/music/music-abc123.mp3', dir, {}, libraries()),
+      ).toBe(join(dir, 'music', 'music-abc123.mp3'))
+      expect(
+        resolveMediaPath('lumora-media://library/memes/meme-1.gif', dir, {}, libraries()),
+      ).toBe(join(dir, 'memes', 'meme-1.gif'))
+    })
+
+    it('không nhận thư viện lạ', () => {
+      expect(
+        resolveMediaPath('lumora-media://library/sounds/x.mp3', dir, {}, libraries()),
+      ).toBeNull()
+      expect(
+        resolveMediaPath('lumora-media://library/toString/x.mp3', dir, {}, libraries()),
+      ).toBeNull()
+    })
+
+    it('chặn truy cập ra ngoài thư viện', () => {
+      expect(resolveMediaPath('lumora-media://library/music/..', dir, {}, libraries())).toBeNull()
+      expect(
+        resolveMediaPath('lumora-media://library/music/%2E%2E%2Fsecret', dir, {}, libraries()),
+      ).toBeNull()
+      expect(
+        resolveMediaPath('lumora-media://library/music/a/b.mp3', dir, {}, libraries()),
+      ).toBeNull()
+      expect(
+        resolveMediaPath('lumora-media://library/music/.hidden', dir, {}, libraries()),
+      ).toBeNull()
+      expect(resolveMediaPath('lumora-media://library/music', dir, {}, libraries())).toBeNull()
+    })
+
+    it('không có danh sách thư viện thì từ chối', () => {
+      expect(resolveMediaPath('lumora-media://library/music/x.mp3', dir)).toBeNull()
+      expect(resolveMediaPath('lumora-media://library/music/x.mp3', dir, {})).toBeNull()
+    })
+  })
 })
 
 describe('handleMediaRequest', () => {
@@ -88,6 +129,28 @@ describe('handleMediaRequest', () => {
     )
     expect(preflight.status).toBe(204)
     expect(preflight.headers.get('access-control-allow-headers')).toBe('Range')
+  })
+
+  it('phát file nhạc từ thư viện chung với đúng Content-Type', async () => {
+    const musicDir = join(dir, 'music')
+    await mkdir(musicDir)
+    await writeFile(join(musicDir, 'music-abc123.mp3'), 'ID3mp3data')
+    const res = await handleMediaRequest(
+      new Request('lumora-media://library/music/music-abc123.mp3'),
+      dir,
+      {},
+      { music: musicDir },
+    )
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('audio/mpeg')
+    expect(res.headers.get('accept-ranges')).toBe('bytes')
+    expect(await res.text()).toBe('ID3mp3data')
+    // Không truyền thư viện thì URL này không phục vụ.
+    const denied = await handleMediaRequest(
+      new Request('lumora-media://library/music/music-abc123.mp3'),
+      dir,
+    )
+    expect(denied.status).toBe(404)
   })
 
   it('HEAD chỉ trả header', async () => {

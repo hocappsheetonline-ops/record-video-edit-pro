@@ -2,11 +2,13 @@ import {
   cameraAt,
   captionAt,
   captionChunk,
+  isCaptionKeyword,
   sourceToOutput,
   cameraRect,
   clickAt,
   cursorAt,
   cursorOpacity,
+  keyCaptionAt,
   fillBaseView,
   fillViewRect,
   frameLayout,
@@ -61,6 +63,8 @@ export interface FrameScene {
   opacity: number
   cursor: { x: number; y: number; size: number; opacity: number } | null
   ripple: { x: number; y: number; radius: number; opacity: number } | null
+  /** Phím tắt vừa bấm (Ctrl+C…) hiện dưới khung hình, mờ dần; cỡ chữ theo pixel video xuất. */
+  keys: { combos: string[]; opacity: number; fontSize: number } | null
   /** Webcam: bong bóng nổi (`circle`/`rounded`/`square`) hoặc dải ngang (`strip`, không bo góc). */
   camera: {
     rect: Rect
@@ -91,6 +95,8 @@ export interface CaptionWord {
   spoken: boolean
   /** Thời gian từ lúc từ bắt đầu được nói (ms, âm nếu chưa tới). */
   since: number
+  /** Từ khóa do AI chọn: vẽ bằng màu từ khóa (kiểu app Captions). */
+  keyword: boolean
 }
 
 export interface SceneCaptions {
@@ -101,6 +107,10 @@ export interface SceneCaptions {
   fontSize: number
   /** Dòng dịch hiện dưới (phụ đề song ngữ). */
   translation: string | null
+  /** Emoji của dòng (vẽ sau chữ, nảy lúc dòng bắt đầu); null nếu không có. */
+  emoji: string | null
+  /** Thời gian từ lúc dòng bắt đầu (ms) — đồng hồ cho các mẫu động (lượn sóng, nảy emoji). */
+  lineSince: number
 }
 
 export interface SceneInput {
@@ -175,6 +185,13 @@ export function computeScene(input: SceneInput): FrameScene {
     }
   }
 
+  let keys: FrameScene['keys'] = null
+  if (!input.imported && edit.cursor.showKeys && input.cursor) {
+    const hit = keyCaptionAt(input.cursor, source)
+    if (hit && hit.opacity > 0)
+      keys = { ...hit, fontSize: Math.round(Math.min(output.width, output.height) * 0.04) }
+  }
+
   let captions: FrameScene['captions'] = null
   const cap = edit.captions
   if (cap.enabled && cap.lines.length > 0) {
@@ -198,11 +215,15 @@ export function computeScene(input: SceneInput): FrameScene {
           active: highlight && from + k === current,
           spoken: highlight ? from + k <= current : true,
           since: source - w.start,
+          keyword: isCaptionKeyword(w.text, line.keywords),
         })),
         style: cap.style,
         look: cap.look,
         fontSize: Math.round(Math.min(output.width, output.height) * 0.05 * cap.size),
         translation: cap.bilingual && line.translation ? line.translation : null,
+        // Emoji chỉ hiện ở nhóm từ cuối khi dòng chia thành nhiều nhóm (cuối câu).
+        emoji: line.emoji && to >= timed.length ? line.emoji : null,
+        lineSince: source - line.start,
       }
     }
   }
@@ -229,6 +250,7 @@ export function computeScene(input: SceneInput): FrameScene {
     opacity: clip?.opacity ?? 1,
     cursor,
     ripple,
+    keys,
     camera: !showCamera ? null : cameraScene(edit.camera, output, layout.strip),
   }
 }

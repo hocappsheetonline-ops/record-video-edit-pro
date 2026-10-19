@@ -1,5 +1,9 @@
 import type {
   AppSettings,
+  AssistantCommand,
+  AssistantContext,
+  DirectorContext,
+  DirectorPlan,
   AudioFx,
   Destination,
   Filmstrip,
@@ -8,6 +12,7 @@ import type {
   CutSuggestion,
   Transcript,
   EditState,
+  HighlightSegment,
   InputEvent,
   KeyStatus,
   KeyValidationResult,
@@ -16,6 +21,7 @@ import type {
   RecordingOptions,
   SecretKey,
   TrackKind,
+  WhisperModel,
   ZoomRegion,
 } from '@lumora/core'
 
@@ -68,19 +74,42 @@ export const IPC = {
   memesRemove: 'memes:remove',
   memesUse: 'memes:use',
   memesAddPaths: 'memes:add-paths',
+  musicList: 'music:list',
+  musicImport: 'music:import',
+  musicAddPaths: 'music:add-paths',
+  musicRemove: 'music:remove',
+  musicUse: 'music:use',
+  musicRecentDownloads: 'music:recent-downloads',
+  musicOpenYouTube: 'music:open-youtube',
+  musicFind: 'music:find',
   exportStart: 'export:start',
   exportWrite: 'export:write',
   exportFinish: 'export:finish',
   exportCancel: 'export:cancel',
   revealFile: 'files:reveal',
+  projectSnapshot: 'project:snapshot',
   projectImportVideo: 'project:import-video',
   projectMerge: 'project:merge',
   aiTranscribe: 'ai:transcribe',
   aiGetTranscript: 'ai:get-transcript',
   aiSuggestCuts: 'ai:suggest-cuts',
   aiSummarize: 'ai:summarize',
+  aiPlan: 'ai:plan',
+  aiLocalModels: 'ai:local-models',
+  aiPullModel: 'ai:pull-model',
+  aiInstallOllama: 'ai:install-ollama',
+  aiBenchmark: 'ai:benchmark',
+  aiSpeechStatus: 'ai:speech-status',
+  aiSpeechCatalog: 'ai:speech-catalog',
+  aiSpeechInstall: 'ai:speech-install',
+  aiSpeechDownload: 'ai:speech-download',
+  aiSpeechRemove: 'ai:speech-remove',
+  aiDirect: 'ai:direct',
+  aiHighlights: 'ai:highlights',
   aiTranslate: 'ai:translate',
   aiEditCaptions: 'ai:edit-captions',
+  aiCaptionEmojis: 'ai:caption-emojis',
+  aiCaptionKeywords: 'ai:caption-keywords',
   aiPlanZooms: 'ai:plan-zooms',
   aiVoices: 'ai:voices',
   aiSpeak: 'ai:speak',
@@ -105,6 +134,10 @@ export const IPC = {
   updateCheck: 'update:check',
   updateInstall: 'update:install',
   openLogs: 'app:open-logs',
+  windowMinimize: 'window:minimize',
+  windowToggleMaximize: 'window:toggle-maximize',
+  windowClose: 'window:close',
+  windowIsMaximized: 'window:is-maximized',
 } as const
 
 /** Sự kiện main process gửi xuống giao diện. */
@@ -117,7 +150,58 @@ export const EVENTS = {
   recordingCommand: 'recording:command',
   recordingFinished: 'recording:finished',
   recordingError: 'recording:error',
+  windowMaximized: 'window:maximized',
+  localAiProgress: 'ai:local-progress',
 } as const
+
+/**
+ * Tiến độ tải model / tải bộ cài Ollama / tải công cụ và model giọng nói cục bộ (gửi liên tục trong
+ * lúc chạy). `kind: 'speech'` dùng chung kênh này; `item` cho biết đang tải gì (`whisper`, `piper`,
+ * tên model Whisper hoặc tên giọng Piper).
+ */
+export interface LocalAiProgress {
+  kind: 'pull' | 'install' | 'speech'
+  status: string
+  completed: number
+  total: number
+  item?: string
+}
+
+/** Công cụ giọng nói cục bộ: whisper.cpp (nhận dạng) hoặc Piper (giọng đọc). */
+export type SpeechTool = 'whisper' | 'piper'
+
+/** Loại dữ liệu tải về cho giọng nói cục bộ: model Whisper hoặc giọng Piper. */
+export type SpeechAssetKind = 'model' | 'voice'
+
+/** Trạng thái cài đặt giọng nói cục bộ trên máy này. */
+export interface LocalSpeechStatus {
+  /** false khi hệ điều hành / kiến trúc không có bản dựng sẵn (khi đó không cài được trong app). */
+  supported: boolean
+  platform: string
+  whisper: { installed: boolean; models: WhisperModel[] }
+  piper: { installed: boolean; voices: string[] }
+}
+
+/** Một giọng Piper tải được trong app. */
+export interface PiperVoiceInfo {
+  id: string
+  language: 'vi' | 'en'
+  label: string
+  sizeMb: number
+}
+
+/** Một model Whisper tải được trong app. */
+export interface WhisperModelInfo {
+  id: WhisperModel
+  label: string
+  sizeMb: number
+}
+
+/** Danh mục model Whisper và giọng Piper mà app biết cách tải. */
+export interface LocalSpeechCatalog {
+  models: WhisperModelInfo[]
+  voices: PiperVoiceInfo[]
+}
 
 export interface AppInfo {
   name: string
@@ -125,6 +209,8 @@ export interface AppInfo {
   platform: string
   /** false khi hệ điều hành không hỗ trợ mã hóa (khi đó không cho lưu API key). */
   encryptionAvailable: boolean
+  /** Cửa sổ không viền: giao diện tự vẽ nút đóng / thu nhỏ / phóng to (macOS dùng nút hệ thống). */
+  frameless: boolean
 }
 
 /** Trạng thái tự cập nhật (GitHub Releases). */
@@ -280,14 +366,45 @@ export interface AudioAsset {
   durationMs: number
 }
 
-/** Nguồn tìm trên kho online: meme Tenor, sticker Tenor, video / ảnh Pixabay. */
-export const ONLINE_SOURCES = ['tenor', 'tenorSticker', 'pixabayVideo', 'pixabayImage'] as const
+/**
+ * Một bài trong kho nhạc của người dùng: tải từ Thư viện âm thanh YouTube, file trên máy, hoặc
+ * AI tự tìm trên Jamendo (nhạc Creative Commons: `credit` là dòng ghi nguồn để dán vào mô tả).
+ */
+export interface MusicTrack {
+  file: string
+  name: string
+  durationMs: number
+  addedAt: number
+  source: 'youtube' | 'file' | 'jamendo'
+  /** Dòng ghi nguồn bắt buộc với nhạc Creative Commons ("Tên bài" by Nghệ sĩ — CC BY 3.0). */
+  credit?: string
+  /** Mã bài trên kho online (để không tải lại). */
+  origin?: { source: 'jamendo'; id: string }
+}
+
+/** Yêu cầu AI tự tìm nhạc nền (Jamendo) theo tâm trạng / nhịp / thời lượng video. */
+export interface MusicFindQuery {
+  mood: string
+  tempo: 'slow' | 'medium' | 'fast'
+  durationMs: number
+}
+
+/** File nhạc vừa xuất hiện trong thư mục Tải về (sau khi tải từ Thư viện âm thanh YouTube). */
+export interface RecentDownload {
+  path: string
+  name: string
+  modifiedAt: number
+  bytes: number
+}
+
+/** Nguồn tìm trên kho online: video / ảnh Pixabay. */
+export const ONLINE_SOURCES = ['pixabayVideo', 'pixabayImage'] as const
 export type OnlineSource = (typeof ONLINE_SOURCES)[number]
 
 /** Một kết quả tìm kiếm trên kho online (URL đều là của máy chủ kho, không chứa key). */
 export interface OnlineItem {
   id: string
-  source: 'tenor' | 'pixabay'
+  source: 'pixabay'
   kind: 'gif' | 'video' | 'image' | 'sticker'
   title: string
   thumbUrl: string
@@ -319,7 +436,10 @@ export interface MediaAsset {
   hasAudio: boolean
 }
 
-/** Nguồn gốc của meme tải từ kho online (để không tải lại và ghi nguồn). */
+/**
+ * Nguồn gốc của mục tải từ kho online (để không tải lại và ghi nguồn). `tenor` chỉ còn ở các
+ * file đã tải trước khi Tenor ngừng hoạt động; không tải thêm được nữa.
+ */
 export interface MemeOrigin {
   source: 'tenor' | 'pixabay'
   id: string
@@ -342,6 +462,13 @@ export interface LumoraApi {
   onUpdateState(listener: (state: UpdateState) => void): Unsubscribe
   /** Mở thư mục nhật ký lỗi (gửi kèm khi báo lỗi). */
   openLogs(): Promise<void>
+  /** Cửa sổ không viền: điều khiển cửa sổ từ thanh tiêu đề tự vẽ. */
+  minimizeWindow(): Promise<void>
+  /** Phóng to / thu về; trả về trạng thái sau khi đổi. */
+  toggleMaximizeWindow(): Promise<boolean>
+  closeWindow(): Promise<void>
+  isWindowMaximized(): Promise<boolean>
+  onWindowMaximized(listener: (maximized: boolean) => void): Unsubscribe
   getSettings(): Promise<AppSettings>
   updateSettings(patch: Partial<AppSettings>): Promise<AppSettings>
   getSecretsStatus(): Promise<SecretsStatus>
@@ -411,18 +538,64 @@ export interface LumoraApi {
   pathForFile(file: File): string
   removeMeme(file: string): Promise<MemeItem[]>
   useMeme(folder: string, file: string): Promise<MediaAsset>
+  /** Kho nhạc: liệt kê, chọn file nhạc trên máy, thêm file kéo thả / vừa tải về, xóa. */
+  listMusic(): Promise<MusicTrack[]>
+  importMusic(): Promise<MusicTrack[]>
+  addMusicPaths(paths: string[], source: MusicTrack['source']): Promise<MusicTrack[]>
+  removeMusic(file: string): Promise<MusicTrack[]>
+  /** Chép một bài trong kho vào dự án. */
+  useMusic(folder: string, file: string): Promise<AudioAsset>
+  /** Tự tìm và tải một bài nhạc nền miễn phí bản quyền (Jamendo) vào kho theo tâm trạng. */
+  findMusic(query: MusicFindQuery): Promise<MusicTrack>
+  /** File nhạc mới trong thư mục Tải về (để thêm bài vừa tải từ Thư viện âm thanh YouTube). */
+  recentAudioDownloads(): Promise<RecentDownload[]>
+  /** Mở Thư viện âm thanh YouTube (YouTube Studio) trong trình duyệt. */
+  openYouTubeAudioLibrary(): Promise<void>
   startExport(folder: string): Promise<string>
   writeExport(id: string, position: number, data: ArrayBuffer): Promise<void>
   finishExport(id: string, folder: string, edit: EditState): Promise<ExportResult>
   cancelExport(id: string): Promise<void>
   /** Mở thư mục chứa một file đã xuất (chỉ trong thư mục dự án). */
   revealFile(path: string): Promise<void>
+  /** Lưu ảnh PNG của khung hình đang xem vào thư mục `exports` của dự án. */
+  saveSnapshot(folder: string, png: ArrayBuffer): Promise<ExportResult>
 
   /** Nhận dạng giọng nói (ElevenLabs). `language`: mã ISO hoặc rỗng để tự nhận diện. */
   transcribe(folder: string, language: string): Promise<Transcript>
   getTranscript(folder: string): Promise<Transcript | null>
   suggestCuts(folder: string): Promise<CutSuggestion[]>
   summarize(folder: string): Promise<AiSummary>
+  /** Trợ lý AI: mô tả bằng lời → danh sách lệnh chỉnh sửa. */
+  planEdits(instruction: string, context: AssistantContext): Promise<AssistantCommand[]>
+  /**
+   * Đạo diễn AI: từ câu yêu cầu + ngữ cảnh (thói quen, kho nhạc, lịch sử) → kế hoạch gồm tóm tắt,
+   * câu hỏi làm rõ (nếu cần) và danh sách lệnh. Lỗi khi không có AI (thiếu key / Ollama tắt).
+   */
+  directEdits(goal: string, context: DirectorContext): Promise<DirectorPlan>
+  /** AI chọn các đoạn hay nhất (thời gian trên bản quay gốc) để tách thành video ngắn. */
+  highlights(folder: string, count: number): Promise<HighlightSegment[]>
+  /** Model đã tải trong Ollama tại địa chỉ đó (AI cục bộ). */
+  listLocalModels(baseUrl: string): Promise<string[]>
+  /** Tải một model về Ollama (tiến độ qua `onLocalAiProgress`). */
+  pullLocalModel(baseUrl: string, model: string): Promise<void>
+  /** Tải bộ cài Ollama về máy rồi mở nó (Windows / macOS); nơi khác mở trang tải. */
+  installOllama(): Promise<void>
+  /** Chạy thử model cục bộ: thời gian nạp và token / giây trên máy này. */
+  benchmarkLocalModel(
+    baseUrl: string,
+    model: string,
+  ): Promise<{ loadMs: number; tokensPerSecond: number; totalMs: number }>
+  onLocalAiProgress(listener: (p: LocalAiProgress) => void): Unsubscribe
+  /** Giọng nói cục bộ (whisper.cpp + Piper): đã cài gì, đã tải model / giọng nào. */
+  localSpeechStatus(): Promise<LocalSpeechStatus>
+  /** Danh mục model Whisper và giọng Piper tải được trong app (kèm cỡ file). */
+  localSpeechCatalog(): Promise<LocalSpeechCatalog>
+  /** Tải và cài whisper.cpp hoặc Piper vào thư mục dữ liệu của app (tiến độ qua `onLocalAiProgress`). */
+  installLocalSpeech(tool: SpeechTool): Promise<void>
+  /** Tải một model Whisper hoặc giọng Piper (tiến độ qua `onLocalAiProgress`, `kind: 'speech'`). */
+  downloadLocalSpeech(kind: SpeechAssetKind, id: string): Promise<void>
+  /** Xóa một model Whisper hoặc giọng Piper đã tải. */
+  removeLocalSpeech(kind: SpeechAssetKind, id: string): Promise<void>
   /** Lưu bản lồng tiếng vừa ghi (WebM) vào dự án. */
   addVoiceover(folder: string, data: ArrayBuffer): Promise<AudioAsset>
   /** Lọc tạp âm / hiệu ứng giọng cho một file trong dự án; trả về tên file đã xử lý. */
@@ -449,10 +622,10 @@ export interface LumoraApi {
     voiceId: string,
     options?: { speed?: number; stability?: number },
   ): Promise<AudioAsset>
-  /** Tìm trên kho online (Tenor, Pixabay). */
+  /** Tìm trên kho online (Pixabay). */
   onlineSearch(source: OnlineSource, q: string, next: string | null): Promise<OnlineSearch>
   /** Tải một kết quả vừa tìm được vào thư viện meme. */
-  onlineDownload(source: 'tenor' | 'pixabay', id: string): Promise<MemeItem>
+  onlineDownload(source: 'pixabay', id: string): Promise<MemeItem>
   /** Dung lượng bộ nhớ đệm (byte). */
   cacheInfo(): Promise<number>
   cacheClear(): Promise<number>
@@ -466,6 +639,16 @@ export interface LumoraApi {
     instruction: string,
     language: string,
   ): Promise<{ id: string; text: string }[]>
+  /** AI chọn một emoji hợp nghĩa cho từng dòng phụ đề ("" = không). */
+  captionEmojis(
+    lines: { id: string; text: string }[],
+    language: string,
+  ): Promise<{ id: string; emoji: string }[]>
+  /** AI chọn 1–3 từ khóa mỗi dòng phụ đề để tô màu riêng. */
+  captionKeywords(
+    lines: { id: string; text: string }[],
+    language: string,
+  ): Promise<{ id: string; keywords: string[] }[]>
   /** Lập lại các đoạn zoom bằng Claude theo yêu cầu; trả về danh sách zoom mới (đã hợp lệ). */
   planZooms(folder: string, input: ZoomPlanInput): Promise<ZoomRegion[]>
   /** Lưu file văn bản (phụ đề SRT/VTT, mô tả...) vào thư mục exports của dự án. */

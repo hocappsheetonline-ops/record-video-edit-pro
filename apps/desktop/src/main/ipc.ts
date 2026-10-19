@@ -16,6 +16,8 @@ import {
   parseZoomRegions,
   sourceDuration,
   type AudioFx,
+  normalizeLocalAi,
+  type DirectorMessage,
 } from '@lumora/core'
 import {
   IPC,
@@ -29,6 +31,14 @@ import {
   type SegmentStart,
   ONLINE_SOURCES,
   type OnlineSource,
+  type MusicFindQuery,
+  type MusicTrack,
+  type RecentDownload,
+  type LocalAiProgress,
+  type LocalSpeechCatalog,
+  type LocalSpeechStatus,
+  type SpeechAssetKind,
+  type SpeechTool,
 } from '@shared/ipc'
 import { validateKey, type Validators } from './key-validation'
 import { mkdir, writeFile } from 'node:fs/promises'
@@ -109,6 +119,18 @@ export interface MemesIpc {
   useInProject(file: string, projectDir: string): Promise<MediaAsset>
 }
 
+export interface MusicIpc {
+  list(): Promise<MusicTrack[]>
+  pickAndAdd(): Promise<MusicTrack[]>
+  add(paths: string[], source: MusicTrack['source']): Promise<MusicTrack[]>
+  remove(file: string): Promise<MusicTrack[]>
+  useInProject(file: string, projectDir: string): Promise<AudioAsset>
+  recentDownloads(): Promise<RecentDownload[]>
+  openYouTube(): Promise<void>
+  /** AI tự tìm nhạc nền miễn phí bản quyền (Jamendo) và tải vào kho. */
+  find(query: MusicFindQuery): Promise<MusicTrack>
+}
+
 export interface IpcDeps {
   settings: SettingsStore
   secrets: SecretStore
@@ -123,8 +145,16 @@ export interface IpcDeps {
     | 'getTranscript'
     | 'suggestCuts'
     | 'summarize'
+    | 'plan'
+    | 'direct'
+    | 'highlights'
+    | 'listLocalModels'
+    | 'pullLocalModel'
+    | 'benchmarkLocalModel'
     | 'translate'
     | 'editCaptions'
+    | 'captionEmojis'
+    | 'captionKeywords'
     | 'planZooms'
     | 'voices'
     | 'speak'
@@ -148,6 +178,31 @@ export interface IpcDeps {
   >
   updates: Pick<UpdateService, 'state' | 'check' | 'install'>
   memes: MemesIpc
+  music: MusicIpc
+  /** AI cục bộ: gửi tiến độ xuống giao diện, tải và mở bộ cài Ollama. */
+  localAi: {
+    sendProgress(p: LocalAiProgress): void
+    installOllama(onProgress: (completed: number, total: number) => void): Promise<void>
+  }
+  /** Giọng nói cục bộ: cài whisper.cpp / Piper, tải và xóa model Whisper / giọng Piper. */
+  localSpeech: {
+    status(): Promise<LocalSpeechStatus>
+    catalog(): LocalSpeechCatalog
+    install(tool: SpeechTool, onProgress: (completed: number, total: number) => void): Promise<void>
+    download(
+      kind: SpeechAssetKind,
+      id: string,
+      onProgress: (completed: number, total: number) => void,
+    ): Promise<void>
+    remove(kind: SpeechAssetKind, id: string): Promise<void>
+  }
+  /** Điều khiển cửa sổ chính (thanh tiêu đề tự vẽ của cửa sổ không viền). */
+  window: {
+    minimize(): void
+    toggleMaximize(): boolean
+    close(): void
+    isMaximized(): boolean
+  }
   openLogs(): Promise<void>
   /** Ghi lỗi của giao diện (renderer) vào main.log. */
   logRendererError?(message: string): void
@@ -181,6 +236,21 @@ function parseRegion(value: unknown): Rect | null {
   return width! > 0 && height! > 0 ? { x: x!, y: y!, width: width!, height: height! } : null
 }
 
+const SPEECH_TOOLS: readonly SpeechTool[] = ['whisper', 'piper']
+const SPEECH_ASSET_KINDS: readonly SpeechAssetKind[] = ['model', 'voice']
+
+function assertSpeechTool(tool: unknown): SpeechTool {
+  if (!SPEECH_TOOLS.includes(tool as SpeechTool)) throw new Error('speech_input')
+  return tool as SpeechTool
+}
+
+/** Loại và tên model / giọng: tên chỉ gồm chữ, số, `.`, `_`, `-` (dùng làm tên file). */
+function assertSpeechAsset(kind: unknown, id: unknown): [SpeechAssetKind, string] {
+  if (!SPEECH_ASSET_KINDS.includes(kind as SpeechAssetKind)) throw new Error('speech_input')
+  if (typeof id !== 'string' || !/^[\w.-]{1,80}$/.test(id)) throw new Error('speech_input')
+  return [kind as SpeechAssetKind, id]
+}
+
 function assertFolder(folder: unknown): string {
   if (typeof folder !== 'string' || !isProjectFolderName(folder)) {
     throw new Error('Thư mục dự án không hợp lệ')
@@ -202,6 +272,10 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
   const { settings, secrets, recording, projects } = deps
 
   ipcMain.handle(IPC.appInfo, () => deps.appInfo())
+  ipcMain.handle(IPC.windowMinimize, () => deps.window.minimize())
+  ipcMain.handle(IPC.windowToggleMaximize, () => deps.window.toggleMaximize())
+  ipcMain.handle(IPC.windowClose, () => deps.window.close())
+  ipcMain.handle(IPC.windowIsMaximized, () => deps.window.isMaximized())
   ipcMain.handle(IPC.updateState, () => deps.updates.state)
   ipcMain.handle(IPC.updateCheck, () => deps.updates.check())
   ipcMain.handle(IPC.updateInstall, () => deps.updates.install())
@@ -368,6 +442,33 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
     if (typeof file !== 'string') throw new Error('Tên file không hợp lệ')
     return deps.memes.useInProject(file, await projectDir(folder))
   })
+  ipcMain.handle(IPC.musicList, () => deps.music.list())
+  ipcMain.handle(IPC.musicImport, () => deps.music.pickAndAdd())
+  ipcMain.handle(IPC.musicAddPaths, (_event, paths: unknown, source: unknown) => {
+    if (!Array.isArray(paths) || paths.length > 50 || !paths.every((p) => typeof p === 'string'))
+      throw new Error('audio_unsupported')
+    return deps.music.add(paths as string[], source === 'youtube' ? 'youtube' : 'file')
+  })
+  ipcMain.handle(IPC.musicRemove, (_event, file: unknown) => {
+    if (typeof file !== 'string') throw new Error('Tên file không hợp lệ')
+    return deps.music.remove(file)
+  })
+  ipcMain.handle(IPC.musicUse, async (_event, folder: unknown, file: unknown) => {
+    if (typeof file !== 'string') throw new Error('Tên file không hợp lệ')
+    return deps.music.useInProject(file, await projectDir(folder))
+  })
+  ipcMain.handle(IPC.musicRecentDownloads, () => deps.music.recentDownloads())
+  ipcMain.handle(IPC.musicOpenYouTube, () => deps.music.openYouTube())
+  ipcMain.handle(IPC.musicFind, (_event, query: unknown) => {
+    const q = typeof query === 'object' && query !== null ? (query as Record<string, unknown>) : {}
+    const mood = typeof q.mood === 'string' ? q.mood.trim().slice(0, 60) : ''
+    const tempo = q.tempo === 'slow' || q.tempo === 'fast' ? q.tempo : 'medium'
+    const durationMs =
+      typeof q.durationMs === 'number' && Number.isFinite(q.durationMs)
+        ? Math.max(0, q.durationMs)
+        : 0
+    return deps.music.find({ mood, tempo, durationMs })
+  })
   ipcMain.handle(IPC.assetsPeaks, async (_event, folder: unknown, file: unknown) => {
     if (typeof file !== 'string') throw new Error('Tên file không hợp lệ')
     return projects.assetPeaks(await projectDir(folder), file)
@@ -442,6 +543,23 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
     return { path, project }
   }
 
+  ipcMain.handle(IPC.projectSnapshot, async (_event, folder: unknown, png: unknown) => {
+    const bytes = asBytes(png)
+    // PNG hợp lệ bắt đầu bằng chữ ký 8 byte; chặn dữ liệu lạ / quá lớn (ảnh 4K ~ vài chục MB).
+    if (bytes.byteLength < 8 || bytes.byteLength > 64 * 1024 * 1024)
+      throw new Error('snapshot_invalid')
+    if (bytes[0] !== 0x89 || bytes[1] !== 0x50 || bytes[2] !== 0x4e || bytes[3] !== 0x47)
+      throw new Error('snapshot_invalid')
+    const { path } = await projectPath(folder)
+    const dir = join(path, EXPORTS_DIR)
+    await mkdir(dir, { recursive: true })
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-')
+    const fileName = safeFileName(`snapshot ${stamp}.png`)
+    const file = join(dir, fileName)
+    await writeFile(file, bytes)
+    return { path: file, fileName }
+  })
+
   ipcMain.handle(IPC.projectImportVideo, async (_event, folder: unknown, file: unknown) => {
     if (file !== undefined && file !== null && (typeof file !== 'string' || file.length > 1000))
       throw new Error('import_no_video')
@@ -475,6 +593,98 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
   ipcMain.handle(IPC.aiSummarize, async (_event, folder: unknown) =>
     deps.ai.summarize((await projectPath(folder)).path),
   )
+  ipcMain.handle(IPC.aiPlan, (_event, instruction: unknown, context: unknown) => {
+    if (typeof instruction !== 'string' || instruction.length > 2000) throw new Error('plan_input')
+    const c =
+      typeof context === 'object' && context !== null ? (context as Record<string, unknown>) : {}
+    return deps.ai.plan(instruction, {
+      language: typeof c.language === 'string' ? c.language.slice(0, 10) : '',
+      durationMs: typeof c.durationMs === 'number' ? Math.max(0, c.durationMs) : 0,
+      hasTranscript: c.hasTranscript === true,
+    })
+  })
+  ipcMain.handle(IPC.aiDirect, (_event, goal: unknown, context: unknown) => {
+    if (typeof goal !== 'string' || goal.length > 2000) throw new Error('direct_input')
+    const c =
+      typeof context === 'object' && context !== null ? (context as Record<string, unknown>) : {}
+    const names = (value: unknown) =>
+      Array.isArray(value) ? value.filter((n): n is string => typeof n === 'string') : []
+    const history: DirectorMessage[] = Array.isArray(c.history)
+      ? c.history.flatMap((item: unknown) => {
+          const m =
+            typeof item === 'object' && item !== null ? (item as Record<string, unknown>) : null
+          if (!m || (m.role !== 'user' && m.role !== 'ai') || typeof m.text !== 'string') return []
+          return [
+            {
+              role: m.role,
+              text: m.text,
+              at: typeof m.at === 'number' && Number.isFinite(m.at) ? m.at : 0,
+            },
+          ]
+        })
+      : []
+    return deps.ai.direct(goal, {
+      language: typeof c.language === 'string' ? c.language.slice(0, 10) : '',
+      durationMs:
+        typeof c.durationMs === 'number' && Number.isFinite(c.durationMs)
+          ? Math.max(0, c.durationMs)
+          : 0,
+      hasTranscript: c.hasTranscript === true,
+      hasCursor: c.hasCursor === true,
+      musicTracks: names(c.musicTracks),
+      projects: names(c.projects),
+      memory: typeof c.memory === 'string' ? c.memory : '',
+      history,
+      // Ngữ cảnh thời gian thật (1.9.0); dịch vụ AI cắt gọn thêm trước khi đưa vào lời nhắc.
+      transcript: typeof c.transcript === 'string' ? c.transcript : '',
+      clicks: Array.isArray(c.clicks)
+        ? c.clicks.filter((n): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 0)
+        : [],
+      edit: typeof c.edit === 'string' ? c.edit : '',
+    })
+  })
+  ipcMain.handle(IPC.aiHighlights, async (_event, folder: unknown, count: unknown) => {
+    const n = typeof count === 'number' && Number.isFinite(count) ? count : 3
+    return deps.ai.highlights((await projectPath(folder)).path, n)
+  })
+  ipcMain.handle(IPC.aiLocalModels, (_event, baseUrl: unknown) => {
+    const url = normalizeLocalAi({ baseUrl }).baseUrl
+    return deps.ai.listLocalModels(url)
+  })
+  ipcMain.handle(IPC.aiPullModel, (_event, baseUrl: unknown, model: unknown) => {
+    const local = normalizeLocalAi({ baseUrl, model })
+    if (typeof model !== 'string' || local.model !== model.trim()) throw new Error('ollama_model')
+    return deps.ai.pullLocalModel(local.baseUrl, local.model, (p) =>
+      deps.localAi.sendProgress({ kind: 'pull', ...p }),
+    )
+  })
+  ipcMain.handle(IPC.aiBenchmark, (_event, baseUrl: unknown, model: unknown) => {
+    const local = normalizeLocalAi({ baseUrl, model })
+    if (typeof model !== 'string' || local.model !== model.trim()) throw new Error('ollama_model')
+    return deps.ai.benchmarkLocalModel(local.baseUrl, local.model)
+  })
+  ipcMain.handle(IPC.aiInstallOllama, () =>
+    deps.localAi.installOllama((completed, total) =>
+      deps.localAi.sendProgress({ kind: 'install', status: 'download', completed, total }),
+    ),
+  )
+  // Giọng nói cục bộ: tiến độ tải đi chung kênh với Ollama, phân biệt bằng kind 'speech' và item.
+  const speechProgress = (item: string) => (completed: number, total: number) =>
+    deps.localAi.sendProgress({ kind: 'speech', status: 'download', item, completed, total })
+  ipcMain.handle(IPC.aiSpeechStatus, () => deps.localSpeech.status())
+  ipcMain.handle(IPC.aiSpeechCatalog, () => deps.localSpeech.catalog())
+  ipcMain.handle(IPC.aiSpeechInstall, (_event, tool: unknown) => {
+    const t = assertSpeechTool(tool)
+    return deps.localSpeech.install(t, speechProgress(t))
+  })
+  ipcMain.handle(IPC.aiSpeechDownload, (_event, kind: unknown, id: unknown) => {
+    const [k, name] = assertSpeechAsset(kind, id)
+    return deps.localSpeech.download(k, name, speechProgress(name))
+  })
+  ipcMain.handle(IPC.aiSpeechRemove, (_event, kind: unknown, id: unknown) => {
+    const [k, name] = assertSpeechAsset(kind, id)
+    return deps.localSpeech.remove(k, name)
+  })
   ipcMain.handle(IPC.aiVoices, () => deps.ai.voices())
   ipcMain.handle(
     IPC.aiSpeak,
@@ -496,7 +706,7 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
     return deps.online.search(source as OnlineSource, q, next)
   })
   ipcMain.handle(IPC.onlineDownload, (_event, source: unknown, id: unknown) => {
-    if ((source !== 'tenor' && source !== 'pixabay') || typeof id !== 'string' || id.length > 100)
+    if (source !== 'pixabay' || typeof id !== 'string' || id.length > 100)
       throw new Error('online_unknown')
     return deps.online.download(source, id)
   })
@@ -526,6 +736,18 @@ export function registerIpc(ipcMain: Pick<IpcMain, 'handle'>, deps: IpcDeps): vo
         typeof instruction === 'string' ? instruction : '',
         typeof language === 'string' ? language.slice(0, 8) : '',
       ),
+  )
+  ipcMain.handle(IPC.aiCaptionEmojis, (_event, lines: unknown, language: unknown) =>
+    deps.ai.captionEmojis(
+      cleanLines(lines),
+      typeof language === 'string' ? language.slice(0, 8) : '',
+    ),
+  )
+  ipcMain.handle(IPC.aiCaptionKeywords, (_event, lines: unknown, language: unknown) =>
+    deps.ai.captionKeywords(
+      cleanLines(lines),
+      typeof language === 'string' ? language.slice(0, 8) : '',
+    ),
   )
   ipcMain.handle(IPC.aiPlanZooms, async (_event, folder: unknown, input: unknown) => {
     const { path, project } = await projectPath(folder)

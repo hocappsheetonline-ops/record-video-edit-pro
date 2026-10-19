@@ -12,6 +12,8 @@ import {
   Captions,
   Flag,
   Magnet,
+  Mic,
+  Plus,
   Layers,
   Music2,
   Redo2,
@@ -19,7 +21,7 @@ import {
   Rewind,
   Scissors,
   Snowflake,
-  Sparkles,
+  Sparkle,
   TrendingUp,
   Trash2,
   Undo2,
@@ -125,6 +127,13 @@ function TimelineToolbar({ zoom, setZoom }: { zoom: number; setZoom: (z: number)
   return (
     <div className="flex h-10 shrink-0 items-center gap-0.5 border-b border-border px-2">
       <ToolButton
+        icon={Plus}
+        label={t('editor.timeline.add')}
+        onClick={() => useEditorStore.getState().requestTab('media')}
+        testId="toolbar-add"
+      />
+      <span className="mx-1 h-5 w-px bg-border" />
+      <ToolButton
         icon={Undo2}
         label={undoLabels.undo ? `${t('editor.undo')}: ${undoLabels.undo}` : t('editor.undo')}
         shortcut="Ctrl+Z"
@@ -203,6 +212,13 @@ function TimelineToolbar({ zoom, setZoom }: { zoom: number; setZoom: (z: number)
         {t('editor.shortcuts')}
       </span>
       <div className="ml-3 flex items-center gap-1.5">
+        <ToolButton
+          icon={Mic}
+          label={t('editor.timeline.voiceover')}
+          onClick={() => useEditorStore.getState().requestTab('audio', 'voice')}
+          testId="toolbar-voiceover"
+        />
+        <span className="mx-1 h-5 w-px bg-border" />
         <ToolButton
           icon={ZoomOut}
           label={t('editor.timeline.zoomOut')}
@@ -283,6 +299,14 @@ function dropErrorText(t: (k: string) => string, message: string) {
 
 /** Chiều cao một hàng con (px) của các hàng có thể xếp chồng. */
 const LANE = { effects: 28, overlays: 32, audio: 40 }
+/** Hàng (có nút khóa) của mỗi loại mục chọn được; zoom không có hàng khóa. */
+const SEL_ROW: Record<SelItem['kind'], TimelineRow | null> = {
+  effect: 'effects',
+  overlay: 'overlays',
+  audio: 'audio',
+  clip: 'clips',
+  zoom: null,
+}
 
 function TrackHeader({
   icon: Icon,
@@ -346,6 +370,7 @@ export function Timeline() {
   const time = useEditorStore((s) => s.time)
   const playing = useEditorStore((s) => s.playing)
   const selection = useEditorStore((s) => s.selection)
+  const selectedItems = useEditorStore((s) => s.selected)
   const scrollRef = useRef<HTMLDivElement>(null)
   const contentRef = useRef<HTMLDivElement>(null)
   const [drag, setDrag] = useState<Drag | null>(null)
@@ -411,9 +436,13 @@ export function Timeline() {
     store().setTime(timeAt(e.clientX))
   }
 
+  const isSel = (kind: SelItem['kind'], id: string) =>
+    selectedItems.some((x) => x.kind === kind && x.id === id)
+
   /**
-   * Kéo trên chỗ trống: vẽ khung chọn, nhả chuột thì chọn các khối giao với khung
-   * (lớp phủ, hiệu ứng, âm thanh; bỏ qua hàng bị khóa). Giữ Ctrl để chọn thêm.
+   * Kéo trên chỗ trống (hoặc kéo từ một clip): vẽ khung chọn, nhả chuột thì chọn các khối
+   * giao với khung (clip, zoom, lớp phủ, hiệu ứng, âm thanh; bỏ qua hàng bị khóa).
+   * Giữ Ctrl để chọn thêm.
    */
   const startMarquee = (e: ReactPointerEvent) => {
     const content = contentRef.current
@@ -443,14 +472,21 @@ export function Timeline() {
       const hits: SelItem[] = []
       content.querySelectorAll<HTMLElement>('[data-sel-kind]').forEach((el) => {
         const kind = el.dataset.selKind as SelItem['kind']
-        const row = kind === 'overlay' ? 'overlays' : kind === 'effect' ? 'effects' : 'audio'
-        if (tracks?.[row].locked) return
+        const row = SEL_ROW[kind]
+        if (row && tracks?.[row].locked) return
         const r = el.getBoundingClientRect()
         if (r.right >= left && r.left <= right && r.bottom >= top && r.top <= bottom)
           hits.push({ kind, id: el.dataset.selId! })
       })
+      // Một đoạn zoom vắt qua nhiều clip vẽ thành nhiều mảnh cùng id: chỉ lấy một lần.
       const seen = new Set(base.map((x) => `${x.kind}:${x.id}`))
-      store().selectMany([...base, ...hits.filter((h) => !seen.has(`${h.kind}:${h.id}`))])
+      const added = hits.filter((h) => {
+        const key = `${h.kind}:${h.id}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      store().selectMany([...base, ...added])
     }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
@@ -479,9 +515,17 @@ export function Timeline() {
   }
 
   const onZoomDown = (e: ReactPointerEvent, zoomRegion: ZoomRegion, mode: Drag['mode']) => {
+    if (e.button !== 0) return
     e.stopPropagation()
+    // Ctrl+click: thêm / bỏ khỏi nhóm đang chọn, không kéo.
+    if (e.ctrlKey || e.metaKey) {
+      store().toggleSelect({ kind: 'zoom', id: zoomRegion.id })
+      return
+    }
     ;(e.target as Element).setPointerCapture(e.pointerId)
-    store().select({ kind: 'zoom', id: zoomRegion.id })
+    // Đang nằm trong nhóm chọn nhiều: giữ nguyên nhóm, chỉ kéo đoạn này.
+    if (!store().isSelected('zoom', zoomRegion.id) || store().selected.length <= 1)
+      store().select({ kind: 'zoom', id: zoomRegion.id })
     setDrag({ id: zoomRegion.id, mode, originX: e.clientX, origin: zoomRegion })
   }
 
@@ -529,7 +573,7 @@ export function Timeline() {
         <div className="shrink-0 border-r border-border bg-surface" style={{ width: HEADER_W }}>
           <div className="h-7 border-b border-border" />
           <TrackHeader
-            icon={Sparkles}
+            icon={Sparkle}
             label={t('editor.tracks.effects')}
             height={heights.effects}
             row="effects"
@@ -650,11 +694,14 @@ export function Timeline() {
               >
                 {edit.zooms.flatMap((zoomRegion) =>
                   zoomOutputIntervals(zoomRegion, edit.clips).map((interval, k) => {
-                    const selected = selection?.kind === 'zoom' && selection.id === zoomRegion.id
+                    const selected = isSel('zoom', zoomRegion.id)
                     return (
                       <div
                         key={`${zoomRegion.id}-${k}`}
                         data-testid="timeline-zoom"
+                        data-selected={selected}
+                        data-sel-kind="zoom"
+                        data-sel-id={zoomRegion.id}
                         onPointerDown={(e) => onZoomDown(e, zoomRegion, 'move')}
                         onContextMenu={(e) => openContextMenu(e, zoomMenu(t, zoomRegion.id))}
                         className={`absolute top-0.5 bottom-0.5 flex cursor-grab items-center justify-center rounded-md border text-[11px] ${
@@ -688,6 +735,25 @@ export function Timeline() {
                 onPointerDown={seekAndDeselect}
                 onPointerLeave={() => setHoverAt(null)}
               >
+                {edit.clips.length === 0 && (
+                  <div
+                    data-testid="timeline-empty"
+                    className="pointer-events-none absolute inset-x-0 top-1 flex h-16 items-center justify-center rounded-md border border-dashed border-border text-[11px] text-muted"
+                  >
+                    <span className="pointer-events-auto flex items-center gap-2">
+                      {t('editor.timeline.empty')}
+                      <button
+                        type="button"
+                        data-testid="timeline-restore-source"
+                        className="rounded-md border border-border bg-surface-2 px-2 py-0.5 font-medium text-text hover:bg-surface"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={() => store().addSourceClips()}
+                      >
+                        {t('editor.timeline.restoreSource')}
+                      </button>
+                    </span>
+                  </div>
+                )}
                 {hoverAt !== null && filmstrip && folder && (
                   <ClipHoverPreview
                     at={hoverAt}
@@ -698,7 +764,7 @@ export function Timeline() {
                   />
                 )}
                 {clipPositions(edit.clips).map(({ clip, outputStart }, i) => {
-                  const selected = selection?.kind === 'clip' && selection.id === clip.id
+                  const selected = isSel('clip', clip.id)
                   // Dải phim hiện đúng màu của bộ lọc (của clip, hoặc của cả video).
                   const tint = lookLayers(clip.look ?? edit.look)?.css
                   return (
@@ -707,13 +773,28 @@ export function Timeline() {
                       type="button"
                       data-testid="timeline-clip"
                       data-selected={selected}
+                      data-sel-kind="clip"
+                      data-sel-id={clip.id}
                       onPointerMove={(e) => setHoverAt(timeAt(e.clientX))}
                       data-freeze={clip.freeze ? true : undefined}
                       onPointerDown={(e) => {
                         if (e.button !== 0) return
                         e.stopPropagation()
-                        if (!clipsLocked) store().select({ kind: 'clip', id: clip.id })
+                        if (clipsLocked) {
+                          seek(e)
+                          return
+                        }
+                        if (e.ctrlKey || e.metaKey) {
+                          // Ctrl+click: thêm / bỏ clip khỏi nhóm đang chọn.
+                          store().toggleSelect({ kind: 'clip', id: clip.id })
+                          return
+                        }
+                        // Hàng clip thường kín, không có chỗ trống: kéo từ một clip
+                        // cũng vẽ khung chọn (nhả chuột không kéo thì chỉ chọn clip này).
+                        if (!store().isSelected('clip', clip.id) || store().selected.length <= 1)
+                          store().select({ kind: 'clip', id: clip.id })
                         seek(e)
+                        startMarquee(e)
                       }}
                       onContextMenu={(e) =>
                         clipsLocked
@@ -762,7 +843,11 @@ export function Timeline() {
                           )}
                         </span>
                       </div>
-                      <div className="relative h-4 shrink-0 bg-black/40 text-accent">
+                      {/* Dải sóng âm kiểu CapCut: nền tối, sóng màu xanh nhạt tô liền. */}
+                      <div
+                        className="relative h-4 shrink-0 bg-[#0d1117] text-sky-300/90"
+                        data-testid="clip-wave-band"
+                      >
                         {waveform && !clip.freeze && (
                           <ClipWaveform clip={clip} waveform={waveform} />
                         )}
